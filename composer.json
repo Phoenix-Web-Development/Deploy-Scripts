@@ -1,0 +1,29 @@
+{
+  "require": {
+    "twbs/bootstrap": "^4.1",
+    "phpseclib/phpseclib": "~2.0",
+    "knplabs/github-api": "^2.10",
+    "php-http/guzzle6-adapter": "^1.1",
+    "components/jquery": "3.3.1"
+  },
+  "autoload": {
+    "psr-4": {
+      "Phoenix\\": "src/"
+    },
+    "files": [
+      "src/Functions.php"
+    ]
+  },
+  "scripts": {
+    "post-update-cmd": "@front-end-stuff",
+    "post-install-cmd": "@front-end-stuff",
+    "front-end-stuff": [
+      "cp vendor/twbs/bootstrap/dist/css/* public/css/",
+      "cp vendor/twbs/bootstrap/dist/js/* public/js/",
+      "cp vendor/components/jquery/jquery.min.js public/js/jquery.min.js; cp vendor/components/jquery/jquery.min.map public/js/jquery.min.map;"
+    ]
+  },
+  "require-dev": {
+    "kint-php/kint": "3.0"
+  }
+}
