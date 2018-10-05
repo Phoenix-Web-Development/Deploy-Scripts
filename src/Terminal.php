@@ -1,10 +1,10 @@
 <?php
 
 namespace Phoenix;
-//    "kint-php/kint": "0.9",
 
 /**
- * @property array $actions
+ * @property array $root
+ * @property array $prompt
  *
  * Class Terminal
  */
@@ -15,9 +15,11 @@ class Terminal extends Base
      */
     private $ssh;
 
-    private $ssh_prompt;
-
     public $environment;
+
+    private $_prompt;
+
+    private $_root;
 
     /**
      * Terminal constructor.
@@ -56,13 +58,20 @@ class Terminal extends Base
     {
         $this->ssh = $ssh;
         sleep(1);
-        $this->ssh_prompt();
+        $this->prompt();
     }
 
-    protected function ssh_prompt()
+    public function root()
     {
-        if (!empty($this->ssh_prompt))
-            return $this->ssh_prompt;
+        if (!empty($this->_root))
+            return $this->_root;
+        return $this->_root = trim($this->exec('pwd'));
+    }
+
+    public function prompt()
+    {
+        if (!empty($this->_prompt))
+            return $this->_prompt;
         $prompt = $this->exec('echo "$PS1"');
         //$prompt = explode( " ", $prompt )[ 0 ];
         $prompt = str_replace('\u', trim($this->exec('whoami')), $prompt);
@@ -71,8 +80,8 @@ class Terminal extends Base
         $prompt = trim($prompt);
         //$prompt = $user . '@' . $hostname;
         //$prompt = '';
-        $this->log(sprintf("Prompt string for read() commands set to '<strong>%s</strong>'", $prompt), 'info');
-        return $this->ssh_prompt = $prompt;
+        $this->log(sprintf("Prompt string for terminal read() commands set to '<strong>%s</strong>'", $prompt), 'info');
+        return $this->_prompt = $prompt;
     }
 
     /**
@@ -108,7 +117,7 @@ class Terminal extends Base
      */
     protected function read_write(array $commands = array(), bool $format = false)
     {
-        $prompt = $this->ssh_prompt();
+        $prompt = $this->prompt();
         $outputs = array();
         $this->ssh->read($prompt);
         foreach ($commands as $command) {
@@ -229,7 +238,7 @@ class Terminal extends Base
                 $output .= $this->exec("
                 cd ~/public_html; 
                 wp core download --skip-content; 
-                wp core config--dbname = " . $db_args['name'] . "--dbuser = " . $$db_args['username'] . "--dbpass = " . $db_args['password'] . "--dbprefix = " . $wp_args['prefix'] . " --locale = en_AU--extra - php << PHP
+                wp core config --dbname = " . $db_args['name'] . " --dbuser=" . $db_args['username'] . " --dbpass=" . $db_args['password'] . " --dbprefix=" . $wp_args['prefix'] . " --locale=en_AU --extra-php << PHP
         define( 'AUTOSAVE_INTERVAL', 300 );
         define( 'WP_POST_REVISIONS', 6 );
         define( 'EMPTY_TRASH_DAYS', 7 );
@@ -237,9 +246,9 @@ class Terminal extends Base
         define( 'WP_DEBUG', " . $debug . " );
         PHP;");
                 $output .= $this->exec("wp core install --url=" . $wp_args['url'] . " --title=" . $wp_args['title'] . " --admin_user=" . $wp_args['username']
-                    . " --admin_password = " . $wp_args['password'] . "--admin_email = " . $wp_args['email']);
+                    . " --admin_password = " . $wp_args['password'] . " --admin_email = " . $wp_args['email']);
                 $output .= $this->exec('wp plugin delete hello;  ' . $wp_plugins . ' wp plugin update --all; wp plugin activate --all; wp post delete 1;' .
-                    'wp widget delete $(wp widget list sidebar-1 --format=ids); wp option update default_comment_status closed; wp option update blogdescription "Enter tagline for ' . $wp_args['title'] . ' here"; wp rewrite structure " /%postname %/"'
+                    'wp widget delete $(wp widget list sidebar-1 --format=ids); wp option update default_comment_status closed; wp option update blogdescription "Enter tagline for ' . $wp_args['title'] . ' here"; wp rewrite structure "/%postname %/"'
                     . 'wp rewrite flush;');
                 $success = true;
                 break;
@@ -270,27 +279,34 @@ class Terminal extends Base
     /**
      * @param string $action
      * @param string $key_name
+     * @param string $passphrase
      * @return bool|string
      */
-    protected function SSHKey(string $action = 'create', string $key_name = 'id_rsa')
+    protected function SSHKey(string $action = 'create', string $key_name = 'id_rsa', string $passphrase = '')
     {
-        $this->log(sprintf(" % s % s SSH key named < strong>%s </strong >.", ucfirst($this->actions[$action]['present']), $this->environment, $key_name), 'info');
-        $error_string = sprintf("Couldn't %s SSH key.", $action);
+        $this->log(sprintf(" % s % s SSH key named <strong>%s</strong>.", ucfirst($this->actions[$action]['present']), $this->environment, $key_name), 'info');
+        $error_string = sprintf("%s %s environment SSH key.", $action, $this->environment);
+        if (empty($key_name)) {
+            $this->log(sprintf("Can't %s. Key name function input is missing."));
+            return false;
+        }
+        $error_string = "Couldn't " . $error_string;
         switch ($action) {
             case 'create':
                 //$this->exec( sprintf( 'rm ~/.ssh /%s; rm ~/.ssh /%s . pub;', $name, $name ) );
-                $output = $this->exec('ssh - keygen - q - t rsa - N "" - f ~/.ssh / ' . $key_name . '; cat ~/.ssh / ' . $key_name . ' . pub');
+                $output = $this->exec('ssh-keygen -q -t rsa -N "' . $passphrase . '" -f ~/.ssh/' . $key_name
+                    . '; cat ~/.ssh/' . $key_name . '.pub');
                 if (strpos($output, 'already exists') !== false) {
                     $this->log(sprintf("%s %s SSH key already exists. %s", $error_string, ucfirst($this->environment), $output));
                     return false;
                 }
-                if (strpos($output, 'ssh - rsa ') !== false) {
+                if (strpos($output, 'ssh-rsa ') !== false) {
                     $this->log(sprintf("Successfully added SSH key. Public key is %s.", $output), 'success');
                     return $output;
                 }
                 break;
             case 'delete':
-                $output = $this->exec('rm ~/.ssh / ' . $key_name . '; rm ~/.ssh / ' . $key_name . ' . pub;', true);
+                $output = $this->exec('rm ~/.ssh/' . $key_name . '; rm ~/.ssh/' . $key_name . ' . pub;', true);
                 if (strpos($output, 'rm: cannot remove') !== false) {
                     $this->log($error_string . ' ' . $output, 'error');
                     return false;
@@ -306,21 +322,37 @@ class Terminal extends Base
     /**
      * @param string $action
      * @param string $host
+     * @param string $hostname
      * @param string $key_name
      * @param string $user
+     * @param int $port
      * @return bool
      */
-    protected function SSHConfig(string $action = 'create', string $host = '', string $key_name = 'id_rsa', string $user = '')
+    protected function SSHConfig(string $action = 'create',
+                                 string $host = '',
+                                 string $hostname = '',
+                                 string $key_name = 'id_rsa',
+                                 string $user = '',
+                                 int $port = 22)
     {
-        $this->log(sprintf("%s %s SSH config for host <strong>%s</strong>.", ucfirst($this->actions[$action]['present']), $this->environment, $host), 'info');
-        $error_string = sprintf("Couldn't % s SSH config . ", $action);
+        if (!in_array($action, array('create', 'delete'))) {
+            $this->log(sprintf("Can't do %s environment SSH config stuff. Action must be 'create' or 'delete'.", $this->environment));
+            return false;
+        }
+        $message_string = sprintf("%s environment SSH config", $action, $this->environment);
+        if (empty($host)) {
+            $this->log(sprintf("Can't %s. Host missing from function input.", $message_string));
+            return false;
+        }
+        $this->log(sprintf("%s %s for host <strong>%s</strong>.", ucfirst($this->actions[$action]['present']), $message_string, $host), 'info');
+        $error_string = sprintf("Couldn't %s.", $message_string);
         $location = '~/.ssh/config';
         $cat = 'cat ' . $location;
         $config_before = $this->exec('touch config; ' . $cat . ';');
         switch ($action) {
             case 'create':
-                $output = $this->exec('echo -e "Host ' . $host . '\n  Hostname ' . $host . '\n  User ' . $user
-                    . '\n  IdentityFile ~/.ssh / ' . $key_name . '\n  Port 22" >> ' . $location . '; chmod 600 ' . $location,
+                $output = $this->exec('echo -e "Host ' . $host . '\n  Hostname ' . $hostname . '\n  User ' . $user
+                    . '\n  IdentityFile ~/.ssh/' . $key_name . '\n  Port ' . $port . '" >> ' . $location . '; chmod 600 ' . $location,
                     true);
                 $config_after = $this->exec($cat);
                 if ($config_before == $config_after) {
@@ -354,10 +386,10 @@ class Terminal extends Base
         //return false;
     }
 
-    protected function git($ssh_password)
+    protected function git($action = 'create', $ssh_password, $git_url = '')
     {
         /*
-        $read = $this->ssh_prompt();
+        $read = $this->prompt();
         $this->ssh->write( "eval $(ssh-agent)\n ssh-add -t 120 ~/.ssh/jackthekey\n" ); // note the "\n"
         $this->log( $this->ssh->read( $read ), 'info' );
         $this->ssh->write( $ssh_password . "\n" ); // note the "\n"
@@ -367,14 +399,20 @@ class Terminal extends Base
         $this->log( $this->ssh->read( $read ), 'info' );
 */
 
-        $commands = array(
-            "eval $(ssh-agent)\n",
-            "ssh-add -t 120 ~/.ssh/jackthekey\n",
-            $ssh_password . "\n",
-            "git clone git@github.com:jamesjonesphoenix/my-new-repo.git\n"
-        );
-        $output = $this->read_write($commands);
-        $this->log($output, 'info');
+        switch ($this->environment) {
+            case 'local':
+                //$this->exec('git clone' . $git_url);
+                break;
+            case 'staging':
+            case 'live':
+                $commands = array(
+                    $ssh_password . "\n",
+                    "git clone git@github.com:jamesjonesphoenix/my-new-repo.git\n"
+                );
+                $output = $this->read_write($commands);
+                $this->log($output, 'info');
+                break;
+        }
 
         /*
                 $this->ssh->write( "eval $(ssh-agent)\n ssh-add -t 120 ~/.ssh/jackthekey\n" ); // note the "\n"

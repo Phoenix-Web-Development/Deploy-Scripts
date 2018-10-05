@@ -9,7 +9,7 @@ rootDir=$3
 #owner=$(who am i | awk '{print $1}')
 owner='james'
 apacheUser=$(ps -ef | egrep '(httpd|apache2|apache)' | grep -v root | head -n1 | awk '{print $1}')
-email='webmaster@localhost'
+email='james.jones@phoenixweb.com.au'
 sitesEnabled='/etc/apache2/sites-enabled/'
 sitesAvailable='/etc/apache2/sites-available/'
 userDir='/var/www/'
@@ -71,23 +71,37 @@ if [ "$action" == 'create' ]
 
 		### create virtual host rules file
 		if ! echo "
-		<VirtualHost *:80>
-			ServerAdmin $email
-			ServerName $domain
-			ServerAlias $domain
-			DocumentRoot $rootDir
-			<Directory />
-				AllowOverride All
-			</Directory>
-			<Directory $rootDir>
-				Options Indexes FollowSymLinks MultiViews
-				AllowOverride all
-				Require all granted
-			</Directory>
-			ErrorLog /var/log/apache2/$domain-error.log
-			LogLevel error
-			CustomLog /var/log/apache2/$domain-access.log combined
-		</VirtualHost>" > $sitesAvailabledomain
+		<IfModule mod_ssl.c>
+            <VirtualHost _default_:443>
+                ServerAdmin $email
+                ServerName $domain
+                ServerAlias $domain
+
+                DocumentRoot $rootDir/Project/public
+                <Directory />
+                                AllowOverride All
+                </Directory>
+                <Directory $rootDir/Project/public>
+                                Options Indexes FollowSymLinks MultiViews
+                                AllowOverride all
+                                Require all granted
+                </Directory>
+                ErrorLog $rootDir/error.log
+                CustomLog $rootDir/access.log combined
+
+                SSLEngine on
+
+                SSLCertificateFile      /etc/ssl/certs/ssl-cert-snakeoil.pem
+                SSLCertificateKeyFile /etc/ssl/private/ssl-cert-snakeoil.key
+
+                <FilesMatch \"\.(cgi|shtml|phtml|php)$\">
+                                SSLOptions +StdEnvVars
+                </FilesMatch>
+                <Directory /usr/lib/cgi-bin>
+                                SSLOptions +StdEnvVars
+                </Directory>
+            </VirtualHost>
+        </IfModule>" > $sitesAvailabledomain
 		then
 			echo -e $"There is an ERROR creating $domain file"
 			exit;

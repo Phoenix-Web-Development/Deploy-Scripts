@@ -58,6 +58,9 @@ final class Deployer extends Base
      */
     public $permissions = array(
         'create' => array('label' => 'Create'),
+        'create_version_control' => array('label' => 'Create main version control repository',
+            'condition' => array('create')),
+
         'create_live_stuff' => array('label' => 'Live stuff',
             'condition' => 'create'),
         'create_live_site' => array('label' => 'cPanel account',
@@ -65,6 +68,8 @@ final class Deployer extends Base
         'create_live_db' => array('label' => 'Database & DB User',
             'condition' => array('create', 'create_live_stuff')),
         'create_live_email_filters' => array('label' => 'Email filters',
+            'condition' => array('create', 'create_live_stuff')),
+        'create_live_version_control' => array('label' => 'Setup version control',
             'condition' => array('create', 'create_live_stuff')),
         'create_live_wp' => array('label' => 'Install WordPress and WP CLI',
             'condition' => array('create', 'create_live_stuff')),
@@ -77,16 +82,22 @@ final class Deployer extends Base
             'condition' => array('create', 'create_staging_stuff')),
         'create_staging_email_filters' => array('label' => 'Email filters',
             'condition' => array('create', 'create_staging_stuff')),
+        'create_staging_version_control' => array('label' => 'Setup version control',
+            'condition' => array('create', 'create_staging_stuff')),
         'create_staging_wp' => array('label' => 'Install WordPress and WP CLI',
             'condition' => array('create', 'create_staging_stuff')),
 
-        'create_version_control' => array('label' => 'Setup Version Control',
+        'create_local_stuff' => array('label' => 'Create local stuff',
             'condition' => array('create')),
+        'create_local_version_control' => array('label' => 'Setup version control',
+            'condition' => array('create', 'create_local_stuff')),
 
-        'create_wp_auto_update' => array('label' => 'Setup WordPress auto-update',
-            'condition' => array('create')),
+        //'create_wp_auto_update' => array('label' => 'Setup WordPress auto-update',
+        //  'condition' => array('create')),
 
         'delete' => array('label' => 'Delete'),
+        'delete_version_control' => array('label' => 'Delete main version control repository',
+            'condition' => array('delete')),
         'delete_live_stuff' => array('label' => 'Live stuff',
             'condition' => array('delete')),
         'delete_live_site' => array('label' => 'cPanel account',
@@ -94,6 +105,10 @@ final class Deployer extends Base
         'delete_live_db' => array('label' => 'Database & DB User',
             'condition' => array('delete', 'delete_live_stuff')),
         'delete_live_email_filters' => array('label' => 'Email filters',
+            'condition' => array('delete', 'delete_live_stuff')),
+        'delete_live_version_control' => array('label' => 'Version control',
+            'condition' => array('delete', 'delete_live_stuff')),
+        'delete_live_wordpress' => array('label' => 'WordPress',
             'condition' => array('delete', 'delete_live_stuff')),
 
         'delete_staging_stuff' => array('label' => 'Staging stuff',
@@ -104,9 +119,16 @@ final class Deployer extends Base
             'condition' => array('delete', 'delete_staging_stuff')),
         'delete_staging_email_filters' => array('label' => 'Email filters',
             'condition' => array('delete', 'delete_staging_stuff')),
+        'delete_staging_version_control' => array('label' => 'Version control',
+            'condition' => array('delete', 'delete_staging_stuff')),
+        'delete_staging_wordpress' => array('label' => 'WordPress',
+            'condition' => array('delete', 'delete_staging_stuff')),
 
-        'delete_version_control' => array('label' => 'Delete Version Control',
+        'delete_local_stuff' => array('label' => 'Delete local stuff',
             'condition' => array('delete')),
+        'delete_local_version_control' => array('label' => 'Delete version control',
+            'condition' => array('delete', 'delete_local_stuff')),
+
 
         'update' => array('label' => 'Update'),
         'update_wp' => array('label' => 'Update WordPress core, plugins and themes',
@@ -298,6 +320,9 @@ final class Deployer extends Base
             $this->log(sprintf("%s %s cPanel account SSH args missing.", $error_string, $environment));
         if (!empty($ssh_args)) {
             $ssh = new SSH2($ssh_args->hostname, $ssh_args->port);
+            $key = new RSA();
+            $key->setPassword($passphrase);
+            $key->loadKey(file_get_contents('privatekey'));
             if ($ssh->login($ssh_args->username, $ssh_args->password)) {
                 $terminal->setSSH($ssh);
             } else
@@ -387,6 +412,10 @@ final class Deployer extends Base
         if ($this->can_do('create_live_email_filters'))
             $created_email_filters = $this->email_filters('create', 'live');
 
+        if ($this->can_do('create_live_version_control')) {
+            $created_version_control = $this->versionControlAccess('create', 'live');
+        }
+
         if ($this->can_do('create_live_wp')) {
             $created_wordpress = $this->wordpress('install', 'live');
         }
@@ -394,6 +423,7 @@ final class Deployer extends Base
         if ((!$this->can_do('create_live_site') || !empty($created_live_account))
             && (!$this->can_do('create_live_db') || !empty($created_db))
             && (!$this->can_do('create_live_email_filters') || !empty($created_email_filters))
+            && (!$this->can_do('create_live_version_control') || !empty($created_version_control))
             && (!$this->can_do('create_live_wp') || !empty($created_wordpress))
         ) {
             $this->log('Successfully created nominated live stuff.', 'success');
@@ -451,13 +481,19 @@ final class Deployer extends Base
         if ($this->can_do('create_staging_email_filters'))
             $created_email_filters = $this->email_filters('create', 'staging');
 
+        if ($this->can_do('create_staging_version_control')) {
+            $created_version_control = $this->versionControlAccess('create', 'staging');
+        }
+
         if ($this->can_do('create_staging_wp')) {
             $this->wordpress('create', 'staging');
         }
 
         if ((!$this->can_do('create_staging_subdomain') || !empty($created_staging_subdomain))
             && (!$this->can_do('create_staging_db') || !empty($created_db))
-            && (!$this->can_do('create_staging_email_filters') || !empty($created_email_filters))) {
+            && (!$this->can_do('create_staging_email_filters') || !empty($created_email_filters))
+            && (!$this->can_do('create_staging_version_control') || !empty($created_version_control))
+        ) {
             $this->log('Successfully created nominated staging stuff.', 'success');
             return true;
         }
@@ -504,6 +540,32 @@ final class Deployer extends Base
         $this->log('Something went wrong creating staging subdomain.');
         return false;
 
+    }
+
+    /**
+     * @param string $action
+     * @return bool
+     */
+    function localStuff($action = 'create')
+    {
+
+        if ($this->can_do('create_local_version_control')) {
+            $this->versionControlAccess('create', 'local');
+        }
+        $key_name = $this->config->live->domain ?? null;
+        $ssh_key = $this->terminal('local')->SSHKey($action, $key_name, $passphrase);
+        if (!empty($ssh_key)) {
+            $host = $this->config->live->domain ?? null;
+            $hostname = $this->config->live->cpanel->ssh->hostname ?? null;
+            $user = $this->config->live->cpanel->ssh->username ?? null;
+            $port = $this->config->live->cpanel->ssh->port ?? null;
+            $this->terminal('local')->SSHConfig($action, $host, $hostname, $key_name, $user, $port);
+
+            $this->whm->import_key($ssh_key, $key_name, $key_pass, $cpanel_parameter, $cpanel_parameter_type);
+        }
+        $this->terminal('local')->virtualHost($action);
+        $this->terminal('local')->Git('create');
+        return true;
     }
 
     /**
@@ -863,11 +925,33 @@ final class Deployer extends Base
         return true;
     }
 
+    function versionControlMainRepo(string $action = 'create')
+    {
+        if (!in_array($action, array('create', 'delete'))) {
+            $this->log("Can't do main version control repository stuff. Action should be 'create' or 'delete'.", 'error');
+            return false;
+        }
+        $repo_name = !empty($this->config->project_name) ? $this->config->project_name : '';
+        if (empty($repo_name)) {
+            $this->log(sprintf("Can't %s version control main repository. Repository name is empty. Repo name supposed to be based on project name so it's probably missing from config.", $action));
+            return false;
+        }
+        $domain = !empty($this->config->environ->live->domain) ? $this->config->environ->live->domain : '';
+        $repository = $this->github->repo($action, $repo_name, $domain);
+        if (!empty($repository)) {
+            $this->log(sprintf('Successfully %s version control main repository.', $this->actions[$action]['past']), 'success');
+            return true;
+        }
+        $this->log(sprintf("Something may have gone wrong while %s version control main repository.", $this->actions[$action]['present']), 'error');
+        return false;
+    }
+
     /**
      * @param string $action
+     * @param string $environment
      * @return bool
      */
-    function versionControlComponents(string $action = 'create')
+    function versionControlAccess(string $action = 'create', string $environment = 'live')
     {
         if (!in_array($action, array('create', 'delete'))) {
             $this->log("Can't do version control stuff. Action should be 'create' or 'delete'.", 'error');
@@ -875,35 +959,51 @@ final class Deployer extends Base
         }
         $this->log(sprintf('<h2>%s Version Control components.</h2>', ucfirst($this->actions[$action]['present'])), 'info');
         $repo_name = !empty($this->config->project_name) ? $this->config->project_name : '';
+        $message_string = sprintf('%s version control components.', $environment);
         if (empty($repo_name)) {
-            $this->log(sprintf("Can't %s version control components. Repository name is empty. Repo name supposed to be based on project name so it's probably missing from config.", $action));
+            $this->log(sprintf("Can't %s Repository name is empty. Repo name supposed to be based on project name so it's probably missing from config.",
+                $message_string, $action));
             return false;
         }
-        $domain = !empty($this->config->environ->live->domain) ? $this->config->environ->live->domain : '';
-        $repository = $this->github->repo($action, $repo_name, $domain);
-        $ssh_key = $this->terminal('live')->SSHKey($action, 'github');
-        $ssh_config = $this->terminal('live')->SSHConfig($action, 'github.com', 'github', 'git');
+        if ($environment == 'local') {
+            $this->log(sprintf("Can't %s Environment is local where VC components not needed.",
+                $message_string, $action));
+            return false;
+        }
+        $passphrase = $this->config->$environment->version_control->deploy_key->passphrase ?? '';
+        $ssh_key = $this->terminal($environment)->SSHKey($action, 'github_' . $repo_name, $passphrase);
+        $ssh_config = $this->terminal($environment)->SSHConfig($action, 'github_' . $repo_name, 'github.com', 'github_' . $repo_name, 'git');
         switch ($action) {
             case 'create':
                 $deploy_key = $this->github->deploy_key($ssh_key, $repo_name);
-                if (!$repository)
-                    $repository = $this->github->find_repo($repo_name);
-                if ($repository) {
-                    $source_repository = json_encode((object)['url' => $repository['ssh_url'], 'remote_name' => "origin"]);
-                    $this->whm->version_control('create', 'wordpress_website', '/home2/imogen/public_html', $source_repository, $this->config->environ->live->cpanel->account->username);
+                $upstream_repository = $this->github->find_repo($repo_name);
+                if ($upstream_repository) {
+                    $repository_root = $this->terminal($environment)->root;
+                    switch ($environment) {
+                        case 'live':
+                            $repository_root .= '/public_html';
+                            break;
+                        case 'staging':
+                            $repository_root = '/public_html' . $this->config->staging->cpanel->subdomain->directory;
+                            break;
+                    }
+                    $downstream_repository = $this->whm->version_control('create',
+                        'wordpress_website',
+                        $repository_root,
+                        json_encode((object)['url' => $upstream_repository['ssh_url'], 'remote_name' => "origin"]),
+                        $this->config->environ->live->cpanel->account->username
+                    );
                 }
                 break;
             case 'delete':
                 $deploy_key = true;
                 break;
         }
-        if (!empty($ssh_key) && !empty($ssh_config) && !empty($repository) && !empty($deploy_key))
-            $success = true;
-        if (!empty($success)) {
-            $this->log(sprintf('Successfully %s version control components.', $this->actions[$action]['past']), 'success');
+        if (!empty($ssh_key) && !empty($ssh_config) && !empty($deploy_key) && !empty($downstream_repository)) {
+            $this->log(sprintf('Successfully %s %s', $this->actions[$action]['past'], $message_string), 'success');
             return true;
         }
-        $this->log(sprintf("Something may have gone wrong while %s version control components.", $this->actions[$action]['present']), 'error');
+        $this->log(sprintf("Something may have gone wrong while %s %s", $this->actions[$action]['present'], $message_string), 'error');
         return false;
 
     }

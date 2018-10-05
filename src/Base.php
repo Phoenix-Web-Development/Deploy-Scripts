@@ -9,7 +9,6 @@ namespace Phoenix;
  */
 class Base
 {
-
     /**
      * @var array
      */
