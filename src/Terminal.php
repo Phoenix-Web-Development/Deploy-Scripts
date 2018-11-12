@@ -3,8 +3,10 @@
 namespace Phoenix;
 
 /**
- * @property array $root
+ *
  * @property array $prompt
+ * @property array $root
+ * @property \phpseclib\Net\SSH2 $ssh
  *
  * Class Terminal
  */
@@ -46,29 +48,46 @@ class Terminal extends Base
                 return call_user_func_array(array($this, $method), $arguments);
             }
             $this->log($error_string . " No SSH connection was established.");
+            return false;
         }
         $this->log($error_string . " No method available.");
         return false;
     }
 
     /**
+     * Inject SSH implementation. Don't do this if running commands locally
+     *
      * @param \phpseclib\Net\SSH2 $ssh
+     * @return \phpseclib\Net\SSH2
      */
-    public function setSSH(\phpseclib\Net\SSH2 $ssh)
+    public function setSSH(\phpseclib\Net\SSH2 $ssh = null)
     {
+        if (!empty($this->ssh))
+            return $this->ssh;
         $this->ssh = $ssh;
         sleep(1);
         $this->prompt();
+        return $ssh;
     }
 
-    public function root()
+    /**
+     * @return mixed
+     */
+    protected function root()
     {
         if (!empty($this->_root))
             return $this->_root;
-        return $this->_root = trim($this->exec('pwd'));
+        $pwd = trim($this->exec('pwd')) ?? false;
+        return $this->_root = $pwd;
     }
 
-    public function prompt()
+    protected function whoami()
+    {
+        $whoami = trim($this->exec('whoami')) ?? false;
+        return $whoami;
+    }
+
+    protected function prompt()
     {
         if (!empty($this->_prompt))
             return $this->_prompt;
@@ -80,7 +99,11 @@ class Terminal extends Base
         $prompt = trim($prompt);
         //$prompt = $user . '@' . $hostname;
         //$prompt = '';
-        $this->log(sprintf("Prompt string for terminal read() commands set to '<strong>%s</strong>'", $prompt), 'info');
+        if (empty($prompt)) {
+            $this->log(sprintf("Couldn't work out the %s environment terminal prompt for read() commands.", $this->environment));
+            return false;
+        }
+        $this->log(sprintf("Prompt string for %s environment terminal read() commands set to '<strong>%s</strong>'.", $this->environment, $prompt), 'info');
         return $this->_prompt = $prompt;
     }
 
@@ -92,16 +115,29 @@ class Terminal extends Base
     protected function exec(string $command = '', bool $format = false)
     {
         if (isset($this->ssh)) {
+            if (!$this->ssh->isAuthenticated() && !empty(debug_backtrace()[1]['function'])) {
+                $this->log(sprintf("%s environment SSH exec() failed as you aren't authenticated. Exec() called by <code>%s()</code> function.",
+                    ucfirst($this->environment), debug_backtrace()[1]['function']), 'error');
+                return false;
+            }
             $this->ssh->enablePTY();
             $this->ssh->exec($command);
             $output = $this->ssh->read();
+
             $this->ssh->disablePTY();
 
             //$output = $this->ssh->read('imogen@r143 [~]');
             //$this->ssh->write($command);
             //$output .= $this->ssh->read('imogen@r143 [~]');
-        } else if ($this->environment == 'local') {
-            exec($command, $output);
+        } elseif ($this->environment == 'local') {
+            //exec($command, $output);
+            exec($command, $raw_outputs);
+            $output = implode('<br>', $raw_outputs);
+            /*
+            foreach ($raw_outputs as $raw_output) {
+                $output .= $raw_output;
+            }
+            */
         } else
             return false;
         return $format ? $this->format_output($output) : $output;
@@ -117,6 +153,13 @@ class Terminal extends Base
      */
     protected function read_write(array $commands = array(), bool $format = false)
     {
+
+        if (!$this->ssh->isAuthenticated() && !empty(debug_backtrace()[1]['function'])) {
+            $this->log(sprintf("%s environment SSH read_write() failed as you aren't authenticated. read_write() called by <code>%s()</code> function.",
+                ucfirst($this->environment), debug_backtrace()[1]['function']), 'error');
+            return false;
+        }
+
         $prompt = $this->prompt();
         $outputs = array();
         $this->ssh->read($prompt);
@@ -284,10 +327,11 @@ class Terminal extends Base
      */
     protected function SSHKey(string $action = 'create', string $key_name = 'id_rsa', string $passphrase = '')
     {
-        $this->log(sprintf(" % s % s SSH key named <strong>%s</strong>.", ucfirst($this->actions[$action]['present']), $this->environment, $key_name), 'info');
+        $this->log(sprintf(" %s %s environment SSH key named <strong>%s</strong>.",
+            ucfirst($this->actions[$action]['present']), $this->environment, $key_name), 'info');
         $error_string = sprintf("%s %s environment SSH key.", $action, $this->environment);
         if (empty($key_name)) {
-            $this->log(sprintf("Can't %s. Key name function input is missing."));
+            $this->log(sprintf("Can't %s Key name function input is missing.", $error_string));
             return false;
         }
         $error_string = "Couldn't " . $error_string;
@@ -319,6 +363,14 @@ class Terminal extends Base
         return false;
     }
 
+    protected function localSSHKey(string $action = 'create', string $key_name = 'id_rsa', string $passphrase = '')
+    {
+        $output = $this->exec(sprintf('sudo /home/james/PhpstormProjects/Deploy/Project/bash/ssh-keygen.sh %s %s /home/james/.ssh/',
+            $passphrase, $key_name, '/home/james/.ssh/'));
+        echo $output;
+        return $output;
+    }
+
     /**
      * @param string $action
      * @param string $host
@@ -339,35 +391,41 @@ class Terminal extends Base
             $this->log(sprintf("Can't do %s environment SSH config stuff. Action must be 'create' or 'delete'.", $this->environment));
             return false;
         }
-        $message_string = sprintf("%s environment SSH config", $action, $this->environment);
+        $message_string = sprintf("%s environment SSH config", $this->environment);
         if (empty($host)) {
             $this->log(sprintf("Can't %s. Host missing from function input.", $message_string));
             return false;
         }
         $this->log(sprintf("%s %s for host <strong>%s</strong>.", ucfirst($this->actions[$action]['present']), $message_string, $host), 'info');
-        $error_string = sprintf("Couldn't %s.", $message_string);
+        $error_string = sprintf("Couldn't %s %s.", $action, $message_string);
         $location = '~/.ssh/config';
         $cat = 'cat ' . $location;
+        $chmod = 'chmod 600 ' . $location;
         $config_before = $this->exec('touch config; ' . $cat . ';');
+        $config_entry_exists = $this->exec('grep "Host ' . $host . '" ' . $location);
+        $config_entry_exists = (strlen($config_entry_exists) > 0 && strpos($config_entry_exists, 'Host ' . $host) !== false) ? true : false;
         switch ($action) {
             case 'create':
+                if ($config_entry_exists) {
+                    $this->log(sprintf(" %s Config entry for <strong>%s</strong> already exists.", $error_string, $host), 'error');
+                    return false;
+                }
                 $output = $this->exec('echo -e "Host ' . $host . '\n  Hostname ' . $hostname . '\n  User ' . $user
-                    . '\n  IdentityFile ~/.ssh/' . $key_name . '\n  Port ' . $port . '" >> ' . $location . '; chmod 600 ' . $location,
-                    true);
+                    . '\n  IdentityFile ~/.ssh/' . $key_name . '\n  Port ' . $port . '" >> ' . $location . ';' . $chmod, true);
                 $config_after = $this->exec($cat);
                 if ($config_before == $config_after) {
-                    $this->log(sprintf(" % s Config file is unchanged after attempting to add to it . ",
+                    $this->log(sprintf(" %s Config file is unchanged after attempting to add to it . ",
                         $error_string), 'error');
                     return false;
                 }
                 break;
             case 'delete':
-                if (empty($config_before)) {
-                    $this->log($error_string . " No need as config file is empty.", 'error');
+                if (!$config_entry_exists) {
+                    $this->log(sprintf("%s Config entry for <strong>%s</strong> doesn't exist.", $error_string, $host), 'error');
                     return false;
                 }
-                $output = $this->exec('sed "s /^Host / \n &/" ' . $location . ' | sed " /^Host "' . $host
-                    . '"$/,/^$/d;/^$/d" > ' . $location . '-dummy && mv ' . $location . '-dummy ' . $location, true);
+                $output = $this->exec('sed "s/^Host/\n&/" ' . $location . ' | sed "/^Host "' . $host
+                    . '"$/,/^$/d;/^$/d" > ' . $location . '-dummy; mv ' . $location . '-dummy ' . $location . ';' . $chmod, true);
                 $config_after = $this->exec($cat);
                 if (strpos($output, "unterminated `s' command") !== false) {
                     $this->log($error_string . " " . $output, 'error');
@@ -380,13 +438,61 @@ class Terminal extends Base
                 }
                 break;
         }
-        $this->log(sprintf("Successfully %s SSH config. %s", ucfirst($this->actions[$action]['past']), $output), 'success');
+        $this->log(sprintf("Successfully %s SSH config for host <strong>%s</strong>. %s", $this->actions[$action]['past'], $host, $output), 'success');
         return true;
         //$this->log( sprintf( "Failed to %s SSH config. %s", $action, $this->format_output( $output ) ), 'error' );
         //return false;
     }
 
-    protected function git($action = 'create', $ssh_password, $git_url = '')
+
+    protected function moveGit(string $worktree = '', string $separate_repo_location = '')
+    {
+        $message_string = sprintf("Git repository to <strong>%s</strong> separate from worktree at <strong>%s</strong>.", $separate_repo_location, $worktree);
+        $this->log(sprintf("Moving %s", $message_string), 'info');
+
+        $error_message_string = "Can't move " . $message_string;
+        $output = $this->exec('mkdir -p ' . $separate_repo_location . '; cd ' . $separate_repo_location . '; git rev-parse --is-inside-git-dir');
+        d($output);
+        if (strpos($output, 'true') !== false) {
+            $this->log(sprintf("%s Git repository already exists at <strong>%s</strong>", $error_message_string, $separate_repo_location));
+            return false;
+        }
+        $output = $this->exec('find ' . $separate_repo_location . ' -maxdepth 0 -empty -exec echo {} is empty. \;');
+        d($output);
+        if (strpos($output, $separate_repo_location . ' is empty') === false) {
+            $this->log(sprintf("%s Directory already exists at <strong>%s</strong> and contains files.", $error_message_string, $separate_repo_location));
+            return false;
+        }
+        $output = $this->exec('cd ' . $worktree . '; git init --separate-git-dir ' . $separate_repo_location, true);
+
+        $message_string .= ' ' . $output;
+        if (strpos($output, 'Reinitialized existing Git repository') !== false) {
+            $this->log(sprintf("Successfully moved %s", $message_string), 'success');
+            return true;
+        }
+        $this->log(sprintf("Failed to move %s", $message_string));
+        return false;
+    }
+
+    protected function deleteGit(string $separate_repo_location = '')
+    {
+        $message_string = sprintf("Git repository folder at <strong>%s</strong>.", $separate_repo_location);
+        $this->log(sprintf("Deleting %s", $message_string), 'info');
+        $cd = 'cd ' . $separate_repo_location . ';';
+        if (strpos($this->exec($cd), 'No such file or directory') !== false) {
+            $this->log(sprintf("No need to delete %s Folder doesn't exist.", $message_string));
+            return false;
+        }
+        $this->exec('rm -rf ' . $separate_repo_location . ';');
+        if (strpos($this->exec($cd), 'No such file or directory') !== false) {
+            $this->log(sprintf("Successfully deleted %s", $message_string), 'success');
+            return true;
+        }
+        $this->log(sprintf("Failed to delete %s", $message_string));
+        return false;
+    }
+
+    protected function git($action = 'create', $github_user, $github_project /*, $ssh_password = '', $git_url = ''*/)
     {
         /*
         $read = $this->prompt();
@@ -397,7 +503,7 @@ class Terminal extends Base
         $this->ssh->write( "git clone git@github.com:jamesjonesphoenix/my-new-repo.git\n" ); // note the "\n"
         //$this->ssh->setTimeout( 5 );
         $this->log( $this->ssh->read( $read ), 'info' );
-*/
+        */
 
         switch ($this->environment) {
             case 'local':
@@ -407,7 +513,8 @@ class Terminal extends Base
             case 'live':
                 $commands = array(
                     $ssh_password . "\n",
-                    "git clone git@github.com:jamesjonesphoenix/my-new-repo.git\n"
+                    "git clone git@github.com:" . $github_user . "/" . $github_project . ".git\n"
+                    //git@github.com:jamesjonesphoenix/ahtgroup.git
                 );
                 $output = $this->read_write($commands);
                 $this->log($output, 'info');
@@ -431,7 +538,7 @@ class Terminal extends Base
             $this->log("Can't do virtual host stuff. Action must be 'create' or 'delete'.");
             return false;
         }
-        $error_string = sprintf("Can't %s virtual host.");
+        $error_string = sprintf("Can't %s virtual host.", $action);
         $output = $this->exec(sprintf('sudo ../bash/virtualhost.sh %s %s %s', $action, $domain, $directory));
         if (strpos($output, 'You have no permission to run') !== false) {
             $this->log(sprintf("%s Insufficient permissions to run the script. Try adding script to NOPASSWD in visudo.", $error_string));

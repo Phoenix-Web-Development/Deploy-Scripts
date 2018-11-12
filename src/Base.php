@@ -13,31 +13,61 @@ class Base
      * @var array
      */
     private $_actions = array(
+        'authorize' => array(
+            'present' => 'authorising',
+            'past' => 'authorised',
+            'action' => 'authorise'
+        ),
+        'clone' => array(
+            'present' => 'cloning',
+            'past' => 'cloned',
+            'action' => 'clone'
+        ),
         'create' => array(
             'present' => 'creating',
             'past' => 'created',
             'action' => 'create'
+        ),
+        'deauthorize' => array(
+            'present' => 'deauthorising',
+            'past' => 'deauthorised',
+            'action' => 'deauthorise'
         ),
         'delete' => array(
             'present' => 'deleting',
             'past' => 'deleted',
             'action' => 'delete'
         ),
+        'generate' => array(
+            'present' => 'generating',
+            'past' => 'generated',
+            'action' => 'generate'
+        ),
         'get' => array(
             'present' => 'getting',
             'past' => 'got',
             'action' => 'get'
+        ),
+        'install' => array(
+            'present' => 'installing',
+            'past' => 'installed',
+            'action' => 'install'
+        ),
+        'remove' => array(
+            'present' => 'removing',
+            'past' => 'removed',
+            'action' => 'remove'
         ),
         'set' => array(
             'present' => 'setting',
             'past' => 'set',
             'action' => 'set'
         ),
-        'install' => array(
-            'present' => 'installing',
-            'past' => 'installed',
-            'action' => 'install'
-        )
+        'upload' => array(
+            'present' => 'uploading',
+            'past' => 'uploaded',
+            'action' => 'upload'
+        ),
     );
 
     public function __construct()

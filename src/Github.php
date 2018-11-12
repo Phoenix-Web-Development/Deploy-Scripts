@@ -43,38 +43,78 @@ class Github extends Base
     }
 
     /**
-     * @param string $public_key
+     * @param string $action
      * @param string $repo_name
+     * @param string $key_title
+     * @param string $public_key
      * @return bool
      */
-    public function deploy_key(string $public_key = '', string $repo_name = '')
+    public function deploy_key(string $action = 'upload', string $repo_name = '', string $key_title = '', string $public_key = '')
     {
-        $this->log("Uploading GitHub deploy key.", 'info');
-        $error_string = "Couldn't create GitHub deploy key.";
-        if (empty($public_key)) {
-            $this->log(sprintf("%s Public key not supplied to function.", $error_string), 'error');
+        if (!in_array($action, array('upload', 'get', 'remove'))) {
+            $this->log("Can't do github deploy key stuff. Action should be 'get','upload' or 'remove'.", 'error');
             return false;
         }
+        $error_string = sprintf("Couldn't %s GitHub deploy key.", $action);
         if (empty($repo_name)) {
             $this->log(sprintf("%s Repo name not supplied to function.", $error_string));
             return false;
         }
-        $deploy_keys = $this->client->api('repo')->keys()->all($this->user, $repo_name);
-        $key_title = 'Live cPanel';
-        if (!empty($deploy_keys)) {
-            foreach ($deploy_keys as $key) {
-                if ($key['title'] == $key_title) {
-                    $this->log(sprintf("Can't create GitHub deploy key. Key named <strong>%s</strong> already exists.", $key['title']));
+        if ($action != 'get')
+            $this->log(sprintf("%s GitHub deploy key <strong>%s</strong> for repository <strong>%s</strong>.",
+                ucfirst($this->actions[$action]['present']), $key_title, $repo_name), 'info');
+        $key_title = $key_title ?? 'Deploy Key';
+        switch ($action) {
+            case 'upload':
+                if (empty($public_key)) {
+                    $this->log(sprintf("%s Public key not supplied to function.", $error_string), 'error');
                     return false;
                 }
-            }
+                if ($this->deploy_key('get', $repo_name, $key_title)) {
+                    $this->log(sprintf("Can't upload GitHub deploy key. Key named <strong>%s</strong> already exists.", $key_title));
+                    return false;
+                }
+                $uploaded_key = $this->client->api('repo')->keys()->create($this->user, $repo_name,
+                    array('title' => $key_title, 'key' => $public_key));
+                if (!empty($uploaded_key) && $uploaded_key['title'] == $key_title) {
+                    $success = true;
+                }
+                break;
+            case 'remove':
+                $existing_key = $this->deploy_key('get', $repo_name, $key_title);
+                if (!$existing_key) {
+                    $this->log(sprintf("Can't remove GitHub deploy key. Key named <strong>%s</strong> doesn't exist.", $key_title));
+                    return false;
+                }
+                $this->client->api('repo')->keys()->remove($this->user, $repo_name, $existing_key['id']);
+                if (!$this->deploy_key('get', $repo_name, $key_title)) {
+                    $success = true;
+                }
+                break;
+            case 'get':
+                $deploy_keys = $this->client->api('repo')->keys()->all($this->user, $repo_name);
+                if (!empty($deploy_keys)) {
+                    foreach ($deploy_keys as $key) {
+                        if ($key['title'] == $key_title) {
+                            return $key;
+                        }
+                    }
+                }
+                return false;
+                /*
+                if (!empty($existing_key)) {
+                    $this->log(sprintf("Found GitHub deploy key named <strong>%s</strong>.", $key_title));
+                    return $existing_key;
+                }
+                */
+                break;
         }
-        $uploaded_key = $this->client->api('repo')->keys()->create($this->user, $repo_name, array('title' => $key_title, 'key' => $public_key));
-        if (!empty($uploaded_key) && $uploaded_key['title'] == $key_title) {
-            $this->log("Successfully created GitHub deploy key.", 'success');
+        $message_string = sprintf('GitHub deploy key named <strong>%s</strong> to Github.', $key_title);
+        if (!empty($success)) {
+            $this->log(sprintf("Successfully %s %s.", $this->actions[$action]['past'], $message_string), 'success');
             return true;
         }
-        $this->log("Failed to create GitHub deploy key.", 'error');
+        $this->log(sprintf("Failed to %s %s.", $action, $message_string), 'error');
         return false;
     }
 

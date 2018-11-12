@@ -1,12 +1,6 @@
 <?php namespace Phoenix; ?>
 <div class="col-md-12">
-    <?php
-
-    logger()->add('<h3>cPanel Staging Subdomains</h3>' . build_recursive_list((array)ph_d()->get_staging_subdomains()), 'light');
-    logger()->add('<h3>Input Config Array</h3>' . build_recursive_list((array)ph_d()->config), 'light');
-
-    logger()->display();
-    ?>
+    <?php logger()->display(); ?>
 </div>
 </div>
 </div>
