@@ -582,10 +582,9 @@ class WHM extends Base
      */
     function db_user_privileges(string $action = 'get', string $db_user = '', string $db_name = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
     {
-        if (!in_array($action, array('get', 'set'))) {
-            $this->log("Can't do DB user privileges stuff. Action should be 'get' or 'set'.", 'error');
+        if (!$this->validate_action($action, array('get', 'set'), "Can't do DB user privileges stuff."))
             return false;
-        }
+
         $error_string_append = sprintf("Can't %s DB user privileges. ", $action);
         if (empty($db_user)) {
             $this->log($error_string_append . "DB user is blank.");
@@ -742,16 +741,19 @@ class WHM extends Base
     }
 
     /**
-     * @param string $db_input
+     * Ensure input has the cPanel prefix on the front
+     *
+     * @param $db_inputs
      * @param string $cpanel_username
      * @return bool|string
      */
-    private
-    function db_prefix_check(string $db_input = '', string $cpanel_username = '')
+    public
+    function db_prefix_check($db_inputs = array(), string $cpanel_username = '')
     {
-        //ensure input has the cPanel prefix on the front
-        if (empty($db_input))
+        if (empty($db_inputs))
             return false;
+        if (is_string($db_inputs))
+            $db_inputs = array($db_inputs);
         if (empty($cpanel_username)) {
             $cpanel_account = $this->get_cpanel_account();
             if (!$cpanel_account) {
@@ -762,10 +764,14 @@ class WHM extends Base
         }
         if (empty($cpanel_username))
             return false;
-        $strpos = strpos($db_input, substr($cpanel_username . '_', 0, 8));
-        if ($strpos === false || $strpos > 0)
-            $db_input = $cpanel_username . '_' . $db_input;
-        return $db_input;
+        foreach ($db_inputs as &$db_input) {
+            $strpos = strpos($db_input, substr($cpanel_username . '_', 0, 8));
+            if ($strpos === false || $strpos > 0)
+                $db_input = $cpanel_username . '_' . $db_input;
+        }
+        if (count($db_inputs) == 1)
+            return $db_inputs[0];
+        return $db_inputs;
     }
 
     /**
@@ -906,10 +912,8 @@ class WHM extends Base
     function email_filter($action = '', string $account = '', string $filter_name = '', $args = array(),
                           string $cpanel_parameter = '', string $cpanel_parameter_type = 'user', bool $quiet = false)
     {
-        if (!in_array($action, array('create', 'delete', 'get'))) {
-            $this->log("Can't do email filter stuff. Action should be 'get', 'create', or 'delete'.", 'error');
+        if (!$this->validate_action($action, array('create', 'delete', 'get'), "Can't do email filter stuff."))
             return false;
-        }
         $error_string_append = sprintf("Can't %s email filter. ", $action);
         if (empty($account)) {
             $this->log($error_string_append . 'Email account input is missing. ', 'error');
@@ -927,7 +931,7 @@ class WHM extends Base
         $finish_message_append = sprintf(" email filter <strong>%s</strong> for email account <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.",
             $filter_name, $account, $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
         $args_api_call = array();
-        if ($action != 'get')
+        if (!$quiet)
             $this->log(ucfirst($this->actions[$action]['present']) . $finish_message_append, 'info');
         switch ($action) {
             case 'create':
@@ -936,8 +940,7 @@ class WHM extends Base
                     $account,
                     $filter_name,
                     $cpanel_parameter,
-                    $cpanel_parameter_type,
-                    true
+                    $cpanel_parameter_type
                 );
 
                 if (!empty($queried_filter)) {
@@ -1020,7 +1023,7 @@ class WHM extends Base
     public
     function get_email_filter(string $account = '', string $filter_name = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
     {
-        return $this->email_filter('get', $account, $filter_name, array(), $cpanel_parameter, $cpanel_parameter_type);
+        return $this->email_filter('get', $account, $filter_name, array(), $cpanel_parameter, $cpanel_parameter_type, true);
     }
 
     /**
@@ -1293,10 +1296,9 @@ class WHM extends Base
     public
     function authkey(string $key_name = '', string $action = 'authorize', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
     {
-        if (!in_array($action, array('authorize', 'deauthorize'))) {
-            $this->log("Can't do key authorisation stuff. Action must be 'authorize' or 'deauthorize'.");
+        if (!$this->validate_action($action, array('authorize', 'deauthorize'), "Can't do cPanel key authorisation stuff."))
             return false;
-        }
+
         $error_string_append = sprintf("Can't %s SSH key.", $this->actions[$action]['action']);
         if (empty($key_name)) {
             $this->log($error_string_append . "No key name supplied to function.", 'error');
@@ -1326,7 +1328,6 @@ class WHM extends Base
             return false;
         }
 
-        $this->log(ucfirst($this->actions[$action]['present']) . $finish_message_append, 'info');
         if (!$result = $this->api_call('cpanel', array_merge($this->_cpanel_api_functions['SSH']['authkey'], array(
             'cpanel_jsonapi_user' => $cpanel_account['user'],
             'cpanel_jsonapi_module' => 'SSH',
@@ -1478,14 +1479,11 @@ class WHM extends Base
         ), $args))
         )
             return false;
-        d($result);
         $finish_message_append .= $result['message'];
         if ($result['success']) {
             switch ($action) {
                 case 'clone':
-                    $blegh = $this->version_control('get', $repository_root, $repo_name, $source_repository);
-                    d($blegh);
-                    if ($blegh) {
+                    if ($this->version_control('get', $repository_root, $repo_name, $source_repository)) {
                         $success = true;
                     }
                     break;

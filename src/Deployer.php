@@ -53,6 +53,7 @@ final class Deployer extends Base
      */
     public $staging_cpanel_key;
 
+    public $staging_cpanel_account;
     /**
      * @var array
      */
@@ -108,7 +109,7 @@ final class Deployer extends Base
             'condition' => array('delete', 'delete_live_stuff')),
         'delete_live_version_control' => array('label' => 'Remove version control',
             'condition' => array('delete', 'delete_live_stuff')),
-        'delete_live_wordpress' => array('label' => 'Remove WordPress',
+        'delete_live_wp' => array('label' => 'Remove WordPress',
             'condition' => array('delete', 'delete_live_stuff')),
 
         'delete_staging_stuff' => array('label' => 'Staging stuff',
@@ -121,7 +122,7 @@ final class Deployer extends Base
             'condition' => array('delete', 'delete_staging_stuff')),
         'delete_staging_version_control' => array('label' => 'Remove version control',
             'condition' => array('delete', 'delete_staging_stuff')),
-        'delete_staging_wordpress' => array('label' => 'WordPress',
+        'delete_staging_wp' => array('label' => 'WordPress',
             'condition' => array('delete', 'delete_staging_stuff')),
 
         'delete_local_stuff' => array('label' => 'Delete local stuff',
@@ -209,9 +210,9 @@ final class Deployer extends Base
                     $this->versionControlMainRepo('create');
                 }
                 if ($this->can_do('create_live_stuff'))
-                    $this->create_live_stuff();
+                    $this->do_environ_stuff('create', 'live');
                 if ($this->can_do('create_staging_stuff'))
-                    $this->do_staging_stuff('create');
+                    $this->do_environ_stuff('create', 'staging');
                 if ($this->can_do('create_local_stuff'))
                     $this->localStuff('create');
 
@@ -220,9 +221,9 @@ final class Deployer extends Base
                 if ($this->can_do('delete_version_control'))
                     $this->versionControlMainRepo('delete');
                 if ($this->can_do('delete_live_stuff'))
-                    $this->delete_live_stuff();
+                    $this->do_environ_stuff('delete', 'live');
                 if ($this->can_do('delete_staging_stuff'))
-                    $this->do_staging_stuff('delete');
+                    $this->do_environ_stuff('delete', 'staging');
                 if ($this->can_do('delete_local_stuff'))
                     $this->localStuff('delete');
 
@@ -463,42 +464,64 @@ final class Deployer extends Base
     }
 
     /**
+     * @param string $action
+     * @param string $environment
      * @return bool
      */
-    function create_live_stuff()
+    function do_environ_stuff($action = 'create', $environment = 'live')
     {
-        $this->log('<h2>Creating nominated live stuff.</h2>', 'info');
+        if (!$this->validate_action($action, array('create', 'delete'), sprintf("Can't do %s environ stuff.", $environment)))
+            return false;
+        if (!in_array($environment, array('live', 'staging'))) {
+            $this->log(sprintf("Can't %s stuff. Environment must be 'live' or 'staging'.", $action), 'error');
+            return false;
+        }
+        $this->log(sprintf('<h2>%s nominated %s stuff.</h2>', ucfirst($this->actions[$action]['present']), $environment), 'info');
 
-        if ($this->can_do('create_live_site')) {
-            $created_live_account = $this->create_live_cpanel_account();
+        $actions = array(
+            'live_site' => $this->can_do($action . '_live_site'),
+            'subdomain' => $this->can_do($action . '_staging_subdomain'),
+            'db' => $this->can_do($action . '_' . $environment . '_db'),
+            'email_filters' => $this->can_do($action . '_' . $environment . '_email_filters'),
+            'version_control' => $this->can_do($action . '_' . $environment . '_version_control'),
+            'wp' => $this->can_do($action . '_' . $environment . '_wp'),
+        );
+
+        //actual site environment and db - logic mess
+        if ($environment == 'live' && $actions['live_site']) {
+            //$live_account = $this->$action . '_live_cpanel_account'();
+            $function_name = $action . '_live_cpanel_account';
+            $live_cpanel_account = $this->$function_name();
+            //$live_account = call_user_func(array($this, $action . '_live_cpanel_account'));
+        } elseif ($actions['subdomain'] && $environment == 'staging') {
+            $function_name = $action . '_staging_subdomain';
+            $staging_subdomain = $this->$function_name();
         }
 
-        if ($this->can_do('create_live_db')) {
-            $created_db = $this->database_components('create', 'live');
+        if ($actions['db'] && ($action == 'create' || $environment == 'staging' || ($action == 'delete' && !$actions['live_site'])))
+            $db = $this->database_components($action, $environment);
+
+        //shared actions
+        if ($actions['email_filters'])
+            $email_filters = $this->email_filters($action, $environment);
+        if ($actions['version_control'])
+            $version_control = $this->versionControlAccess($action, $environment);
+        if ($actions['wp']) {
+            $wp = $this->wordpress($action, $environment);
         }
 
-        if ($this->can_do('create_live_email_filters'))
-            $created_email_filters = $this->email_filters('create', 'live');
-
-        if ($this->can_do('create_live_version_control')) {
-            $created_version_control = $this->versionControlAccess('create', 'live');
-        }
-
-        if ($this->can_do('create_live_wp')) {
-            $created_wordpress = $this->wordpress('install', 'live');
-        }
-
-        if ((!$this->can_do('create_live_site') || !empty($created_live_account))
-            && (!$this->can_do('create_live_db') || !empty($created_db))
-            && (!$this->can_do('create_live_email_filters') || !empty($created_email_filters))
-            && (!$this->can_do('create_live_version_control') || !empty($created_version_control))
-            && (!$this->can_do('create_live_wp') || !empty($created_wordpress))
+        if (((!$actions['live_site'] || !empty($live_cpanel_account)) || (!$actions['subdomain'] || !empty($staging_subdomain)))
+            && (!$actions['db'] || !empty($db) || ($action == 'delete' && !empty($live_cpanel_account)))
+            && (!$actions['email_filters'] || !empty($email_filters))
+            && (!$actions['version_control'] || !empty($version_control))
+            && (!$actions['wp'] || !empty($wp))
         ) {
-            $this->log('Successfully created nominated live stuff.', 'success');
+            $this->log(sprintf('Successfully %s nominated %s stuff.', $this->actions[$action]['past'], $environment), 'success');
             return true;
         }
-        $this->log('Something may have gone wrong creating nominated live stuff.');
+        $this->log(sprintf('Something may have gone wrong while %s nominated %s stuff.', $this->actions[$action]['present'], $environment), 'error');
         return false;
+
     }
 
     /**
@@ -525,54 +548,12 @@ final class Deployer extends Base
             return false;
         }
         $this->log("No pre-existing live cPanel account so let's create a new one.", 'info');
-        $create_account_args = !empty($this->config->environ->live->cpanel->create_account_args) ? $this->config->environ->live->cpanel->create_account_args : array();
+        $create_account_args = $this->config->environ->live->cpanel->create_account_args ?? array();
         if ($this->whm->create_cpanel_account($username, $domain, (array)$create_account_args))
             return true;
         return false;
     }
 
-    public function do_staging_stuff($action = 'create', $environment = 'staging')
-    {
-        $this->log(sprintf('<h2>%s nominated %s stuff.</h2>', ucfirst($this->actions[$action]['present']), $environment), 'info');
-        $actions = array(
-            'subdomain' => $this->can_do($action . '_staging_subdomain'),
-            'db' => $this->can_do($action . '_staging_db'),
-            'email_filters' => $this->can_do($action . '_staging_email_filters'),
-            'version_control' => $this->can_do($action . '_staging_version_control'),
-            'wordpress' => $this->can_do($action . '_staging_wp'),
-        );
-        if ($action == 'create') {
-            if ($actions['subdomain']) {
-                $staging_subdomain = $this->create_staging_subdomain();
-            }
-        }
-        if ($actions['db'])
-            $db = $this->database_components($action, 'staging');
-        if ($action == 'delete') {
-            if ($actions['subdomain']) {
-                $staging_subdomain = $this->delete_staging_subdomain();
-            }
-        }
-        if ($actions['email_filters'])
-            $email_filters = $this->email_filters($action, 'staging');
-        if ($actions['version_control'])
-            $version_control = $this->versionControlAccess($action, 'staging');
-        if ($actions['wordpress']) {
-            $wp_action = $action == 'create' ? 'install' : 'delete';
-            $wordpress = $this->wordpress($wp_action, 'staging');
-        }
-
-        if ((!$actions['subdomain'] || !empty($staging_subdomain))
-            && (!$actions['db'] || !empty($db))
-            && (!$actions['email_filters'] || !empty($email_filters))
-            && (!$actions['version_control'] || !empty($version_control))
-            && (!$actions['wordpress'] || !empty($wordpress))) {
-            $this->log(sprintf('Successfully %s nominated staging stuff.', $this->actions[$action]['past']), 'success');
-            return true;
-        }
-        $this->log(sprintf('Something may have gone wrong while %s nominated staging stuff.', $this->actions[$action]['present']), 'error');
-        return false;
-    }
 
     /**
      * @return bool
@@ -655,6 +636,8 @@ final class Deployer extends Base
     function find_staging_cpanel(string $subdomain_slug = '', array $cpanel_accounts = array())
     {
         $error_string = "Can't find staging cPanel subdomain.";
+        if (!empty($this->staging_cpanel_account))
+            return $this->staging_cpanel_account;
         if (empty($subdomain_slug)) {
             if (empty($this->config->environ->staging->cpanel->subdomain->slug)) {
                 $this->log($error_string . " cPanel subdomain slug missing.");
@@ -673,7 +656,7 @@ final class Deployer extends Base
             $subdomain = $this->whm->get_subdomain($subdomain_slug, $cpanel_account->username);
             if ($subdomain) {
                 $cpanel_account = $this->whm->get_cpanel_account($subdomain['user']);
-                return $cpanel_account;
+                return $this->staging_cpanel_account = $cpanel_account;
             }
         }
         return false;
@@ -752,14 +735,13 @@ final class Deployer extends Base
      */
     function database_components(string $action = 'create', string $environment = 'live')
     {
-        if (!in_array($action, array('create', 'delete'))) {
-            $this->log("Can't do cPanel database stuff. Action must be 'create' or 'delete'.", 'error');
+        if (!$this->validate_action($action, array('create', 'delete'), sprintf("Can't do %s cPanel database stuff.", $environment)))
             return false;
-        }
+
         $error_string = sprintf("Can't %s %s cPanel database components.", $action, $environment);
         $this->log(sprintf('<h4>%s database components for %s cPanel account.</h4>',
             ucfirst($this->actions[$action]['present']), $environment), 'info');
-        $db_args = !empty($this->config->environ->$environment->db) ? $this->config->environ->$environment->db : null;
+        $db_args = $this->config->environ->$environment->db ?? null;
         if (!isset($db_args->name, $db_args->username, $db_args->password)) {
             $this->log($error_string . " DB name, username and/or password are missing from config.", 'error');
             return false;
@@ -795,38 +777,6 @@ final class Deployer extends Base
         return false;
     }
 
-    /**
-     * @return bool
-     */
-    function delete_live_stuff()
-    {
-        $this->log('<h2>Deleting nominated live stuff.</h2>', 'info');
-
-        if ($this->can_do('delete_live_site')) {
-            $deleted_cpanel = $this->delete_live_cpanel_account();
-        } else if ($this->can_do('delete_live_db')) {
-            $deleted_cpanel = $this->database_components('delete', 'live');
-        }
-
-        if ($this->can_do('delete_live_email_filters')) {
-            $deleted_email_filters = $this->email_filters('delete', 'live');
-        }
-
-        if ($this->can_do('delete_live_version_control')) {
-            $deleted_version_control = $this->versionControlAccess('delete', 'live');
-        }
-
-        if (((!$this->can_do('delete_live_site') && !$this->can_do('delete_live_db')) || !empty($deleted_cpanel))
-            && (!$this->can_do('delete_live_email_filters') || !empty($deleted_email_filters))
-            && (!$this->can_do('delete_live_version_control') || !empty($deleted_version_control))
-        ) {
-            $this->log('Successfully deleted nominated live stuff.', 'success');
-            return true;
-        }
-
-        $this->log('Something may have gone wrong deleting nominated live stuff.', 'error');
-        return false;
-    }
 
     /**
      * @return bool
@@ -945,17 +895,16 @@ final class Deployer extends Base
      */
     function email_filters(string $action = 'create', string $environment = 'live')
     {
-        if (!in_array($action, array('create', 'delete'))) {
-            $this->log("Can't do cPanel email filter stuff. Action should be 'create' or 'delete'.", 'error');
+        if (!$this->validate_action($action, array('create', 'delete'), sprintf("Can't do %s cPanel email filter stuff.", $environment)))
             return false;
-        }
+
         $this->log(sprintf('<h4>%s %s cPanel email filters.</h4> ', ucfirst($this->actions[$action]['present']), $environment), 'info');
         $error_string = sprintf("Can't %s %s email filters.", $action, $environment);
         if (empty($this->config->environ->$environment->cpanel->email_filters)) {
             $this->log($error_string . " Filter args missing from config.", 'error');
             return false;
         }
-        $cpanel_username = !empty($this->config->environ->primary->cpanel->username) ? $this->config->environ->primary->cpanel->username : '';
+        $cpanel_username = $this->config->environ->primary->cpanel->username ?? '';
         if (empty($cpanel_username)) {
             $this->log($error_string . " Primary cPanel account username missing from config.", 'error');
             return false;
@@ -996,16 +945,14 @@ final class Deployer extends Base
 
     function versionControlMainRepo(string $action = 'create')
     {
-        if (!in_array($action, array('create', 'delete'))) {
-            $this->log("Can't do main version control repository stuff. Action should be 'create' or 'delete'.", 'error');
+        if (!$this->validate_action($action, array('create', 'delete'), "Can't do main version control repository stuff."))
             return false;
-        }
-        $repo_name = !empty($this->config->project_name) ? $this->config->project_name : '';
+        $repo_name = $this->config->project_name ?? '';
         if (empty($repo_name)) {
             $this->log(sprintf("Can't %s version control main repository. Repository name is empty. Repo name supposed to be based on project name so it's probably missing from config.", $action));
             return false;
         }
-        $domain = !empty($this->config->environ->live->domain) ? $this->config->environ->live->domain : '';
+        $domain = $this->config->environ->live->domain ?? '';
         $repository = $this->github->repo($action, $repo_name, $domain);
         if (!empty($repository)) {
             $this->log(sprintf('Successfully %s version control main repository.', $this->actions[$action]['past']), 'success');
@@ -1022,11 +969,10 @@ final class Deployer extends Base
      */
     function versionControlAccess(string $action = 'create', string $environment = 'live')
     {
-        if (!in_array($action, array('create', 'delete'))) {
-            $this->log("Can't do version control stuff. Action should be 'create' or 'delete'.", 'error');
+        if (!$this->validate_action($action, array('create', 'delete'), sprintf("Can't do %s environment version control stuff.", $environment)))
             return false;
-        }
-        $this->log(sprintf('<h2>%s %s Version Control components.</h2>', ucfirst($this->actions[$action]['present']), $environment), 'info');
+
+        $this->log(sprintf('<h2>%s %s version control components.</h2>', ucfirst($this->actions[$action]['present']), $environment), 'info');
         $repo_name = $this->config->project_name ?? '';
         $message_string = sprintf('%s version control components.', $environment);
         $error_string = sprintf("Can't %s %s", $action, $message_string);
@@ -1122,14 +1068,16 @@ final class Deployer extends Base
     {
         $error_string = sprintf("Can't get %s environment url.", $environment);
         if ($environment == 'staging') {
-            if (!$this->find_staging_cpanel())
+            $staging_cpanel = $this->find_staging_cpanel();
+            if (!$staging_cpanel)
                 return false;
-            $slug = !empty($this->config->environ->staging->cpanel->subdomain->slug) ? $this->config->environ->staging->cpanel->subdomain->slug : '';
+            $slug = $this->config->environ->staging->cpanel->subdomain->slug ?? '';
             if (empty($slug)) {
                 $this->log($error_string . " Subdomain slug missing.", 'error');
                 return false;
             }
-            $url = $this->whm->get_subdomain($slug)['domain'];
+            $url = $slug . '.' . $staging_cpanel['domain'];
+            //$url = $this->whm->get_subdomain($slug)['domain'];
         } else {
             if (empty($this->config->environ->$environment->domain)) {
                 $this->log($error_string . " Domain missing from config.", 'error');
@@ -1154,7 +1102,7 @@ final class Deployer extends Base
             $disklimit += intval($account['disklimit']);
         }
         $diskusage = $this->whm->get_disk_usage();
-        $disktotal = !empty($diskusage['total']) ? $diskusage['total'] : 100000;
+        $disktotal = $diskusage['total'] ?? 100000;
         return array(
             'used' => $diskused,
             'allocated' => $disklimit,
@@ -1169,23 +1117,36 @@ final class Deployer extends Base
      */
     function wordpress(string $action = 'install', string $environment = 'live')
     {
-        if (!in_array($action, array('install', 'delete'))) {
-            $this->log("Can't do WordPress stuff. Action must be 'install' or 'delete'.", 'error');
+        if (!$this->validate_action($action, array('create', 'install', 'delete'), "Can't do WordPress stuff."))
             return false;
+        $action = $action == 'create' ? 'install' : $action;
+
+        $this->log(sprintf('<h2>%s WordPress and WP CLI</h2>', ucfirst($this->actions[$action]['present'])), 'info');
+        $root = $this->terminal($environment)->root;
+        switch ($environment) {
+            case 'live':
+                $directory = $root . '/public_html';
+                break;
+            case 'staging':
+                $directory = !empty($this->config->environ->$environment->cpanel->subdomain->directory) ?
+                    $root . $this->config->environ->$environment->cpanel->subdomain->directory : '';
+                break;
         }
-        $this->log(sprintf('%s WordPress and WP CLI.', ucfirst($this->actions[$action]['present'])), 'info');
         switch ($action) {
             case 'install':
                 $this->terminal($environment)->WPCLI('install');
-                $wp_args = !empty($this->config->wordpress) ? $this->config->wordpress : null;
-                $wp_args->title = !empty($this->config->project_name) ? $this->config->project_name : 'Insert Site Title Here';
+                $wp_args = $this->config->wordpress ?? null;
+                $wp_args->title = $this->config->project_name ?? 'Insert Site Title Here';
                 $wp_args->url = $this->get_environment_url($environment);
-                $db_args = !empty($this->config->environ->$environment->db) ? $this->config->environ->$environment->db : null;
-                $success = $this->terminal($environment)->WordPress('install', (array)$db_args, (array)$wp_args);
+                $db_args = (array)$this->config->environ->$environment->db ?? null;
+                $db_args['name'] = $this->whm->db_prefix_check($db_args['name']);
+                $db_args['username'] = $this->whm->db_prefix_check($db_args['username']);
+                $success = $this->terminal($environment)->WordPress('install', $directory, $db_args, (array)$wp_args);
                 break;
             case 'delete':
-                $deleted_wp = $this->terminal($environment)->WordPress('delete');
-                $deleted_wp_cli = $this->terminal($environment)->WPCLI('delete');
+                $deleted_wp = $this->terminal($environment)->WordPress('delete', $directory);
+                if ($deleted_wp)
+                    $deleted_wp_cli = $this->terminal($environment)->WPCLI('delete');
                 if ($deleted_wp && $deleted_wp_cli)
                     $success = true;
                 break;

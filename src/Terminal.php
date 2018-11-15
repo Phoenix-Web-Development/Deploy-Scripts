@@ -193,32 +193,36 @@ class Terminal extends Base
      */
     protected function WPCLI(string $action = 'install')
     {
-        if (!in_array($action, array('install', 'delete'))) {
-            $this->log(sprintf("Can't do WP CLI stuff in %s environment. Action must be 'install' or 'delete'.", $this->environment), 'error');
+        if (!$this->validate_action($action, array('check', 'install', 'delete'), sprintf("Can't do WP CLI stuff in %s environment.", $this->environment)))
             return false;
-        }
         $string = sprintf("WP CLI in %s environment", $this->environment);
         $error_string = sprintf("Can't %s %s.", $action, $string);
-        $this->log(sprintf('%s WordPress CLI.', ucfirst($this->actions[$action]['present'])), 'info');
-        $installed = $this->checkWPCLI();
+        if ($action != 'check')
+            $this->log(sprintf('%s WordPress CLI in %s environment .', ucfirst($this->actions[$action]['present']), $this->environment), 'info');
         $output = '';
         switch ($action) {
+            case 'check':
+                $output = $this->exec('wp --info;');
+                if (strpos($output, 'WP-CLI version:	2') !== false) //big space between : and 2
+                    return true;
+                return false;
+                break;
             case 'install':
-                if ($installed) {
+                if ($this->WPCLI('check')) {
                     $this->log(sprintf('%s already installed.', $string), 'info');
                     return true;
                 }
                 $output = $this->exec('curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar; chmod +x wp-cli.phar; mkdir ~/bin; mv wp-cli.phar ~/bin/wp; echo -e "PATH=$PATH:$HOME/.local/bin:$HOME/bin\n\nexport PATH" >> ~/.bashrc;', true);
-                if ($this->checkWPCLI())
+                if ($this->WPCLI('check'))
                     $success = true;
                 break;
             case 'delete':
-                if (!$installed) {
+                if (!$this->WPCLI('check')) {
                     $this->log($error_string . ' WordPress CLI not installed.', 'info');
                     return true;
                 }
                 $output = $this->exec('rm ~/bin/wp', true);
-                if (!$this->checkWPCLI())
+                if (!$this->WPCLI('check'))
                     $success = true;
                 break;
         }
@@ -231,72 +235,139 @@ class Terminal extends Base
     }
 
     /**
-     * @return bool
-     */
-    protected function checkWPCLI($verbose = false)
-    {
-        //export $PATH:~/.local/bin:~/bin;
-        $output = $this->exec('wp --info;');
-        //d($output );
-        //d(strpos( $output, '' ));
-        if (strpos($output, 'WP-CLI version:	2') !== false) //big space between : and 2
-            return true;
-        return false;
-    }
-
-    /**
      * @param string $action
+     * @param string $directory
      * @param array $db_args
      * @param array $wp_args
      * @return bool
      */
-    protected function WordPress(string $action = 'install', array $db_args = array(), array $wp_args = array())
+    protected function WordPress(string $action = 'install', string $directory = '', array $db_args = array(), array $wp_args = array())
     {
-        if (!in_array($action, array('install', 'delete'))) {
-            $this->log(sprintf("Can't do WordPress stuff in %s environment. Action must be 'install' or 'delete'.", $this->environment), 'error');
+        if (!$this->validate_action($action, array('check', 'create', 'install', 'uninstall', 'delete'),
+            sprintf("Can't do WordPress stuff in %s environment.", $this->environment)))
             return false;
-        }
+        $action = $action == 'create' ? 'install' : $action;
+        $action = $action == 'delete' ? 'uninstall' : $action;
+
         $string = sprintf("WordPress in %s environment", $this->environment);
         $error_string = sprintf("Can't %s %s.", $action, $string);
-        $installed = $this->checkWPCLI();
-        $output = '';
+        if (!$this->WPCLI('check')) {
+            if (!$this->WPCLI('install')) {
+                $this->log($error_string . " WP CLI not installed and couldn't perform install.", 'error');
+                return false;
+            }
+        }
+        if (empty($directory)) {
+            $this->log($error_string . " File directory missing from function input.", 'error');
+            return false;
+        }
+        if ($action != 'check')
+            $this->log(sprintf('%s %s in directory <strong>%s</strong>.', ucfirst($this->actions[$action]['present']), $string, $directory), 'info');
+        if (in_array($directory, array('~/', $this->root))) {
+            $this->log(sprintf($error_string . "Shouldn't be %s WordPress in root directory <strong>%s</strong>.", $this->actions[$action]['present'], $directory));
+            return false;
+        }
+        if (!$this->dir_exists($directory)) {
+            $this->log(sprintf($error_string . " Directory <strong>%s</strong> doesn't exist.", $directory));
+            return false;
+        }
         switch ($action) {
-            case 'install':
-                if (!$installed) {
-                    if (!$this->WPCLI('install')) {
-                        $this->log($error_string . " WP CLI not installed. ", 'error');
+            case 'check':
+                $output = $this->exec("cd " . $directory . "; wp core is-installed;");
+                foreach (array("This does not seem to be a WordPress install", "'wp-config.php' not found") as $error) {
+                    if (strpos($output, $error) !== false)
                         return false;
-                    }
+                }
+                return true;
+            case 'install':
+                if ($this->WordPress('check', $directory)) {
+                    $this->log(sprintf($error_string . ' WordPress already installed at <strong>%s</strong>.', $directory));
+                    return false;
                 }
                 if (!isset($db_args['name'], $db_args['username'], $db_args['password'])) {
-                    $this->log($error_string . " DB name, username and/or password are missing from config . ", 'error');
+                    $this->log($error_string . " DB name, username and/or password are missing from config.");
                     return false;
                 }
                 if (!isset($wp_args['username'], $wp_args['password'], $wp_args['email'], $wp_args['url'], $wp_args['title'], $wp_args['prefix'])) {
-                    $this->log($error_string . " WordPress username, password, email, url, title and/or prefix are missing from config . ", 'error');
+                    $this->log($error_string . " WordPress username, password, email, url, title and/or prefix are missing from config. ");
                     return false;
                 }
-                $debug = !empty($wp_args->debug) ? $wp_args->debug : false;
+                $debug = !empty($wp_args->debug) && $wp_args->debug ? 'true' : 'false';
                 $wp_plugins = !empty($wp_args['plugins']) ? sprintf('wp plugin install %s;', implode(' ', (array)$wp_args['plugins'])) : '';
+                $this->ssh->setTimeout(240); //downloading WP can take a while
+                $output = $this->exec("cd " . $directory . "; wp core download --skip-content;");
+                if (stripos($output, 'success') === false && strpos($output, 'WordPress files seem to already be present here') === false) {
+                    break;
+                }
+                $config_constants = array(
+                    'AUTOSAVE_INTERVAL' => 300,
+                    'WP_POST_REVISIONS' => 6,
+                    'EMPTY_TRASH_DAYS' => 7,
+                    'DISALLOW_FILE_EDIT' => 'true',
+                    'WP_DEBUG' => $debug
+                );
+                $config_set = '';
+                foreach ($config_constants as $config_constant => $constant)
+                    $config_set .= sprintf("wp config set %s %s --raw --type=constant;", $config_constant, $constant);
                 $output .= $this->exec("
-                cd ~/public_html; 
-                wp core download --skip-content; 
-                wp core config --dbname = " . $db_args['name'] . " --dbuser=" . $db_args['username'] . " --dbpass=" . $db_args['password'] . " --dbprefix=" . $wp_args['prefix'] . " --locale=en_AU --extra-php << PHP
-        define( 'AUTOSAVE_INTERVAL', 300 );
-        define( 'WP_POST_REVISIONS', 6 );
-        define( 'EMPTY_TRASH_DAYS', 7 );
-        define( 'DISALLOW_FILE_EDIT', true );
-        define( 'WP_DEBUG', " . $debug . " );
-        PHP;");
-                $output .= $this->exec("wp core install --url=" . $wp_args['url'] . " --title=" . $wp_args['title'] . " --admin_user=" . $wp_args['username']
-                    . " --admin_password = " . $wp_args['password'] . " --admin_email = " . $wp_args['email']);
-                $output .= $this->exec('wp plugin delete hello;  ' . $wp_plugins . ' wp plugin update --all; wp plugin activate --all; wp post delete 1;' .
-                    'wp widget delete $(wp widget list sidebar-1 --format=ids); wp option update default_comment_status closed; wp option update blogdescription "Enter tagline for ' . $wp_args['title'] . ' here"; wp rewrite structure "/%postname %/"'
-                    . 'wp rewrite flush;');
-                $success = true;
+                cd " . $directory . "; 
+                wp config create --dbname=" . $db_args['name'] . " --dbuser=" . $db_args['username'] . " --dbpass=" . $db_args['password'] . " --dbprefix=" . rtrim($wp_args['prefix'], '_') . '_' . " --locale=en_AU;         
+                " . $config_set . "
+                wp core install --url=" . $wp_args['url'] . " --title=" . $wp_args['title'] . " --admin_user=" . $wp_args['username']
+                    . " --admin_password=" . $wp_args['password'] . " --admin_email=" . $wp_args['email'] . ' --skip-email;'
+                    . $wp_plugins . '
+                wp plugin update --all; wp plugin activate --all; 
+                wp post delete 1;
+                wp widget delete $(wp widget list sidebar-1 --format=ids); 
+                wp option update default_comment_status closed; 
+                wp option update blogdescription "Enter tagline for ' . $wp_args['title'] . ' here";
+                wp theme install twentyseventeen --activate
+                chmod 755  wp-content/plugins/ 
+                wp rewrite structure "/%postname %/";
+                wp rewrite flush;
+                mv wp-config.php ../'
+                );
+                if ($this->WordPress('check', $directory))
+                    $success = true;
                 break;
-            case 'delete':
-                $success = true;
+            case 'uninstall':
+                $db_clean = $this->WordPress('check', $directory) ? ' wp db clean --yes;' : '';
+                $wp_files = array(
+                    'wp-admin/',
+                    'wp-content/',
+                    'wp-includes/',
+                    'index.php',
+                    'license.txt',
+                    'readme.html',
+                    'wp-activate.php',
+                    'wp-blog-header.php',
+                    'wp-comments-post.php',
+                    'wp-config.php',
+                    '../wp-config.php',
+                    'wp-config-sample.php',
+                    'wp-cron.php',
+                    'wp-links-opml.php',
+                    'wp-load.php',
+                    'wp-login.php',
+                    'wp-mail.php',
+                    'wp-settings.php',
+                    'wp-signup.php',
+                    'wp-trackback.php',
+                    'xmlrpc.php'
+                );
+                $other_files = array(
+                    '.htaccess',
+                    '.htaccess_lscachebak_*',
+                    'README.md',
+                    'wordfence-waf.php'
+                );
+                $output = $this->exec("
+                cd " . $directory . ";" . $db_clean . "                
+                rm -R " . implode(' ', $wp_files) . "; 
+                rm " . implode(' ', $other_files) . ";"
+                );
+                if (!$this->WordPress('check', $directory))
+                    $success = true;
                 break;
         }
         $output = $this->format_output($output);
@@ -306,7 +377,6 @@ class Terminal extends Base
         }
         $this->log(sprintf('Failed to %s %s. %s', $action, $string, $output));
         return false;
-        return true;
     }
 
     /**
@@ -316,7 +386,14 @@ class Terminal extends Base
      */
     protected function updateWordPress($db_name = '', $db_username = '', $db_password)
     {
-        $this->exec('wp core update --locale="en_AU"; wp core update-db; wp theme update --all; wp plugin update --all; wp core language update; wp db optimize');
+        $this->exec('
+        wp core update --locale="en_AU"; 
+        wp core update-db; 
+        wp theme update --all; 
+        wp plugin update --all; 
+        wp core language update; 
+        wp db optimize'
+        );
     }
 
     /**
@@ -387,10 +464,8 @@ class Terminal extends Base
                                  string $user = '',
                                  int $port = 22)
     {
-        if (!in_array($action, array('create', 'delete'))) {
-            $this->log(sprintf("Can't do %s environment SSH config stuff. Action must be 'create' or 'delete'.", $this->environment));
+        if (!$this->validate_action($action, array('create', 'delete'), sprintf("Can't do %s environment SSH config stuff.", $this->environment)))
             return false;
-        }
         $message_string = sprintf("%s environment SSH config", $this->environment);
         if (empty($host)) {
             $this->log(sprintf("Can't %s. Host missing from function input.", $message_string));
@@ -474,17 +549,28 @@ class Terminal extends Base
         return false;
     }
 
+    protected function dir_exists(string $dir = '')
+    {
+        if (empty($dir)) {
+            $this->log(sprintf("Can't check if directory exists. No directory supplied to function. ", $message_string));
+            return false;
+        }
+        $output = $this->exec('if test -d ' . $dir . '; then echo "exist"; fi');
+        if (strpos($output, 'exist') !== false)
+            return true;
+        return false;
+    }
+
     protected function deleteGit(string $separate_repo_location = '')
     {
         $message_string = sprintf("Git repository folder at <strong>%s</strong>.", $separate_repo_location);
         $this->log(sprintf("Deleting %s", $message_string), 'info');
-        $cd = 'cd ' . $separate_repo_location . ';';
-        if (strpos($this->exec($cd), 'No such file or directory') !== false) {
+        if (!$this->dir_exists($separate_repo_location)) {
             $this->log(sprintf("No need to delete %s Folder doesn't exist.", $message_string));
             return false;
         }
         $this->exec('rm -rf ' . $separate_repo_location . ';');
-        if (strpos($this->exec($cd), 'No such file or directory') !== false) {
+        if (!$this->dir_exists($separate_repo_location)) {
             $this->log(sprintf("Successfully deleted %s", $message_string), 'success');
             return true;
         }
@@ -534,10 +620,9 @@ class Terminal extends Base
 
     protected function virtualHost(string $action = 'create', string $domain = '', string $directory = '')
     {
-        if (!in_array($action, array('create', 'delete'))) {
-            $this->log("Can't do virtual host stuff. Action must be 'create' or 'delete'.");
+        if (!$this->validate_action($action, array('create', 'delete'), sprintf("Can't do %s environment virtual host stuff.", $this->environment)))
             return false;
-        }
+
         $error_string = sprintf("Can't %s virtual host.", $action);
         $output = $this->exec(sprintf('sudo ../bash/virtualhost.sh %s %s %s', $action, $domain, $directory));
         if (strpos($output, 'You have no permission to run') !== false) {

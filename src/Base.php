@@ -18,6 +18,11 @@ class Base
             'past' => 'authorised',
             'action' => 'authorise'
         ),
+        'check' => array(
+            'present' => 'checking',
+            'past' => 'checked',
+            'action' => 'check'
+        ),
         'clone' => array(
             'present' => 'cloning',
             'past' => 'cloned',
@@ -62,6 +67,11 @@ class Base
             'present' => 'setting',
             'past' => 'set',
             'action' => 'set'
+        ),
+        'uninstall' => array(
+            'present' => 'uninstalling',
+            'past' => 'uninstalled',
+            'action' => 'uninstall'
         ),
         'upload' => array(
             'present' => 'uploading',
@@ -124,5 +134,35 @@ class Base
     function log(string $message_string = '', string $message_type = 'error')
     {
         return logger()->add($message_string, $message_type);
+    }
+
+    static function validate_action($action = '', $actions = array(), $message = '')
+    {
+        if (empty($action)) {
+            $fail = true;
+            $fail_string = "No action inputted to %s.";
+        } elseif (!in_array($action, $actions)) {
+            $fail = true;
+            $fail_string = "%s received '<strong>%s</strong>' as input action.";
+        }
+        if (!empty($fail)) {
+            $debug_backtrace = !empty(debug_backtrace()[1]['function']) ? '<code>' . debug_backtrace()[1]['function'] . '()</code> function' : 'function';
+            $fail_string = sprintf($fail_string, $debug_backtrace, $action, $debug_backtrace);
+            Base::log(sprintf("%s Action must be %s. %s",
+                $message, Base::implode_item_str($actions), $fail_string), 'error');
+            return false;
+        }
+        return true;
+    }
+
+    static function implode_item_str(array $array = array())
+    {
+        foreach ($array as &$item) {
+            $item = "'" . $item . "'";
+        }
+        $last = array_slice($array, -1);
+        $first = join(", ", array_slice($array, 0, -1));
+        $both = array_filter(array_merge(array($first), $last), 'strlen');
+        return join(' or ', $both);
     }
 }

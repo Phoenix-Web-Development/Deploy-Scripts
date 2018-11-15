@@ -51,10 +51,10 @@ class Github extends Base
      */
     public function deploy_key(string $action = 'upload', string $repo_name = '', string $key_title = '', string $public_key = '')
     {
-        if (!in_array($action, array('upload', 'get', 'remove'))) {
-            $this->log("Can't do github deploy key stuff. Action should be 'get','upload' or 'remove'.", 'error');
+
+        if (!$this->validate_action($action, array('upload', 'get', 'remove'), "Can't do github deploy key stuff."))
             return false;
-        }
+
         $error_string = sprintf("Couldn't %s GitHub deploy key.", $action);
         if (empty($repo_name)) {
             $this->log(sprintf("%s Repo name not supplied to function.", $error_string));
@@ -109,12 +109,12 @@ class Github extends Base
                 */
                 break;
         }
-        $message_string = sprintf('GitHub deploy key named <strong>%s</strong> to Github.', $key_title);
+        $message_string = sprintf('GitHub deploy key named <strong>%s</strong> at Github.', $key_title);
         if (!empty($success)) {
-            $this->log(sprintf("Successfully %s %s.", $this->actions[$action]['past'], $message_string), 'success');
+            $this->log(sprintf("Successfully %s %s", $this->actions[$action]['past'], $message_string), 'success');
             return true;
         }
-        $this->log(sprintf("Failed to %s %s.", $action, $message_string), 'error');
+        $this->log(sprintf("Failed to %s %s", $action, $message_string), 'error');
         return false;
     }
 
@@ -127,10 +127,8 @@ class Github extends Base
      */
     function repo(string $action = 'create', string $repo_name = '', string $domain = '')
     {
-        if (!in_array($action, array('create', 'delete'))) {
-            $this->log("Can't do github repo stuff. Action should be 'create' or 'delete'.", 'error');
+        if (!$this->validate_action($action, array('create', 'delete'), "Can't do github repo stuff."))
             return false;
-        }
         $this->log(sprintf("%s GitHub repository.", ucfirst($this->actions[$action]['present'])), 'info');
         $error_string = sprintf("Can't %s GitHub repository.", $action);
         if (empty($repo_name)) {
