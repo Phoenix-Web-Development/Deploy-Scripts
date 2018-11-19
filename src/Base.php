@@ -28,6 +28,11 @@ class Base
             'past' => 'cloned',
             'action' => 'clone'
         ),
+        'commit' => array(
+            'present' => 'committing',
+            'past' => 'committed',
+            'action' => 'commit'
+        ),
         'create' => array(
             'present' => 'creating',
             'past' => 'created',
@@ -57,6 +62,11 @@ class Base
             'present' => 'installing',
             'past' => 'installed',
             'action' => 'install'
+        ),
+        'move' => array(
+            'present' => 'moving',
+            'past' => 'moved',
+            'action' => 'move'
         ),
         'remove' => array(
             'present' => 'removing',

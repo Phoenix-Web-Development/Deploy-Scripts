@@ -406,7 +406,7 @@ final class Deployer extends Base
     {
         if (empty($this->_config)) {
             $base_config = include BASE_DIR . '/../configs/base-config.php';
-            $site_config = include BASE_DIR . '/../configs/sites/potential_ability_group.php';
+            $site_config = include BASE_DIR . '/../configs/sites/abettameta.php';
             //$site_config = include BASE_DIR . '/../configs/sites/ahtgroup.php';
 
             $config = array_merge_recursive($base_config, $site_config);
@@ -509,6 +509,8 @@ final class Deployer extends Base
         if ($actions['wp']) {
             $wp = $this->wordpress($action, $environment);
         }
+        if ($actions['version_control'])
+            $version_control = $this->versionControlInitialCommit($action, $environment);
 
         if (((!$actions['live_site'] || !empty($live_cpanel_account)) || (!$actions['subdomain'] || !empty($staging_subdomain)))
             && (!$actions['db'] || !empty($db) || ($action == 'delete' && !empty($live_cpanel_account)))
@@ -1062,6 +1064,11 @@ final class Deployer extends Base
         $this->log(sprintf("Something may have gone wrong while %s %s", $this->actions[$action]['present'], $message_string), 'error');
         return false;
 
+    }
+
+    function versionControlInitialCommit(string $environment = 'live')
+    {
+        $this->terminal($environment)->gitAction('commit');
     }
 
     function get_environment_url(string $environment = 'live')

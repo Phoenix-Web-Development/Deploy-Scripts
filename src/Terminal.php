@@ -321,10 +321,14 @@ class Terminal extends Base
                 wp widget delete $(wp widget list sidebar-1 --format=ids); 
                 wp option update default_comment_status closed; 
                 wp option update blogdescription "Enter tagline for ' . $wp_args['title'] . ' here";
-                wp theme install twentyseventeen --activate
-                chmod 755  wp-content/plugins/ 
-                wp rewrite structure "/%postname %/";
+                wp theme install twentyseventeen --activate               
+                wp rewrite structure "/%postname%/";
                 wp rewrite flush;
+                find ' . $directory . ' -type d -exec chmod 755 {} \;
+                find ' . $directory . ' -type f -exec chmod 644 {} \;  
+                find ' . $directory . '/wp-content -type d -exec chmod 775 {} \;
+                find ' . $directory . '/wp-content -type f -exec chmod 664 {} \;
+                chmod 660 wp-config.php
                 mv wp-config.php ../'
                 );
                 if ($this->WordPress('check', $directory))
@@ -380,13 +384,121 @@ class Terminal extends Base
     }
 
     /**
+     * @param string $separate_repo_location
+     * @return bool
+     */
+    protected function deleteGit(string $separate_repo_location = '')
+    {
+        $message_string = sprintf("Git repository folder at <strong>%s</strong>.", $separate_repo_location);
+        $this->log(sprintf("Deleting %s", $message_string), 'info');
+        if (!$this->dir_exists($separate_repo_location)) {
+            $this->log(sprintf("No need to delete %s Folder doesn't exist.", $message_string));
+            return false;
+        }
+        $this->exec('rm -rf ' . $separate_repo_location . ';');
+        if (!$this->dir_exists($separate_repo_location)) {
+            $this->log(sprintf("Successfully deleted %s", $message_string), 'success');
+            return true;
+        }
+        $this->log(sprintf("Failed to delete %s", $message_string));
+        return false;
+    }
+
+    /**
+     * @param string $worktree
+     * @param string $separate_repo_location
+     * @return bool
+     */
+    protected function moveGit(string $worktree = '', string $separate_repo_location = '')
+    {
+        $message_string = sprintf("Git repository to <strong>%s</strong> separate from worktree at <strong>%s</strong>.", $separate_repo_location, $worktree);
+        $this->log(sprintf("Moving %s", $message_string), 'info');
+
+        $error_message_string = "Can't move " . $message_string;
+        $output = $this->exec('mkdir -p ' . $separate_repo_location . '; cd ' . $separate_repo_location . '; git rev-parse --is-inside-git-dir');
+        d($output);
+        if (strpos($output, 'true') !== false) {
+            $this->log(sprintf("%s Git repository already exists at <strong>%s</strong>", $error_message_string, $separate_repo_location));
+            return false;
+        }
+        $output = $this->exec('find ' . $separate_repo_location . ' -maxdepth 0 -empty -exec echo {} is empty. \;');
+        d($output);
+        if (strpos($output, $separate_repo_location . ' is empty') === false) {
+            $this->log(sprintf("%s Directory already exists at <strong>%s</strong> and contains files.", $error_message_string, $separate_repo_location));
+            return false;
+        }
+        $output = $this->exec('cd ' . $worktree . '; git init --separate-git-dir ' . $separate_repo_location, true);
+
+        $message_string .= ' ' . $output;
+        if (strpos($output, 'Reinitialized existing Git repository') !== false) {
+            $this->log(sprintf("Successfully moved %s", $message_string), 'success');
+            return true;
+        }
+        $this->log(sprintf("Failed to move %s", $message_string));
+        return false;
+    }
+
+    /**
+     * @param string $action
+     * @param string $directory
+     * @param string $message
+     * @return bool
+     */
+    protected function gitAction($action = 'update', $directory = '', $message = 'automated update of WordPress, plugins and themes')
+    {
+        if (!$this->validate_action($action, array('update', 'commit', 'delete'), "Can't do Git stuff in the terminal."))
+            return false;
+        if (!$this->dir_exists($directory)) {
+            $this->log(sprintf("Can't commit Git repository. Directory <strong>%s</strong> doesn't exist in %s environment.", $directory, $this->environment));
+            return false;
+        }
+        $branch = 'master';
+        $message = sprintf(" %s environment Git repo. ", $this->environment);
+        $this->log("Committing and pushing" . $message, 'info');
+        $output = '';
+        $init = "cd " . $directory . "; git checkout " . $branch . ";";
+        switch ($action) {
+            case 'update':
+                $output = $this->exec($init . "
+        git fetch --all;
+        git reset --hard origin/" . $branch . ";"
+                );
+                if (strpos($output, 'blegh') !== false) {
+                    $success = true;
+                }
+                break;
+            case 'commit':
+                $output = $this->exec($init . "
+        git add . --all;
+        git commit -m '" . $message . "';
+        git push origin " . $branch . ";"
+                );
+                if (strpos($output, 'blegh') !== false) {
+                    $success = true;
+                }
+                break;
+        }
+        $message .= $output;
+        if (!empty($success)) {
+            $this->log("Successfully committed and pushed" . $message, 'success');
+            return true;
+        }
+        $this->log("Failed to commit" . $message);
+        return false;
+    }
+
+    /**
      * @param string $db_name
      * @param string $db_username
      * @param $db_password
      */
-    protected function updateWordPress($db_name = '', $db_username = '', $db_password)
+    protected function updateWordPress($directory = '')
     {
+        $branch = 'master';
         $this->exec('
+        cd ' . $directory . ';                
+        
+        
         wp core update --locale="en_AU"; 
         wp core update-db; 
         wp theme update --all; 
@@ -519,36 +631,6 @@ class Terminal extends Base
         //return false;
     }
 
-
-    protected function moveGit(string $worktree = '', string $separate_repo_location = '')
-    {
-        $message_string = sprintf("Git repository to <strong>%s</strong> separate from worktree at <strong>%s</strong>.", $separate_repo_location, $worktree);
-        $this->log(sprintf("Moving %s", $message_string), 'info');
-
-        $error_message_string = "Can't move " . $message_string;
-        $output = $this->exec('mkdir -p ' . $separate_repo_location . '; cd ' . $separate_repo_location . '; git rev-parse --is-inside-git-dir');
-        d($output);
-        if (strpos($output, 'true') !== false) {
-            $this->log(sprintf("%s Git repository already exists at <strong>%s</strong>", $error_message_string, $separate_repo_location));
-            return false;
-        }
-        $output = $this->exec('find ' . $separate_repo_location . ' -maxdepth 0 -empty -exec echo {} is empty. \;');
-        d($output);
-        if (strpos($output, $separate_repo_location . ' is empty') === false) {
-            $this->log(sprintf("%s Directory already exists at <strong>%s</strong> and contains files.", $error_message_string, $separate_repo_location));
-            return false;
-        }
-        $output = $this->exec('cd ' . $worktree . '; git init --separate-git-dir ' . $separate_repo_location, true);
-
-        $message_string .= ' ' . $output;
-        if (strpos($output, 'Reinitialized existing Git repository') !== false) {
-            $this->log(sprintf("Successfully moved %s", $message_string), 'success');
-            return true;
-        }
-        $this->log(sprintf("Failed to move %s", $message_string));
-        return false;
-    }
-
     protected function dir_exists(string $dir = '')
     {
         if (empty($dir)) {
@@ -561,22 +643,6 @@ class Terminal extends Base
         return false;
     }
 
-    protected function deleteGit(string $separate_repo_location = '')
-    {
-        $message_string = sprintf("Git repository folder at <strong>%s</strong>.", $separate_repo_location);
-        $this->log(sprintf("Deleting %s", $message_string), 'info');
-        if (!$this->dir_exists($separate_repo_location)) {
-            $this->log(sprintf("No need to delete %s Folder doesn't exist.", $message_string));
-            return false;
-        }
-        $this->exec('rm -rf ' . $separate_repo_location . ';');
-        if (!$this->dir_exists($separate_repo_location)) {
-            $this->log(sprintf("Successfully deleted %s", $message_string), 'success');
-            return true;
-        }
-        $this->log(sprintf("Failed to delete %s", $message_string));
-        return false;
-    }
 
     protected function git($action = 'create', $github_user, $github_project /*, $ssh_password = '', $git_url = ''*/)
     {
