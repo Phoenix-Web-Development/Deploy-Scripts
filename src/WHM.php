@@ -397,8 +397,10 @@ class WHM extends Base
     function list_domains(string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
     {
         $cpanel_account = $this->get_cpanel_account($cpanel_parameter, $cpanel_parameter_type);
-        if (!$cpanel_account)
+        if (!$cpanel_account) {
             $this->log("Failed to list cPanel account domains. Couldn't find cPanel account to query for domains.");
+            return false;
+        }
 
         if (!$result = $this->api_call('cpanel', array_merge($this->cpanel_api_functions['list_domains'], array(
             'user' => $cpanel_account['user']
@@ -549,8 +551,10 @@ class WHM extends Base
         }
 
         $cpanel_account = $this->get_cpanel_account($cpanel_parameter, $cpanel_parameter_type);
-        if (!$cpanel_account)
+        if (!$cpanel_account) {
             $this->log($error_string_append . "Couldn't find cPanel account to add DB schema to.", 'error');
+            return false;
+        }
 
         $db_name = $this->db_prefix_check($db_name, $cpanel_account['user']);
 
@@ -673,8 +677,10 @@ class WHM extends Base
         }
 
         $cpanel_account = $this->get_cpanel_account($cpanel_parameter, $cpanel_parameter_type);
-        if (!$cpanel_account)
+        if (!$cpanel_account) {
             $this->log($error_string_append . "Couldn't find cPanel account to delete DB user from.", 'error');
+            return false;
+        }
         $db_user = $this->db_prefix_check($db_user, $cpanel_account['user']);
 
         $finish_message_append = sprintf(" DB user <strong>%s</strong> from cPanel account with %s <strong>%s</strong>.",
@@ -790,9 +796,10 @@ class WHM extends Base
         }
 
         $cpanel_account = $this->get_cpanel_account($rootdomain, 'domain');
-        if (!$cpanel_account)
+        if (!$cpanel_account) {
             $this->log(sprintf("Can't add <strong>%s</strong> subdomain. No cPanel account with domain <strong>%s</strong> found.", $subdomain, $rootdomain), 'error');
-
+            return false;
+        }
         $finish_message_append = sprintf(' subdomain <strong>%s</strong> to cPanel account with domain <strong>%s</strong>.', $subdomain, $rootdomain);
         $this->log('Adding' . $finish_message_append, 'info');
         if (!$result = $this->api_call('cpanel', array_merge($this->cpanel_api_functions['addsubdomain'], array(
@@ -830,8 +837,10 @@ class WHM extends Base
         }
 
         $cpanel_account = $this->get_cpanel_account($cpanel_parameter, $cpanel_parameter_type);
-        if (!$cpanel_account)
+        if (!$cpanel_account) {
             $this->log($error_string . "Couldn't find cPanel account to query.", 'error');
+            return false;
+        }
         $subdomain_url = $subdomain_slug . '.' . $cpanel_account['domain'];
 
         $finish_message_append = sprintf(" subdomain <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.",
@@ -872,8 +881,10 @@ class WHM extends Base
         }
 
         $cpanel_account = $this->get_cpanel_account($cpanel_parameter, $cpanel_parameter_type);
-        if (!$cpanel_account)
+        if (!$cpanel_account) {
             $this->log(sprintf($error_string . "Couldn't find cPanel account to delete <strong>%s</strong> subdomain from.", $subdomain_slug), 'error');
+            return false;
+        }
         $subdomain_url = $subdomain_slug . '.' . $cpanel_account['domain'];
 
         $finish_message_append = sprintf(" subdomain <strong>%s</strong> from cPanel account with %s <strong>%s</strong>.",
@@ -1066,8 +1077,10 @@ class WHM extends Base
         //$this->log( 'Getting quota info', 'info' );
         $error_string_append = "Can't get quota info. ";
         $cpanel_account = $this->get_cpanel_account($cpanel_parameter, $cpanel_parameter_type);
-        if (!$cpanel_account)
+        if (!$cpanel_account) {
             $this->log($error_string_append . "Couldn't find cPanel account to get quota info from.", 'error');
+            return false;
+        }
 
         $finish_message_append = sprintf(" quota information from cPanel account with %s <strong>%s</strong>",
             $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
@@ -1101,8 +1114,10 @@ class WHM extends Base
     {
         $error_string_append = "Can't import SSH key into cPanel. ";
         $cpanel_account = $this->get_cpanel_account($cpanel_parameter, $cpanel_parameter_type);
-        if (!$cpanel_account)
+        if (!$cpanel_account) {
             $this->log($error_string_append . "Couldn't find cPanel account to get quota info from.", 'error');
+            return false;
+        }
 
         $finish_message_append = sprintf(" SSH key named <strong>%s</strong> into cPanel account with %s <strong>%s</strong>",
             $key_name, $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
@@ -1143,8 +1158,10 @@ class WHM extends Base
             return false;
         }
         $cpanel_account = $this->get_cpanel_account($cpanel_parameter, $cpanel_parameter_type);
-        if (!$cpanel_account)
+        if (!$cpanel_account) {
             $this->log($error_string_append . "Couldn't find cPanel account to generate SSH key for.", 'error');
+            return false;
+        }
         if ($ssh_key = $this->fetchkey($key_name)) {
             $this->log(sprintf("%s Key named <strong>%s</strong> already exists.", $error_string_append, $key_name), 'error');
             return $ssh_key;
@@ -1420,8 +1437,10 @@ class WHM extends Base
             return false;
         }
         $cpanel_account = $this->get_cpanel_account($cpanel_parameter, $cpanel_parameter_type);
-        if (!$cpanel_account)
+        if (!$cpanel_account) {
             $this->log($error_string_append . " Couldn't find cPanel account.", 'error');
+            return false;
+        }
         $repository_url = json_decode($source_repository)->url ?? '';
         $repository_url_str = !empty($repository_url) ? sprintf(' sourced from <strong>%s</strong>', $repository_url) : '';
         $repository_root_str = !empty($repository_root) ? sprintf(' located at <strong>%s</strong>', $repository_root) : '';

@@ -48,6 +48,11 @@ class Base
             'past' => 'deleted',
             'action' => 'delete'
         ),
+        'deploy' => array(
+            'present' => 'deploying',
+            'past' => 'deployed',
+            'action' => 'deploy'
+        ),
         'generate' => array(
             'present' => 'generating',
             'past' => 'generated',
@@ -100,7 +105,7 @@ class Base
      * @param $name
      * @param $value
      */
-    function __set($name, $value)
+    public function __set($name, $value)
     {
         if (method_exists($this, $name)) {
             $this->$name($value);
@@ -114,7 +119,7 @@ class Base
      * @param $name
      * @return null
      */
-    function __get($name)
+    public function __get($name)
     {
         if (method_exists($this, $name)) {
             return $this->$name();

@@ -2,8 +2,6 @@
 
 namespace Phoenix;
 
-use Github\Client;
-
 /**
  * @property \Github\Client $client
  * @property $user
@@ -26,6 +24,7 @@ class Github extends Base
 
     protected function client(\Github\Client $client = null)
     {
+        d('github client');
         if (!empty($this->_client))
             return $this->_client;
         if (empty($client))

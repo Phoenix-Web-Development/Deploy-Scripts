@@ -12,13 +12,15 @@ use Phoenix\Functions;
  * @property WHM $whm
  * @property \stdClass $config
  * @property Bitbucket $bitbucket
- * @property Terminal $terminal
  * @property Github $github
+ * @property Terminal $terminal
  *
  * Class Deployer
  */
 final class Deployer extends Base
 {
+    const CONFIG = '/../configs/';
+
     /**
      * @var null
      */
@@ -132,9 +134,18 @@ final class Deployer extends Base
 
 
         'update' => array('label' => 'Update'),
-        'update_wp' => array('label' => 'Update WordPress core, plugins and themes',
+        'update_live_stuff' => array('label' => 'Live stuff',
             'condition' => array('update')),
+        'update_live_wp' => array('label' => 'Update WordPress core, plugins and themes',
+            'condition' => array('update', 'update_live_stuff')),
+
+        'update_staging_stuff' => array('label' => 'Staging stuff',
+            'condition' => array('update')),
+        'update_staging_wp' => array('label' => 'Update WordPress core, plugins and themes',
+            'condition' => array('update', 'update_staging_stuff'))
     );
+
+    public $template;
 
 
     /**
@@ -205,30 +216,43 @@ final class Deployer extends Base
         if (!$this->can_do('create') && !ph_d()->can_do('delete')) {
             template()->get('form');
         } else {
-            if ($this->can_do('create')) {
-                if ($this->can_do('create_version_control')) {
-                    $this->versionControlMainRepo('create');
-                }
-                if ($this->can_do('create_live_stuff'))
-                    $this->do_environ_stuff('create', 'live');
-                if ($this->can_do('create_staging_stuff'))
-                    $this->do_environ_stuff('create', 'staging');
-                if ($this->can_do('create_local_stuff'))
-                    $this->localStuff('create');
+            $action = '';
+            if ($this->can_do('update'))
+                $action = 'update';
+            elseif ($this->can_do('create'))
+                $action = 'deploy';
+            elseif ($this->can_do('delete'))
+                $action = 'delete';
 
-                $this->log('<h2>Finished Deploying</h2>', 'info');
-            } elseif ($this->can_do('delete')) {
-                if ($this->can_do('delete_version_control'))
-                    $this->versionControlMainRepo('delete');
-                if ($this->can_do('delete_live_stuff'))
-                    $this->do_environ_stuff('delete', 'live');
-                if ($this->can_do('delete_staging_stuff'))
-                    $this->do_environ_stuff('delete', 'staging');
-                if ($this->can_do('delete_local_stuff'))
-                    $this->localStuff('delete');
-
-                $this->log('<h2>Finished Deleting</h2>', 'info');
+            switch ($action) {
+                case 'delete':
+                    if ($this->can_do('delete_version_control'))
+                        $this->versionControlMainRepo('delete');
+                    if ($this->can_do('delete_live_stuff'))
+                        $this->do_environ_stuff('delete', 'live');
+                    if ($this->can_do('delete_staging_stuff'))
+                        $this->do_environ_stuff('delete', 'staging');
+                    if ($this->can_do('delete_local_stuff'))
+                        $this->localStuff('delete');
+                    break;
+                case 'deploy':
+                    if ($this->can_do('create_version_control'))
+                        $this->versionControlMainRepo('create');
+                    if ($this->can_do('create_live_stuff'))
+                        $this->do_environ_stuff('create', 'live');
+                    if ($this->can_do('create_staging_stuff'))
+                        $this->do_environ_stuff('create', 'staging');
+                    if ($this->can_do('create_local_stuff'))
+                        $this->localStuff('create');
+                    break;
+                case 'update':
+                    if ($this->can_do('update_live_stuff'))
+                        $this->updateWP('live');
+                    if ($this->can_do('update_staging_stuff'))
+                        $this->updateWP('staging');
+                    break;
             }
+            $this->log(sprintf('<h2>Finished %s</h2>', ucfirst($this->actions[$action]['present'])), 'info');
         }
 
         $this->log(sprintf('Apache user is <strong>%s</strong>.', $this->terminal('local')->whoami()), 'info');
@@ -346,31 +370,34 @@ final class Deployer extends Base
             return $this->_terminal->$environment;
         if (empty($this->_terminal))
             $this->_terminal = new \stdClass();
-        $error_string = sprintf("Can't connect %s environment terminal.", $environment);
-        switch ($environment) {
-            case 'live':
-                if (!$this->find_cpanel_account($this->config->environ->live->domain, $this->config->environ->live->cpanel->account->username)) {
-                    $this->log($error_string . " Couldn't locate live cPanel account.");
-                    break;
-                }
-                $ssh_args = $this->config->environ->live->cpanel->ssh ?? array();
-                break;
-            case 'staging':
-                $subdomain = $this->find_staging_cpanel();
-                if (!$subdomain) {
-                    $this->log(sprintf("%s Apparently subdomain <strong>%s</strong> doesn't exist in your staging cPanel accounts.",
-                        $error_string, $this->config->environ->staging->cpanel->subdomain->slug));
-                    break;
-                }
-                $domain = $subdomain['domain'];
-                $ssh_args = $this->config->environ->staging->cpanel->accounts->$domain->ssh ?? array();
-                break;
-        }
+        //$error_string = sprintf("Can't connect %s environment via SSH.", $environment);
         $terminal = new Terminal($environment);
-        if (!isset($ssh_args->hostname, $ssh_args->port) && $environment != 'local')
-            $this->log(sprintf("%s %s cPanel account SSH args missing.", $error_string, ucfirst($environment)));
-        if (!empty($ssh_args)) {
-            $ssh = new SSH2($ssh_args->hostname, $ssh_args->port);
+
+        $ssh = $this->get_phpseclib('ssh', $environment);
+        if (!empty($ssh))
+            $terminal->set_ssh($ssh);
+        $sftp = $this->get_phpseclib('sftp', $environment);
+        if (!empty($sftp))
+            $terminal->set_sftp($sftp);
+        return $this->_terminal->$environment = $terminal;
+    }
+
+    function get_phpseclib($protocol = 'ssh', string $environment = 'live')
+    {
+        $message = sprintf("%s environment %s connection.", $environment, $protocol);
+        if ($environment != 'local') {
+
+            $ssh_args = $this->get_environ_ssh_args($environment);
+            if (!empty($ssh_args)) {
+                switch ($protocol) {
+                    case 'ssh':
+                        $ssh = new SSH2($ssh_args->hostname, $ssh_args->port);
+                        break;
+                    case 'sftp':
+                        $ssh = new SFTP($ssh_args->hostname, $ssh_args->port);
+                        break;
+                }
+            }
             //$passphrase = $this->config->environ->local->ssh_keys->live->passphrase ?? '';
             //$key_name = $this->config->environ->local->ssh_keys->live->key_name ?? '';
             if (!empty($passphrase) && !empty($key_name)) {
@@ -389,15 +416,43 @@ final class Deployer extends Base
                     $key->loadKey(file_get_contents($private_key_location));
                 }
             }
-            if ($ssh->login($ssh_args->username, $ssh_args->password)) {
-                $terminal->setSSH($ssh);
-                $this->log(sprintf("Successfully authenticated %s environment via SSH.", $environment), 'success');
-            } else
-                $this->log(sprintf("Couldn't authenticate to %s environment via SSH.", $environment));
+            if (!empty($ssh) && $ssh->login($ssh_args->username, $ssh_args->password)) {
+                $this->log("Successfully authenticated " . $message, 'success');
+                return $ssh;
+            }
         }
-        return $this->_terminal->$environment = $terminal;
+        $this->log("Couldn't authenticate " . $message);
+        return false;
     }
 
+    function get_environ_ssh_args(string $environment = 'live')
+    {
+        $error_string = sprintf("Can't connect %s environment via SSH.", $environment);
+        switch ($environment) {
+            case 'live':
+                if (!$this->find_cpanel_account($this->config->environ->live->domain, $this->config->environ->live->cpanel->account->username)) {
+                    $this->log($error_string . " Couldn't locate live cPanel account.");
+                    return false;
+                }
+                $ssh_args = $this->config->environ->live->cpanel->ssh ?? array();
+                break;
+            case 'staging':
+                $subdomain = $this->find_staging_cpanel();
+                if (!$subdomain) {
+                    $this->log(sprintf("%s Apparently subdomain <strong>%s</strong> doesn't exist in your staging cPanel accounts.",
+                        $error_string, $this->config->environ->staging->cpanel->subdomain->slug));
+                    return false;
+                }
+                $domain = $subdomain['domain'];
+                $ssh_args = $this->config->environ->staging->cpanel->accounts->$domain->ssh ?? array();
+                break;
+        }
+        if (!isset($ssh_args->hostname, $ssh_args->port)) {
+            $this->log(sprintf("%s %s cPanel account SSH args missing.", $error_string, ucfirst($environment)));
+            return false;
+        }
+        return $ssh_args;
+    }
 
     /**
      * @return array|bool|\stdClass
@@ -505,12 +560,12 @@ final class Deployer extends Base
         if ($actions['email_filters'])
             $email_filters = $this->email_filters($action, $environment);
         if ($actions['version_control'])
-            $version_control = $this->versionControlAccess($action, $environment);
+            $version_control = $this->environ_version_control($action, $environment);
         if ($actions['wp']) {
             $wp = $this->wordpress($action, $environment);
         }
-        if ($actions['version_control'])
-            $version_control = $this->versionControlInitialCommit($action, $environment);
+        //if ($actions['version_control'])
+        //$version_control = $this->versionControlInitialCommit($action, $environment);
 
         if (((!$actions['live_site'] || !empty($live_cpanel_account)) || (!$actions['subdomain'] || !empty($staging_subdomain)))
             && (!$actions['db'] || !empty($db) || ($action == 'delete' && !empty($live_cpanel_account)))
@@ -606,7 +661,7 @@ final class Deployer extends Base
     {
 
         if ($this->can_do('create_local_version_control')) {
-            $this->versionControlAccess('create', 'local');
+            $this->environ_version_control('create', 'local');
         }
         $key_name = $this->config->live->domain ?? '';
         $passphrase = $this->config->local->ssh_keys->live->passphrase ?? '';
@@ -624,7 +679,7 @@ final class Deployer extends Base
         $this->terminal('local')->virtualHost($action);
 
         $github_user = $this->config->version_control->github->user ?? '';
-        $project_name = $this->config->project_name ?? '';
+        $project_name = $this->config->project->name ?? '';
 
         $this->terminal('local')->Git('create', $github_user, $project_name);
         return true;
@@ -949,9 +1004,9 @@ final class Deployer extends Base
     {
         if (!$this->validate_action($action, array('create', 'delete'), "Can't do main version control repository stuff."))
             return false;
-        $repo_name = $this->config->project_name ?? '';
+        $repo_name = $this->config->version_control->repo_name ?? '';
         if (empty($repo_name)) {
-            $this->log(sprintf("Can't %s version control main repository. Repository name is empty. Repo name supposed to be based on project name so it's probably missing from config.", $action));
+            $this->log(sprintf("Can't %s version control main repository. Repository name missing from config.", $action));
             return false;
         }
         $domain = $this->config->environ->live->domain ?? '';
@@ -969,13 +1024,12 @@ final class Deployer extends Base
      * @param string $environment
      * @return bool
      */
-    function versionControlAccess(string $action = 'create', string $environment = 'live')
+    function environ_version_control(string $action = 'create', string $environment = 'live')
     {
         if (!$this->validate_action($action, array('create', 'delete'), sprintf("Can't do %s environment version control stuff.", $environment)))
             return false;
 
         $this->log(sprintf('<h2>%s %s version control components.</h2>', ucfirst($this->actions[$action]['present']), $environment), 'info');
-        $repo_name = $this->config->project_name ?? '';
         $message_string = sprintf('%s version control components.', $environment);
         $error_string = sprintf("Can't %s %s", $action, $message_string);
         if ($environment == 'local') {
@@ -983,8 +1037,9 @@ final class Deployer extends Base
                 $error_string));
             return false;
         }
+        $repo_name = $this->config->version_control->repo_name ?? '';
         if (empty($repo_name)) {
-            $this->log(sprintf("%s Repository name is empty. Repo name supposed to be based on project name so it's probably missing from config.",
+            $this->log(sprintf("%s Repository name is missing from config.",
                 $error_string));
             return false;
         }
@@ -1003,23 +1058,9 @@ final class Deployer extends Base
             $this->log(sprintf("%s Couldn't get %s environment SSH root directory.", $error_string, $environment));
             return false;
         }
-        switch ($environment) {
-            case 'live':
-                $repository_root = $root . '/public_html';
-                $separate_repo_location = $root . '/git/website';
-                $downstream_repo_name = 'wordpress_website';
-                break;
-            case 'staging':
-                $staging_dir = $this->config->environ->staging->cpanel->subdomain->directory ?? '';
-                if (empty($staging_dir)) {
-                    $this->log(sprintf("%s %s environment directory missing from config.", $error_string, $environment));
-                    return false;
-                }
-                $repository_root = $root . $staging_dir;
-                $separate_repo_location = $root . '/git/' . $repo_name . '/website';
-                $downstream_repo_name = $repo_name . '_website';
-                break;
-        }
+        $web_dir = $this->get_environ_dir($environment, 'web');
+        $separate_repo_location = $this->get_environ_dir($environment, 'git');
+        $downstream_repo_name = $repo_name . '_website';
         $key_title = ucfirst($environment) . ' cPanel';
         switch ($action) {
             case 'create':
@@ -1029,30 +1070,48 @@ final class Deployer extends Base
                     $ssh_config = $this->terminal($environment)->SSHConfig('create', $key_name, 'github.com', $key_name, 'git');
                 }
                 $upstream_repository = $this->github->find_repo($repo_name);
+
+                //$is_empty = $this->dir_is_empty($separate_repo_location);
+
                 if ($upstream_repository && !empty($ssh_key)) {
                     $deploy_key = $this->github->deploy_key('upload', $repo_name, $key_title, $ssh_key['key']);
+
+                    $git_dir_is_empty = $this->terminal($environment)->dir_is_empty($web_dir);
+
+                    if (!$git_dir_is_empty) {
+                        $this->terminal($environment)->exec('mkdir ' . $web_dir . '/../dummy');
+                        $this->terminal($environment)->move_files($web_dir, $web_dir . '/../dummy');
+                    }
                     $ssh_url = str_replace('git@github.com', $key_name, $upstream_repository['ssh_url']);
                     //$ssh_url = $upstream_repository['ssh_url'];
 
-                    $this->terminal($environment)->exec('shopt -s dotglob; rm -rf ' . $repository_root . '/*;');
                     $downstream_repository = $this->whm->version_control('clone',
-                        $repository_root,
+                        $web_dir,
                         $downstream_repo_name,
                         json_encode((object)['url' => $ssh_url, 'remote_name' => "origin"])
                     );
-                    $this->terminal($environment)->moveGit($repository_root, $separate_repo_location);
+                    if (!$git_dir_is_empty) {
+                        $this->terminal($environment)->move_files($web_dir . '/../dummy', $web_dir);
+                        $this->terminal($environment)->exec('rm -R ' . $web_dir . '/../dummy');
+                    }
+                    $this->terminal($environment)->moveGit($web_dir, $separate_repo_location);
                 } else
                     $this->log("Can't upload deploy key or clone repository. Upstream repository not found.");
-                if (!empty($ssh_key) && !empty($authkey) && !empty($ssh_config) && !empty($deploy_key) && !empty($downstream_repository))
+                $gitignore = $this->terminal($environment)->gitignore('create', $web_dir);
+                if (!empty($ssh_key) && !empty($authkey) && !empty($ssh_config) && !empty($deploy_key)
+                    && !empty($downstream_repository) && !empty($gitignore))
                     $success = true;
                 break;
             case 'delete':
                 $ssh_config = $this->terminal($environment)->SSHConfig('delete', 'github_' . $repo_name, 'github.com', 'github_' . $repo_name, 'git');
                 $ssh_key = $this->whm->delkey($key_name, $cPanel_account['user']);
                 $deploy_key = $this->github->deploy_key('remove', $repo_name, $key_title);
-                $downstream_repository = $this->whm->version_control('delete', $repository_root, '', '', $cPanel_account['user']);
+                $downstream_repository = $this->whm->version_control('delete', $web_dir, '', '', $cPanel_account['user']);
                 $deleted_git_folder = $this->terminal($environment)->deleteGit($separate_repo_location);
-                if (!empty($ssh_key) && !empty($ssh_config) && !empty($deploy_key) && !empty($downstream_repository) && !empty($deleted_git_folder))
+                $gitignore = $this->terminal($environment)->gitignore('delete', $web_dir);
+                if (!empty($ssh_key) && !empty($ssh_config) && !empty($deploy_key)
+                    && !empty($downstream_repository) && !empty($deleted_git_folder) && !empty($gitignore)
+                )
                     $success = true;
                 break;
         }
@@ -1066,12 +1125,7 @@ final class Deployer extends Base
 
     }
 
-    function versionControlInitialCommit(string $environment = 'live')
-    {
-        $this->terminal($environment)->gitAction('commit');
-    }
-
-    function get_environment_url(string $environment = 'live')
+    function get_environ_url(string $environment = 'live')
     {
         $error_string = sprintf("Can't get %s environment url.", $environment);
         if ($environment == 'staging') {
@@ -1097,6 +1151,47 @@ final class Deployer extends Base
         if (strpos($protocol, $url) !== 0)
             $url = $protocol . $url;
         return $url;
+    }
+
+    function get_environ_dir(string $environment = 'live', $type = 'web')
+    {
+        $root = $this->terminal($environment)->root;
+        $error_string = sprintf("Couldn't determine %s environment %s directory.", $environment, $type);
+        if (!empty($root)) {
+            switch ($type) {
+                case 'web':
+                    switch ($environment) {
+                        case 'live':
+                            $dir = '/public_html';
+                            break;
+                        case 'staging':
+                            $dir = $this->config->environ->$environment->cpanel->subdomain->directory ?? '';
+                            break;
+                    }
+                    break;
+                case 'git':
+                    switch ($environment) {
+                        case 'live':
+                            $dir = '/git/website';
+                            break;
+                        case 'staging':
+                            $repo_name = $this->config->version_control->repo_name ?? '';
+                            if (empty($repo_name)) {
+                                $this->log($error_string . ' Version control repo name missing from config.');
+                                return false;
+                            }
+                            $dir = '/git/' . $repo_name . '/website';
+                            break;
+                    }
+                    break;
+            }
+        }
+        if (empty($dir)) {
+            $this->log($error_string);
+            return false;
+        }
+        $directory = $root . $dir;
+        return $directory;
     }
 
     function getWHMDiskSpace()
@@ -1129,22 +1224,15 @@ final class Deployer extends Base
         $action = $action == 'create' ? 'install' : $action;
 
         $this->log(sprintf('<h2>%s WordPress and WP CLI</h2>', ucfirst($this->actions[$action]['present'])), 'info');
-        $root = $this->terminal($environment)->root;
-        switch ($environment) {
-            case 'live':
-                $directory = $root . '/public_html';
-                break;
-            case 'staging':
-                $directory = !empty($this->config->environ->$environment->cpanel->subdomain->directory) ?
-                    $root . $this->config->environ->$environment->cpanel->subdomain->directory : '';
-                break;
-        }
+
+        $directory = $this->get_environ_dir($environment, 'web');
+
         switch ($action) {
             case 'install':
                 $this->terminal($environment)->WPCLI('install');
                 $wp_args = $this->config->wordpress ?? null;
-                $wp_args->title = $this->config->project_name ?? 'Insert Site Title Here';
-                $wp_args->url = $this->get_environment_url($environment);
+                $wp_args->title = $this->config->project->title ?? 'Insert Site Title Here';
+                $wp_args->url = $this->get_environ_url($environment);
                 $db_args = (array)$this->config->environ->$environment->db ?? null;
                 $db_args['name'] = $this->whm->db_prefix_check($db_args['name']);
                 $db_args['username'] = $this->whm->db_prefix_check($db_args['username']);
@@ -1163,6 +1251,22 @@ final class Deployer extends Base
             return true;
         }
         $this->log(sprintf('Something may have gone wrong %s %s environment WordPress.', $this->actions[$action]['present'], $environment), 'error');
+        return false;
+    }
+
+    function updateWP($environment = 'live')
+    {
+        $directory = $this->get_environ_dir($environment, 'web');
+        if (!empty($directory)) {
+            $git_update = $this->terminal($environment)->gitAction('update', $directory, 'dev');
+            $wp_update = $this->terminal($environment)->updateWP($directory);
+            $git_commit = $this->terminal($environment)->gitAction('commit', $directory, 'dev');
+        }
+        if (!empty($git_update) && !empty($wp_update) && !empty($git_commit)) {
+            $this->log(sprintf('Successfully updated WordPress in %s environment.', $environment), 'success');
+            return true;
+        }
+        $this->log(sprintf('Failed to update WordPress in %s environment.', $environment), 'error');
         return false;
     }
 
@@ -1187,11 +1291,12 @@ final class Deployer extends Base
      */
     function format_email_filtername(string $filter_name = '')
     {
-        if (empty($filter_name) || empty($this->config->project_name)) {
+        $project_name = $this->config->project->name ?? '';
+        if (empty($filter_name) || empty($project_name)) {
             $this->log("Can't format email filter name. Filter name or project name input missing.");
             return false;
         }
-        return ucwords($this->config->project_name) . ' ' . $filter_name;
+        return ucwords($project_name) . ' ' . $filter_name;
     }
 
     /**

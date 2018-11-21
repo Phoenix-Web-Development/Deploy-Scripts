@@ -2,49 +2,49 @@
 
 namespace Phoenix;
 
+use phpseclib\Net\SFTP;
+
 /**
  *
  * @property array $prompt
  * @property array $root
+ * @property \phpseclib\Net\SFTP $sftp
  * @property \phpseclib\Net\SSH2 $ssh
  *
  * Class Terminal
  */
 class Terminal extends Base
 {
-    /**
-     * @var \phpseclib\Net\SSH2
-     */
-    private $ssh;
-
     public $environment;
 
     private $_prompt;
 
     private $_root;
 
+    private $_sftp;
+
+    public $sftp;
+
+    private $_ssh;
+
+    public $ssh;
+
     /**
      * Terminal constructor.
-     * @param \phpseclib\Net\SSH2 $ssh
-     * @param string $username
-     * @param string $password
      * @param string $environment
      */
     public function __construct(string $environment = 'live')
     {
+        parent::__construct();
         $this->environment = $environment;
+        return true;
     }
 
-    /**
-     * @param $method
-     * @param $arguments
-     * @return bool|mixed
-     */
     public function __call($method, $arguments)
     {
         $error_string = sprintf("Can't execute <code>%s</code> terminal function in %s environment.", $method, $this->environment);
         if (method_exists($this, $method)) {
-            if (isset($this->ssh) || $this->environment == 'local') {
+            if (isset($this->ssh) || $this->environment == 'local' || $method == 'ssh') {
                 return call_user_func_array(array($this, $method), $arguments);
             }
             $this->log($error_string . " No SSH connection was established.");
@@ -55,19 +55,23 @@ class Terminal extends Base
     }
 
     /**
-     * Inject SSH implementation. Don't do this if running commands locally
-     *
-     * @param \phpseclib\Net\SSH2 $ssh
-     * @return \phpseclib\Net\SSH2
+     * @param \phpseclib\Net\SSH2|null $ssh
+     * @return bool|\phpseclib\Net\SSH2
      */
-    public function setSSH(\phpseclib\Net\SSH2 $ssh = null)
+    public function set_ssh(\phpseclib\Net\SSH2 $ssh = null)
     {
-        if (!empty($this->ssh))
-            return $this->ssh;
+        if (empty($ssh))
+            return false;
         $this->ssh = $ssh;
         sleep(1);
         $this->prompt();
-        return $ssh;
+        return $this->ssh = $ssh;
+    }
+
+    public function set_sftp(\phpseclib\Net\SFTP $sftp = null)
+    {
+        $this->sftp = $sftp;
+        return $sftp;
     }
 
     /**
@@ -78,7 +82,10 @@ class Terminal extends Base
         if (!empty($this->_root))
             return $this->_root;
         $pwd = trim($this->exec('pwd')) ?? false;
-        return $this->_root = $pwd;
+        if (!empty($pwd))
+            return $this->_root = $pwd;
+        $this->log(sprintf("Couldn't get %s environment root directory", $this->environment));
+        return false;
     }
 
     protected function whoami()
@@ -100,7 +107,7 @@ class Terminal extends Base
         //$prompt = $user . '@' . $hostname;
         //$prompt = '';
         if (empty($prompt)) {
-            $this->log(sprintf("Couldn't work out the %s environment terminal prompt for read() commands.", $this->environment));
+            $this->log(sprintf("Couldn't work out the %s environment terminal prompt for <code>read()</code> commands.", $this->environment));
             return false;
         }
         $this->log(sprintf("Prompt string for %s environment terminal read() commands set to '<strong>%s</strong>'.", $this->environment, $prompt), 'info');
@@ -114,7 +121,7 @@ class Terminal extends Base
      */
     protected function exec(string $command = '', bool $format = false)
     {
-        if (isset($this->ssh)) {
+        if (isset($this->ssh) && $this->ssh->isConnected()) {
             if (!$this->ssh->isAuthenticated() && !empty(debug_backtrace()[1]['function'])) {
                 $this->log(sprintf("%s environment SSH exec() failed as you aren't authenticated. Exec() called by <code>%s()</code> function.",
                     ucfirst($this->environment), debug_backtrace()[1]['function']), 'error');
@@ -138,8 +145,10 @@ class Terminal extends Base
                 $output .= $raw_output;
             }
             */
-        } else
+        } else {
+            $this->log(sprintf('<code>exec()</code> failed in %s environment terminal.', $this->environment));
             return false;
+        }
         return $format ? $this->format_output($output) : $output;
     }
 
@@ -155,7 +164,7 @@ class Terminal extends Base
     {
 
         if (!$this->ssh->isAuthenticated() && !empty(debug_backtrace()[1]['function'])) {
-            $this->log(sprintf("%s environment SSH read_write() failed as you aren't authenticated. read_write() called by <code>%s()</code> function.",
+            $this->log(sprintf("%s environment SSH read_write() failed as you aren't authenticated. <code>read_write()</code> called by <code>%s()</code> function.",
                 ucfirst($this->environment), debug_backtrace()[1]['function']), 'error');
             return false;
         }
@@ -164,13 +173,15 @@ class Terminal extends Base
         $outputs = array();
         $this->ssh->read($prompt);
         foreach ($commands as $command) {
-            $this->ssh->write($command); // note the "\n"
-            $output = $this->ssh->read($prompt);
-            //echo '<strong>' . $command . ':</strong>' . $output . '<br><br>';
-            $output = str_replace($prompt, '', $output);
-            $output = str_replace(trim(str_replace('\n', '', $command)), '', $output);
-            $output = '<code>' . $command . '</code>' . trim($output);
-            $outputs[] = $output;
+            if (!empty($command)) {
+                $this->ssh->write($command); // note the "\n"
+                $output = $this->ssh->read($prompt);
+                //echo '<strong>' . $command . ':</strong>' . $output . '<br><br>';
+                $output = str_replace($prompt, '', $output);
+                $output = str_replace(trim(str_replace('\n', '', $command)), '', $output);
+                $output = '<code>' . $command . '</code>' . trim($output);
+                $outputs[] = $output;
+            }
         }
         return implode('<br>', $outputs);
     }
@@ -296,6 +307,7 @@ class Terminal extends Base
                 $wp_plugins = !empty($wp_args['plugins']) ? sprintf('wp plugin install %s;', implode(' ', (array)$wp_args['plugins'])) : '';
                 $this->ssh->setTimeout(240); //downloading WP can take a while
                 $output = $this->exec("cd " . $directory . "; wp core download --skip-content;");
+                $this->ssh->setTimeout(false); //downloading WP can take a while
                 if (stripos($output, 'success') === false && strpos($output, 'WordPress files seem to already be present here') === false) {
                     break;
                 }
@@ -307,29 +319,61 @@ class Terminal extends Base
                     'WP_DEBUG' => $debug
                 );
                 $config_set = '';
-                foreach ($config_constants as $config_constant => $constant)
+                foreach ($config_constants as $config_constant => $constant) {
                     $config_set .= sprintf("wp config set %s %s --raw --type=constant;", $config_constant, $constant);
+                    //$config_constant_commands[] = sprintf("wp config set %s %s --raw --type=constant;", $config_constant, $constant);
+                }
+                /*
+                    $commands = array_merge(array(
+                        "cd " . $directory . ";",
+                        "wp config create --dbname='" . $db_args['name'] . "' --dbuser='" . $db_args['username'] . "' --dbpass='" . $db_args['password'] . "' --dbprefix='" . rtrim($wp_args['prefix'], '_') . "_'" . " --locale=en_AU;"
+                        ),$config_constant_commands, array(
+                        "wp core install --url='" . $wp_args['url'] . "' --title='" . $wp_args['title'] . "' --admin_user='" . $wp_args['username']
+                        . "' --admin_password='" . $wp_args['password'] . "' --admin_email='" . $wp_args['email'] . "'' --skip-email;",
+                        $wp_plugins,
+                        "wp plugin update --all;",
+                        "wp plugin activate --all;",
+                        "wp post delete 1;",
+                        "wp widget delete $(wp widget list sidebar-1 --format=ids);",
+                        "wp option update default_comment_status closed;",
+                        "wp option update blogdescription \"Enter tagline for " . $wp_args['title'] . " here\";",
+                        "wp theme install twentyseventeen --activate",
+                        "wp rewrite structure \"/%postname%/\";",
+                        "wp rewrite flush;",
+                        "find ' . $directory . ' -type d -exec chmod 755 {} \;",
+                        "find ' . $directory . ' -type f -exec chmod 644 {} \;",
+                        "find ' . $directory . '/wp-content -type d -exec chmod 775 {} \;",
+                        "find ' . $directory . '/wp-content -type f -exec chmod 664 {} \;",
+                        "chmod 660 wp-config.php",
+                        "mv wp-config.php ../"
+
+                    ));
+                    $output .= $this->read_write($commands);
+                */
                 $output .= $this->exec("
                 cd " . $directory . "; 
-                wp config create --dbname=" . $db_args['name'] . " --dbuser=" . $db_args['username'] . " --dbpass=" . $db_args['password'] . " --dbprefix=" . rtrim($wp_args['prefix'], '_') . '_' . " --locale=en_AU;         
+                wp config create --dbname='" . $db_args['name'] . "' --dbuser='" . $db_args['username'] . "' --dbpass='" . $db_args['password'] . "' --dbprefix='" . rtrim($wp_args['prefix'], '_') . "_'" . " --locale=en_AU;         
                 " . $config_set . "
-                wp core install --url=" . $wp_args['url'] . " --title=" . $wp_args['title'] . " --admin_user=" . $wp_args['username']
-                    . " --admin_password=" . $wp_args['password'] . " --admin_email=" . $wp_args['email'] . ' --skip-email;'
+                wp core install --url='" . $wp_args['url'] . "' --title='" . $wp_args['title'] . "' --admin_user='" . $wp_args['username']
+                    . "' --admin_password='" . $wp_args['password'] . "' --admin_email='" . $wp_args['email'] . "' --skip-email;"
                     . $wp_plugins . '
-                wp plugin update --all; wp plugin activate --all; 
+                wp plugin update --all;                 
                 wp post delete 1;
                 wp widget delete $(wp widget list sidebar-1 --format=ids); 
                 wp option update default_comment_status closed; 
                 wp option update blogdescription "Enter tagline for ' . $wp_args['title'] . ' here";
-                wp theme install twentyseventeen --activate               
-                wp rewrite structure "/%postname%/";
-                wp rewrite flush;
+                wp theme install twentyseventeen --activate                              
                 find ' . $directory . ' -type d -exec chmod 755 {} \;
                 find ' . $directory . ' -type f -exec chmod 644 {} \;  
                 find ' . $directory . '/wp-content -type d -exec chmod 775 {} \;
                 find ' . $directory . '/wp-content -type f -exec chmod 664 {} \;
                 chmod 660 wp-config.php
-                mv wp-config.php ../'
+                mv wp-config.php ../
+                wp rewrite structure "/%postname%/";
+                wp rewrite flush;
+                wp plugin activate --all;
+                wp option update timezone_string "Australia/Adelaide";              
+                '
                 );
                 if ($this->WordPress('check', $directory))
                     $success = true;
@@ -421,9 +465,10 @@ class Terminal extends Base
             $this->log(sprintf("%s Git repository already exists at <strong>%s</strong>", $error_message_string, $separate_repo_location));
             return false;
         }
-        $output = $this->exec('find ' . $separate_repo_location . ' -maxdepth 0 -empty -exec echo {} is empty. \;');
-        d($output);
-        if (strpos($output, $separate_repo_location . ' is empty') === false) {
+
+        $is_empty = $this->dir_is_empty($separate_repo_location);
+
+        if ($is_empty !== null && !$is_empty) {
             $this->log(sprintf("%s Directory already exists at <strong>%s</strong> and contains files.", $error_message_string, $separate_repo_location));
             return false;
         }
@@ -441,37 +486,48 @@ class Terminal extends Base
     /**
      * @param string $action
      * @param string $directory
-     * @param string $message
+     * @param string $branch
+     * @param string $git_message
      * @return bool
      */
-    protected function gitAction($action = 'update', $directory = '', $message = 'automated update of WordPress, plugins and themes')
+    protected function gitAction(
+        string $action = 'update',
+        string $directory = '',
+        string $branch = 'master',
+        string $git_message = 'automated update of WordPress, plugins and themes'
+    )
     {
         if (!$this->validate_action($action, array('update', 'commit', 'delete'), "Can't do Git stuff in the terminal."))
             return false;
+        $error_string = sprintf("Can't %s Git repository in %s environment. ", $action, $this->environment);
         if (!$this->dir_exists($directory)) {
-            $this->log(sprintf("Can't commit Git repository. Directory <strong>%s</strong> doesn't exist in %s environment.", $directory, $this->environment));
+            $this->log(sprintf("%s Directory <strong>%s</strong> doesn't exist.",
+                $error_string, $directory));
             return false;
         }
-        $branch = 'master';
-        $message = sprintf(" %s environment Git repo. ", $this->environment);
-        $this->log("Committing and pushing" . $message, 'info');
+        $message = sprintf("%s environment Git repo. ", $this->environment);
+        $this->log("Committing and pushing " . $message, 'info');
         $output = '';
         $init = "cd " . $directory . "; git checkout " . $branch . ";";
         switch ($action) {
             case 'update':
-                $output = $this->exec($init . "
-        git fetch --all;
-        git reset --hard origin/" . $branch . ";"
-                );
+                $output = $this->exec($init . " git diff");
+                d($output);
+                if (strlen($output) > 0) {
+                    $this->log(sprintf("%s Uncommitted changes in %s environment Git repo.",
+                        $error_string, $this->environment));
+                    return false;
+                }
+                $output = $this->exec($init . " git pull;");
                 if (strpos($output, 'blegh') !== false) {
                     $success = true;
                 }
                 break;
             case 'commit':
                 $output = $this->exec($init . "
-        git add . --all;
-        git commit -m '" . $message . "';
-        git push origin " . $branch . ";"
+                git add . --all;
+                git commit -m '" . $git_message . "';
+                git push origin " . $branch . ";"
                 );
                 if (strpos($output, 'blegh') !== false) {
                     $success = true;
@@ -480,19 +536,15 @@ class Terminal extends Base
         }
         $message .= $output;
         if (!empty($success)) {
-            $this->log("Successfully committed and pushed" . $message, 'success');
+            $this->log(sprintf("Successfully %s %s", $this->actions[$action]['past'], $message), 'success');
             return true;
         }
-        $this->log("Failed to commit" . $message);
+        $this->log(sprintf("Failed to %s", $action, $message));
         return false;
     }
 
-    /**
-     * @param string $db_name
-     * @param string $db_username
-     * @param $db_password
-     */
-    protected function updateWordPress($directory = '')
+
+    protected function updateWP($directory = '')
     {
         $branch = 'master';
         $this->exec('
@@ -631,10 +683,22 @@ class Terminal extends Base
         //return false;
     }
 
+    protected function file_exists(string $file = '')
+    {
+        if (empty($file)) {
+            $this->log("Can't check if file exists. No file supplied to function.");
+            return false;
+        }
+        $output = $this->exec('if test -f ' . $file . '; then echo "exist"; fi');
+        if (strpos($output, 'exist') !== false)
+            return true;
+        return false;
+    }
+
     protected function dir_exists(string $dir = '')
     {
         if (empty($dir)) {
-            $this->log(sprintf("Can't check if directory exists. No directory supplied to function. ", $message_string));
+            $this->log("Can't check if directory exists. No directory supplied to function. ");
             return false;
         }
         $output = $this->exec('if test -d ' . $dir . '; then echo "exist"; fi');
@@ -643,8 +707,84 @@ class Terminal extends Base
         return false;
     }
 
+    protected function dir_is_empty(string $dir = '')
+    {
+        $error_string = "Can't check if directory empty.";
+        if (empty($dir)) {
+            $this->log(sprintf("%s No directory supplied to function.", $error_string));
+            return false;
+        }
+        if (!$this->dir_exists($dir)) {
+            $this->log(sprintf("%s Directory <strong>%s</strong> doesn't exist in %s environment. You should check if dir exists first.", $error_string, $this->environment));
+            return null;
+        }
 
-    protected function git($action = 'create', $github_user, $github_project /*, $ssh_password = '', $git_url = ''*/)
+        $output = $this->exec('find ' . $dir . ' -maxdepth 0 -empty -exec echo {} is empty. \;');
+        d($output);
+        if (strpos($output, $dir . ' is empty') === false) {
+            return false;
+        }
+        return true;
+    }
+
+    protected function move_files($origin_dir, $location_dir)
+    {
+        if (empty($origin_dir) || empty($location_dir)) {
+            $this->log("Can't move files between directories. Origin and/or location directory not supplied to function.");
+            return false;
+        }
+        $origin_dir = rtrim($origin_dir, '/') . '/*';
+        $location_dir = rtrim($location_dir, '/') . '/';
+
+        $output = $this->exec('
+        mkdir ' . $location_dir . ';
+        shopt -s dotglob;
+        mv ' . $origin_dir . ' ' . $location_dir . ' ;');
+    }
+
+    protected
+    function gitignore($action = 'create', $directory = '')
+    {
+        if (!$this->validate_action($action, array('create', 'delete'), sprintf("Can't do %s gitignore stuff.", $this->environment)))
+            return false;
+        $message = sprintf("%s environment gitignore file.", $this->environment);
+        $error_string = sprintf("Can't %s %s", $action, $message);
+        if (!$this->dir_exists($directory)) {
+            $this->log(sprintf("%s Directory <strong>%s</strong> doesn't exist", $error_string, $directory));
+            return false;
+        }
+        $this->log(sprintf("%s %s", ucfirst($this->actions[$action]['present']), $message), 'info');
+        $file = $directory . '/.gitignore';
+        switch ($action) {
+            case 'create':
+                if ($this->file_exists($file)) {
+                    $this->log(sprintf("%s Gitignore file at <strong>%s</strong> already exists so no need to create.", $error_string, $directory));
+                    return false;
+                }
+                if ($this->sftp->put($file,
+                    dirname(__FILE__) . '/../configs/gitignore-template', SFTP::SOURCE_LOCAL_FILE))
+                    $success = true;
+                break;
+            case 'delete':
+                if (!$this->file_exists($file)) {
+                    $this->log(sprintf("%s Gitignore file at <strong>%s</strong> doesn't exist so no need to delete.", $error_string, $directory));
+                    return false;
+                }
+                $this->exec('rm ' . $file);
+                if (!$this->file_exists($file))
+                    $success = true;
+                break;
+        }
+        if (!empty($success)) {
+            $this->log(sprintf("Successfully %s %s", $this->actions[$action]['past'], $message), 'success');
+            return true;
+        }
+        $this->log(sprintf("Failed to %s %s", $action, $message));
+        return false;
+    }
+
+    protected
+    function git($action = 'create', $github_user, $github_project /*, $ssh_password = '', $git_url = ''*/)
     {
         /*
         $read = $this->prompt();
@@ -684,7 +824,8 @@ class Terminal extends Base
         //$this->ssh->read( $command );
     }
 
-    protected function virtualHost(string $action = 'create', string $domain = '', string $directory = '')
+    protected
+    function virtualHost(string $action = 'create', string $domain = '', string $directory = '')
     {
         if (!$this->validate_action($action, array('create', 'delete'), sprintf("Can't do %s environment virtual host stuff.", $this->environment)))
             return false;
