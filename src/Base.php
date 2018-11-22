@@ -83,6 +83,11 @@ class Base
             'past' => 'set',
             'action' => 'set'
         ),
+        'transfer' => array(
+            'present' => 'transferring',
+            'past' => 'transferred',
+            'action' => 'transfer'
+        ),
         'uninstall' => array(
             'present' => 'uninstalling',
             'past' => 'uninstalled',

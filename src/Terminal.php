@@ -427,6 +427,101 @@ class Terminal extends Base
         return false;
     }
 
+    protected function exportDB(string $wp_directory = '', string $filename = '')
+    {
+        $message = sprintf("%s environment database to filename <strong>%s</strong> in directory <strong>%s</strong>.",
+            $this->environment, $filename, $wp_directory);
+        $error_string = "Can't export " . $message;
+        $this->log("Exporting " . $message, 'info');
+        $this->WPCLI();
+        if (!$this->dir_exists($wp_directory)) {
+            $this->log($error_string . " WordPress directory doesn't exist.");
+            return false;
+        }
+        $filepath = $wp_directory . '/' . $filename;
+        if ($this->file_exists($filepath)) {
+            $this->log($error_string . " Backup file already exists in WordPress directory.");
+            return false;
+        }
+        d("cd " . $wp_directory . "; wp db export --add-drop-table " . $filename . " ;
+        tar -vczf " . $filename . ".gz " . $filename . " ;");
+        $output = $this->exec("cd " . $wp_directory . "; wp db export --add-drop-table " . $filename . " ;
+        tar -vczf " . $filename . ".gz " . $filename . " ;"
+        );
+        $message .= $this->format_output($output);
+        if (stripos($output, 'success') === false || stripos($output, 'error') !== false) {
+            $this->log($error_string . " WP CLI export failed." . $this->format_output($output));
+            return false;
+        }
+        if ($this->sftp->get($filepath . ".gz", dirname(__FILE__) . '/../backups/' . $filename . '.gz')) {
+            $this->sftp->delete($filepath . ".gz", false);
+            $this->log("Successfully exported " . $message, 'success');
+            return true;
+        } else {
+            $this->log($error_string . "  CLI export succeeded but couldn't download backup file." . $this->format_output($output));
+            return false;
+        }
+        $this->log("Failed to export " . $message . $this->format_output($output));
+        return false;
+    }
+
+    protected function importDB(
+        string $wp_directory = '',
+        string $from_dir = '',
+        string $filename = '',
+        string $old_url = '',
+        string $dest_url = '')
+    {
+        $message = sprintf("%s environment database for WordPress install in directory <strong>%s</strong> from filename <strong>%s</strong>.",
+            $this->environment, $wp_directory, $filename);
+        $error_string = "Can't import " . $message;
+        $this->log("Importing " . $message, 'info');
+        //if ($this->sftp->get($wp_directory . '/' . $filename, $filename))
+        //  return true;
+        if (!$this->dir_exists($wp_directory)) {
+            $this->log($error_string . " WordPress directory doesn't exist.");
+            return false;
+        }
+        $from_filepath = rtrim($from_dir, '/') . '/' . $filename;
+        $dest_filepath = $wp_directory . '/' . $filename;
+        if (!$this->sftp->put($dest_filepath, $from_filepath, SFTP::SOURCE_LOCAL_FILE)) {
+            $this->log($error_string . " Uploading DB file via SFTP failed.");
+            return false;
+        }
+        if (strpos($dest_url, 'https://') !== 0 && strpos($dest_url, 'http://') !== 0) {
+            $this->log($error_string . " Destination URL doesn't contain https:// or http:// protocol.");
+            return false;
+        }
+        if (strpos($old_url, 'https://') !== 0 && strpos($old_url, 'http://') !== 0) {
+            $this->log($error_string . " Origin URL string doesn't contain https:// or http:// protocol.");
+            return false;
+        }
+        $search_replace_urls[$old_url] = $dest_url;
+        $old_url = rtrim($old_url, '/');
+        $dest_url = rtrim($dest_url, '/');
+        $search_replace_urls[$old_url] = $dest_url;
+        $search_replace_urls[ltrim(ltrim($old_url, 'https://'), 'http://')] = ltrim(ltrim($dest_url, 'https://'), 'http://');
+        $wp_search_replace = '';
+        foreach ($search_replace_urls as $old => $dest) {
+            $wp_search_replace .= " wp search-replace '" . $old . "' '" . $dest . "';";
+        }
+
+        $output = $this->exec(
+            "cd " . $wp_directory . ";
+            tar -zxvf " . $filename . ";
+            wp db import " . rtrim($filename, '.gz') . ";"
+            . $wp_search_replace .
+            ""
+        );
+        $message .= $this->format_output($output);
+        if (stripos($output, 'success') !== false && stripos($output, 'error') === false) {
+            $this->log("Successfully imported " . $message, 'success');
+            return true;
+        }
+        $this->log("Failed to import " . $message);
+        return false;
+    }
+
     /**
      * @param string $separate_repo_location
      * @return bool

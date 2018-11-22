@@ -138,11 +138,34 @@ final class Deployer extends Base
             'condition' => array('update')),
         'update_live_wp' => array('label' => 'Update WordPress core, plugins and themes',
             'condition' => array('update', 'update_live_stuff')),
-
         'update_staging_stuff' => array('label' => 'Staging stuff',
             'condition' => array('update')),
         'update_staging_wp' => array('label' => 'Update WordPress core, plugins and themes',
-            'condition' => array('update', 'update_staging_stuff'))
+            'condition' => array('update', 'update_staging_stuff')),
+        'update_local_stuff' => array('label' => 'Local stuff',
+            'condition' => array('update')),
+        'update_local_wp' => array('label' => 'Update WordPress core, plugins and themes',
+            'condition' => array('update', 'update_local_stuff')),
+
+        'transfer' => array('label' => 'Transfer'),
+        'transfer_from_live' => array('label' => 'From live',
+            'condition' => array('transfer')),
+        'transfer_live_wp_to_staging' => array('label' => 'WordPress DB to staging server',
+            'condition' => array('transfer', 'transfer_from_live')),
+        'transfer_live_wp_to_local' => array('label' => 'WordPress DB to local server',
+            'condition' => array('transfer', 'transfer_from_live')),
+        'transfer_from_staging' => array('label' => 'From staging',
+            'condition' => array('transfer')),
+        'transfer_staging_wp_to_live' => array('label' => 'WordPress DB to live server',
+            'condition' => array('transfer', 'transfer_from_staging')),
+        'transfer_staging_wp_to_local' => array('label' => 'WordPress DB to local server',
+            'condition' => array('transfer', 'transfer_from_staging')),
+        'transfer_from_local' => array('label' => 'From local',
+            'condition' => array('transfer')),
+        'transfer_local_wp_to_live' => array('label' => 'WordPress DB to live server',
+            'condition' => array('transfer', 'transfer_from_local')),
+        'transfer_local_wp_to_staging' => array('label' => 'WordPress DB to staging server',
+            'condition' => array('transfer', 'transfer_from_local')),
     );
 
     public $template;
@@ -213,17 +236,19 @@ final class Deployer extends Base
 
         $this->template->get('header');
 
-        if (!$this->can_do('create') && !ph_d()->can_do('delete')) {
+        $action = '';
+        if ($this->can_do('update'))
+            $action = 'update';
+        elseif ($this->can_do('create'))
+            $action = 'deploy';
+        elseif ($this->can_do('transfer'))
+            $action = 'transfer';
+        elseif ($this->can_do('delete'))
+            $action = 'delete';
+        else
             template()->get('form');
-        } else {
-            $action = '';
-            if ($this->can_do('update'))
-                $action = 'update';
-            elseif ($this->can_do('create'))
-                $action = 'deploy';
-            elseif ($this->can_do('delete'))
-                $action = 'delete';
 
+        if (!empty($action)) {
             switch ($action) {
                 case 'delete':
                     if ($this->can_do('delete_version_control'))
@@ -251,22 +276,36 @@ final class Deployer extends Base
                     if ($this->can_do('update_staging_stuff'))
                         $this->updateWP('staging');
                     break;
+                case 'transfer':
+                    if ($this->can_do('transfer_live_wp_to_staging'))
+                        $this->transferDB('live', 'staging');
+                    if ($this->can_do('transfer_live_wp_to_local'))
+                        $this->transferDB('live', 'local');
+                    if ($this->can_do('transfer_staging_wp_to_live'))
+                        $this->transferDB('staging', 'live');
+                    if ($this->can_do('transfer_staging_wp_to_local'))
+                        $this->transferDB('staging', 'local');
+                    if ($this->can_do('transfer_local_wp_to_live'))
+                        $this->transferDB('local', 'live');
+                    if ($this->can_do('transfer_local_wp_to_staging'))
+                        $this->transferDB('local', 'staging');
+                    break;
             }
             $this->log(sprintf('<h2>Finished %s</h2>', ucfirst($this->actions[$action]['present'])), 'info');
+        } else {
+            $this->log(sprintf('Apache user is <strong>%s</strong>.', $this->terminal('local')->whoami()), 'info');
+            $diskspace = $this->getWHMDiskSpace();
+
+            $plan = $this->config->environ->live->cpanel->create_account_args->plan ?? '';
+            $package_size = $this->whm->get_pkg_info($plan)['data']['pkg']['QUOTA'];
+            if (($diskspace['total'] - $diskspace['allocated']) > $package_size)
+                $disk_message = 'You have';
+            else
+                $disk_message = 'Not enough';
+            $this->log(sprintf('Total disk space - <strong>%s</strong>MB. Disk used - <strong>%s</strong>MB. Allocated disk space - <strong>%s</strong>MB. %s enough unallocated disk space for a new <strong>%s</strong>MB cPanel account.',
+                $diskspace['total'], $diskspace['used'], $diskspace['allocated'], $disk_message, $package_size), 'info');
+            $this->log('<h3>cPanel Staging Subdomains</h3>' . build_recursive_list((array)ph_d()->get_staging_subdomains()), 'light');
         }
-
-        $this->log(sprintf('Apache user is <strong>%s</strong>.', $this->terminal('local')->whoami()), 'info');
-        $diskspace = $this->getWHMDiskSpace();
-
-        $plan = $this->config->environ->live->cpanel->create_account_args->plan ?? '';
-        $package_size = $this->whm->get_pkg_info($plan)['data']['pkg']['QUOTA'];
-        if (($diskspace['total'] - $diskspace['allocated']) > $package_size)
-            $disk_message = 'You have';
-        else
-            $disk_message = 'Not enough';
-        $this->log(sprintf('Total disk space - <strong>%s</strong>MB. Disk used - <strong>%s</strong>MB. Allocated disk space - <strong>%s</strong>MB. %s enough unallocated disk space for a new <strong>%s</strong>MB cPanel account.',
-            $diskspace['total'], $diskspace['used'], $diskspace['allocated'], $disk_message, $package_size), 'info');
-        $this->log('<h3>cPanel Staging Subdomains</h3>' . build_recursive_list((array)ph_d()->get_staging_subdomains()), 'light');
         $this->log('<h3>Input Config Array</h3>' . build_recursive_list((array)ph_d()->config), 'light');
 
 
@@ -461,7 +500,7 @@ final class Deployer extends Base
     {
         if (empty($this->_config)) {
             $base_config = include BASE_DIR . '/../configs/base-config.php';
-            $site_config = include BASE_DIR . '/../configs/sites/abettameta.php';
+            $site_config = include BASE_DIR . '/../configs/sites/config-paradigm.php';
             //$site_config = include BASE_DIR . '/../configs/sites/ahtgroup.php';
 
             $config = array_merge_recursive($base_config, $site_config);
@@ -1268,6 +1307,49 @@ final class Deployer extends Base
         }
         $this->log(sprintf('Failed to update WordPress in %s environment.', $environment), 'error');
         return false;
+    }
+
+    protected function transferDB(string $from_environment = '', string $dest_environment)
+    {
+        $message = sprintf(' %s DB to %s environment', $from_environment, $dest_environment);
+        $this->log('<h2>Migrating' . $message . '</h2>', 'info');
+        $from_directory = $this->get_environ_dir($from_environment, 'web');
+        $from_db_name = $this->config->environ->$from_environment->db->name ?? null;
+        if ($from_environment != 'local') {
+            $from_cpanel = $this->find_environ_cpanel($from_environment);
+            if (!empty($from_cpanel))
+                $from_db_name = $this->whm->db_prefix_check($from_db_name, $from_cpanel['user']);
+        }
+        $from_filename = $from_db_name . '-' . $from_environment . date("-Y-m-d_H_i_s") . '.sql';
+
+        //backup destination DB before import
+        $export = $this->terminal($from_environment)->exportDB($from_directory, $from_filename);
+
+        if ($export) {
+            $to_directory = $this->get_environ_dir($dest_environment, 'web');
+
+            $from_url = $this->get_environ_url($from_environment);
+            $dest_url = $this->get_environ_url($dest_environment);
+
+            $dest_db_name = $this->config->environ->$dest_environment->db->name ?? null;
+            if ($dest_environment != 'local') {
+                $dest_cpanel = $this->find_environ_cpanel($dest_environment);
+                if (!empty($dest_cpanel))
+                    $dest_db_name = $this->whm->db_prefix_check($dest_db_name, $dest_cpanel['user']);
+            }
+            $backup_filename = $dest_db_name . '-' . $dest_environment . date("-Y-m-d_H_i_s") . '.sql';
+            $backup = $this->terminal($dest_environment)->exportDB($to_directory, $backup_filename);
+            if ($backup)
+                $import = $this->terminal($dest_environment)->importDB($to_directory,
+                    dirname(__FILE__) . '/../backups/', $from_filename . '.gz', $from_url, $dest_url);
+        }
+        if (!empty($export) && !empty($backup) && !empty($import)) {
+            $this->log('<h3>Finished migrating ' . $message . '</h3>', 'success');
+            return true;
+        }
+        $this->log('<h3>Something may have gone wrong migrating ' . $message . '</h3>');
+        return false;
+
     }
 
     /**

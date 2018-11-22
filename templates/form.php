@@ -13,14 +13,21 @@
         -->
         <hr class="mb-4">
         <div class="row">
-            <div class="col-md-4 mb-2">
-                <?php template()->checkboxes(); ?>
+            <div class="col-md-6 mb-2">
+                <h5>Create</h5>
+                <?php template()->checkboxes('create'); ?>
             </div>
-            <div class="col-md-4 mb-2">
+            <div class="col-md-6 mb-2">
+                <h5>Delete</h5>
                 <?php template()->checkboxes('delete'); ?>
             </div>
-            <div class="col-md-4 mb-2">
+            <div class="col-md-6 mb-2">
+                <h5>Update</h5>
                 <?php template()->checkboxes('update'); ?>
+            </div>
+            <div class="col-md-6 mb-2">
+                <h5>Transfer</h5>
+                <?php template()->checkboxes('transfer'); ?>
             </div>
         </div>
         <hr class="mb-4">
