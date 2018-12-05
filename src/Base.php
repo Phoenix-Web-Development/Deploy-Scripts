@@ -53,6 +53,11 @@ class Base
             'past' => 'deployed',
             'action' => 'deploy'
         ),
+        'export' => array(
+            'present' => 'exporting',
+            'past' => 'exported',
+            'action' => 'export'
+        ),
         'generate' => array(
             'present' => 'generating',
             'past' => 'generated',
@@ -62,6 +67,11 @@ class Base
             'present' => 'getting',
             'past' => 'got',
             'action' => 'get'
+        ),
+        'import' => array(
+            'present' => 'importing',
+            'past' => 'imported',
+            'action' => 'import'
         ),
         'install' => array(
             'present' => 'installing',

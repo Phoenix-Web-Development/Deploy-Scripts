@@ -2,28 +2,25 @@
 
 namespace Phoenix;
 
+use Phoenix\Terminal\WP_DB;
+use Phoenix\Terminal\WP_CLI;
 use phpseclib\Net\SFTP;
 
 /**
  *
  * @property array $prompt
  * @property array $root
- * @property \phpseclib\Net\SFTP $sftp
- * @property \phpseclib\Net\SSH2 $ssh
+ * @property \phpseclib\Net\SFTP $ssh
  *
  * Class Terminal
  */
-class Terminal extends Base
+class TerminalClient extends Base
 {
     public $environment;
 
     private $_prompt;
 
     private $_root;
-
-    private $_sftp;
-
-    public $sftp;
 
     private $_ssh;
 
@@ -55,10 +52,10 @@ class Terminal extends Base
     }
 
     /**
-     * @param \phpseclib\Net\SSH2|null $ssh
-     * @return bool|\phpseclib\Net\SSH2
+     * @param \phpseclib\Net\SFTP|null $ssh
+     * @return bool|\phpseclib\Net\SFTP
      */
-    public function set_ssh(\phpseclib\Net\SSH2 $ssh = null)
+    public function set_ssh(\phpseclib\Net\SFTP $ssh = null)
     {
         if (empty($ssh))
             return false;
@@ -66,12 +63,6 @@ class Terminal extends Base
         sleep(1);
         $this->prompt();
         return $this->ssh = $ssh;
-    }
-
-    public function set_sftp(\phpseclib\Net\SFTP $sftp = null)
-    {
-        $this->sftp = $sftp;
-        return $sftp;
     }
 
     /**
@@ -88,7 +79,7 @@ class Terminal extends Base
         return false;
     }
 
-    protected function whoami()
+    function whoami()
     {
         $whoami = trim($this->exec('whoami')) ?? false;
         return $whoami;
@@ -220,7 +211,7 @@ class Terminal extends Base
                 break;
             case 'install':
                 if ($this->WPCLI('check')) {
-                    $this->log(sprintf('%s already installed.', $string), 'info');
+                    //$this->log(sprintf('%s already installed.', $string), 'info');
                     return true;
                 }
                 $output = $this->exec('curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar; chmod +x wp-cli.phar; mkdir ~/bin; mv wp-cli.phar ~/bin/wp; echo -e "PATH=$PATH:$HOME/.local/bin:$HOME/bin\n\nexport PATH" >> ~/.bashrc;', true);
@@ -262,19 +253,12 @@ class Terminal extends Base
 
         $string = sprintf("WordPress in %s environment", $this->environment);
         $error_string = sprintf("Can't %s %s.", $action, $string);
-        if (!$this->WPCLI('check')) {
-            if (!$this->WPCLI('install')) {
-                $this->log($error_string . " WP CLI not installed and couldn't perform install.", 'error');
-                return false;
-            }
-        }
         if (empty($directory)) {
             $this->log($error_string . " File directory missing from function input.", 'error');
             return false;
         }
-        if ($action != 'check')
-            $this->log(sprintf('%s %s in directory <strong>%s</strong>.', ucfirst($this->actions[$action]['present']), $string, $directory), 'info');
-        if (in_array($directory, array('~/', $this->root))) {
+        $directory = self::trailing_char($directory);
+        if (in_array($directory, array('~/', self::trailing_slash($this->root)))) {
             $this->log(sprintf($error_string . "Shouldn't be %s WordPress in root directory <strong>%s</strong>.", $this->actions[$action]['present'], $directory));
             return false;
         }
@@ -282,6 +266,15 @@ class Terminal extends Base
             $this->log(sprintf($error_string . " Directory <strong>%s</strong> doesn't exist.", $directory));
             return false;
         }
+        if (!$this->WPCLI('check')) {
+            if (!$this->WPCLI('install')) {
+                $this->log($error_string . " WP CLI not installed and couldn't perform install.", 'error');
+                return false;
+            }
+        }
+        if ($action != 'check')
+            $this->log(sprintf('%s %s in directory <strong>%s</strong>.', ucfirst($this->actions[$action]['present']), $string, $directory), 'info');
+
         switch ($action) {
             case 'check':
                 $output = $this->exec("cd " . $directory . "; wp core is-installed;");
@@ -323,33 +316,6 @@ class Terminal extends Base
                     $config_set .= sprintf("wp config set %s %s --raw --type=constant;", $config_constant, $constant);
                     //$config_constant_commands[] = sprintf("wp config set %s %s --raw --type=constant;", $config_constant, $constant);
                 }
-                /*
-                    $commands = array_merge(array(
-                        "cd " . $directory . ";",
-                        "wp config create --dbname='" . $db_args['name'] . "' --dbuser='" . $db_args['username'] . "' --dbpass='" . $db_args['password'] . "' --dbprefix='" . rtrim($wp_args['prefix'], '_') . "_'" . " --locale=en_AU;"
-                        ),$config_constant_commands, array(
-                        "wp core install --url='" . $wp_args['url'] . "' --title='" . $wp_args['title'] . "' --admin_user='" . $wp_args['username']
-                        . "' --admin_password='" . $wp_args['password'] . "' --admin_email='" . $wp_args['email'] . "'' --skip-email;",
-                        $wp_plugins,
-                        "wp plugin update --all;",
-                        "wp plugin activate --all;",
-                        "wp post delete 1;",
-                        "wp widget delete $(wp widget list sidebar-1 --format=ids);",
-                        "wp option update default_comment_status closed;",
-                        "wp option update blogdescription \"Enter tagline for " . $wp_args['title'] . " here\";",
-                        "wp theme install twentyseventeen --activate",
-                        "wp rewrite structure \"/%postname%/\";",
-                        "wp rewrite flush;",
-                        "find ' . $directory . ' -type d -exec chmod 755 {} \;",
-                        "find ' . $directory . ' -type f -exec chmod 644 {} \;",
-                        "find ' . $directory . '/wp-content -type d -exec chmod 775 {} \;",
-                        "find ' . $directory . '/wp-content -type f -exec chmod 664 {} \;",
-                        "chmod 660 wp-config.php",
-                        "mv wp-config.php ../"
-
-                    ));
-                    $output .= $this->read_write($commands);
-                */
                 $output .= $this->exec("
                 cd " . $directory . "; 
                 wp config create --dbname='" . $db_args['name'] . "' --dbuser='" . $db_args['username'] . "' --dbpass='" . $db_args['password'] . "' --dbprefix='" . rtrim($wp_args['prefix'], '_') . "_'" . " --locale=en_AU;         
@@ -365,8 +331,8 @@ class Terminal extends Base
                 wp theme install twentyseventeen --activate                              
                 find ' . $directory . ' -type d -exec chmod 755 {} \;
                 find ' . $directory . ' -type f -exec chmod 644 {} \;  
-                find ' . $directory . '/wp-content -type d -exec chmod 775 {} \;
-                find ' . $directory . '/wp-content -type f -exec chmod 664 {} \;
+                find ' . $directory . 'wp-content -type d -exec chmod 775 {} \;
+                find ' . $directory . 'wp-content -type f -exec chmod 664 {} \;
                 chmod 660 wp-config.php
                 mv wp-config.php ../
                 wp rewrite structure "/%postname%/";
@@ -411,8 +377,7 @@ class Terminal extends Base
                 );
                 $output = $this->exec("
                 cd " . $directory . ";" . $db_clean . "                
-                rm -R " . implode(' ', $wp_files) . "; 
-                rm " . implode(' ', $other_files) . ";"
+                rm -R " . implode(' ', array_merge($wp_files, $other_files)) . ";"
                 );
                 if (!$this->WordPress('check', $directory))
                     $success = true;
@@ -427,66 +392,116 @@ class Terminal extends Base
         return false;
     }
 
-    protected function exportDB(string $wp_directory = '', string $filename = '')
+    public function api($name)
+    {
+        $name = strtolower($name);
+        switch ($name) {
+            case 'wp_cli':
+            case 'wpcli':
+                $api = new WP_CLI($this);
+                break;
+            case 'wp_db':
+            case 'wpdb':
+                $api = new WP_DB($this);
+                break;
+            default:
+                return false;
+        }
+        $error_string = sprintf("Can't execute <code>%s</code> terminal method in %s environment.",
+            $name, $this->environment);
+        if (empty($api)) {
+            $this->log($error_string . " No method available.");
+            return false;
+        }
+        if (isset($this->ssh) || $this->environment == 'local') {
+            return $api;
+            //return call_user_func_array(array($this, $method), $arguments);
+        }
+        $this->log($error_string . " No SSH connection was established.");
+        return false;
+    }
+
+    /**
+     *
+     * Exports and downloads DB gzipped. Adds '.gz' to nominated filename.
+     *
+     * @param string $wp_dir
+     * @param string $filename
+     * @param string $download_dir
+     * @return bool
+     */
+    protected function exportDB(
+        string $wp_dir = '',
+        string $filename = '',
+        string $download_dir = ''
+    )
     {
         $message = sprintf("%s environment database to filename <strong>%s</strong> in directory <strong>%s</strong>.",
-            $this->environment, $filename, $wp_directory);
+            $this->environment, $filename, $wp_dir);
         $error_string = "Can't export " . $message;
         $this->log("Exporting " . $message, 'info');
-        $this->WPCLI();
-        if (!$this->dir_exists($wp_directory)) {
+        if (!$this->dir_exists($wp_dir)) {
             $this->log($error_string . " WordPress directory doesn't exist.");
             return false;
         }
-        $filepath = $wp_directory . '/' . $filename;
-        if ($this->file_exists($filepath)) {
+        if (!$this->WPCLI('check')) {
+            $this->log($error_string . " WP CLI not installed.");
+            return false;
+        }
+        $gz = '.gz';
+        $uncompressed_filename = rtrim($filename, $gz);
+
+        $uncompressed_filepath = self::trailing_slash($wp_dir) . $uncompressed_filename;
+        $compressed_filename = $uncompressed_filename . $gz;
+        $compressed_filepath = $uncompressed_filepath . $gz;
+        if ($this->file_exists($uncompressed_filepath) || $this->file_exists($compressed_filepath)) {
             $this->log($error_string . " Backup file already exists in WordPress directory.");
             return false;
         }
-        d("cd " . $wp_directory . "; wp db export --add-drop-table " . $filename . " ;
-        tar -vczf " . $filename . ".gz " . $filename . " ;");
-        $output = $this->exec("cd " . $wp_directory . "; wp db export --add-drop-table " . $filename . " ;
-        tar -vczf " . $filename . ".gz " . $filename . " ;"
-        );
-        $message .= $this->format_output($output);
+
+        $output = $this->format_output($this->exec("cd " . $wp_dir . "; wp db export --add-drop-table " . $uncompressed_filename . " ;
+        tar -vczf " . $compressed_filename . " " . $uncompressed_filename . " ;"));
+        $message .= $output;
         if (stripos($output, 'success') === false || stripos($output, 'error') !== false) {
-            $this->log($error_string . " WP CLI export failed." . $this->format_output($output));
+            $this->log($error_string . " WP CLI export failed." . $output);
             return false;
         }
-        if ($this->sftp->get($filepath . ".gz", dirname(__FILE__) . '/../backups/' . $filename . '.gz')) {
-            $this->sftp->delete($filepath . ".gz", false);
+        if ($this->ssh->get($compressed_filepath, self::trailing_slash($download_dir) . $compressed_filename)) {
+            $this->ssh->delete($compressed_filepath, false);
+            $this->ssh->delete($uncompressed_filepath, false);
+
             $this->log("Successfully exported " . $message, 'success');
             return true;
         } else {
-            $this->log($error_string . "  CLI export succeeded but couldn't download backup file." . $this->format_output($output));
+            $this->log($error_string . "  CLI export succeeded but couldn't download backup file." . $output);
             return false;
         }
-        $this->log("Failed to export " . $message . $this->format_output($output));
+        $this->log("Failed to export " . $message . $output);
         return false;
     }
 
     protected function importDB(
-        string $wp_directory = '',
-        string $from_dir = '',
-        string $filename = '',
+        string $wp_dir = '',
+        string $from_filepath = '',
         string $old_url = '',
-        string $dest_url = '')
+        string $dest_url = ''
+    )
     {
-        $message = sprintf("%s environment database for WordPress install in directory <strong>%s</strong> from filename <strong>%s</strong>.",
-            $this->environment, $wp_directory, $filename);
+        $message = sprintf("%s environment database for WordPress install in directory <strong>%s</strong> from filepath <strong>%s</strong>.",
+            $this->environment, $wp_dir, $from_filepath);
         $error_string = "Can't import " . $message;
         $this->log("Importing " . $message, 'info');
-        //if ($this->sftp->get($wp_directory . '/' . $filename, $filename))
-        //  return true;
-        if (!$this->dir_exists($wp_directory)) {
+        if (!$this->dir_exists($wp_dir)) {
             $this->log($error_string . " WordPress directory doesn't exist.");
             return false;
         }
-        $from_filepath = rtrim($from_dir, '/') . '/' . $filename;
-        $dest_filepath = $wp_directory . '/' . $filename;
-        if (!$this->sftp->put($dest_filepath, $from_filepath, SFTP::SOURCE_LOCAL_FILE)) {
-            $this->log($error_string . " Uploading DB file via SFTP failed.");
-            return false;
+        $upload_filename = basename($from_filepath);
+        $dest_filepath = self::trailing_slash($wp_dir) . $upload_filename;
+        if (!$this->ssh->put($dest_filepath, $from_filepath, SFTP::SOURCE_LOCAL_FILE)) {
+            if (!$this->ssh->put($dest_filepath, $from_filepath, SFTP::SOURCE_LOCAL_FILE)) {
+                $this->log($error_string . " Uploading DB file via SFTP failed.");
+                return false;
+            }
         }
         if (strpos($dest_url, 'https://') !== 0 && strpos($dest_url, 'http://') !== 0) {
             $this->log($error_string . " Destination URL doesn't contain https:// or http:// protocol.");
@@ -496,24 +511,23 @@ class Terminal extends Base
             $this->log($error_string . " Origin URL string doesn't contain https:// or http:// protocol.");
             return false;
         }
-        $search_replace_urls[$old_url] = $dest_url;
-        $old_url = rtrim($old_url, '/');
-        $dest_url = rtrim($dest_url, '/');
-        $search_replace_urls[$old_url] = $dest_url;
-        $search_replace_urls[ltrim(ltrim($old_url, 'https://'), 'http://')] = ltrim(ltrim($dest_url, 'https://'), 'http://');
-        $wp_search_replace = '';
-        foreach ($search_replace_urls as $old => $dest) {
-            $wp_search_replace .= " wp search-replace '" . $old . "' '" . $dest . "';";
+        $exec_commands = "cd " . $wp_dir . ";
+            tar -zxvf " . $upload_filename . ";
+            wp db import " . rtrim($upload_filename, '.gz') . ";";
+        if (!empty($old_url) && !empty($dest_url)) {
+            $search_replace_urls[$old_url] = $dest_url;
+            $old_url = rtrim($old_url, '/');
+            $dest_url = rtrim($dest_url, '/');
+            $search_replace_urls[$old_url] = $dest_url;
+            $search_replace_urls[ltrim(ltrim($old_url, 'https://'), 'http://')] = ltrim(ltrim($dest_url, 'https://'), 'http://');
+            foreach ($search_replace_urls as $old => $dest) {
+                $exec_commands .= " wp search-replace '" . $old . "' '" . $dest . "';";
+            }
         }
-
-        $output = $this->exec(
-            "cd " . $wp_directory . ";
-            tar -zxvf " . $filename . ";
-            wp db import " . rtrim($filename, '.gz') . ";"
-            . $wp_search_replace .
-            ""
-        );
+        $output = $this->exec($exec_commands);
         $message .= $this->format_output($output);
+        $this->ssh->delete($compressed_filepath, false);
+        $this->ssh->delete($uncompressed_filepath, false);
         if (stripos($output, 'success') !== false && stripos($output, 'error') === false) {
             $this->log("Successfully imported " . $message, 'success');
             return true;
@@ -526,7 +540,8 @@ class Terminal extends Base
      * @param string $separate_repo_location
      * @return bool
      */
-    protected function deleteGit(string $separate_repo_location = '')
+    protected
+    function deleteGit(string $separate_repo_location = '')
     {
         $message_string = sprintf("Git repository folder at <strong>%s</strong>.", $separate_repo_location);
         $this->log(sprintf("Deleting %s", $message_string), 'info');
@@ -548,14 +563,14 @@ class Terminal extends Base
      * @param string $separate_repo_location
      * @return bool
      */
-    protected function moveGit(string $worktree = '', string $separate_repo_location = '')
+    protected
+    function moveGit(string $worktree = '', string $separate_repo_location = '')
     {
         $message_string = sprintf("Git repository to <strong>%s</strong> separate from worktree at <strong>%s</strong>.", $separate_repo_location, $worktree);
         $this->log(sprintf("Moving %s", $message_string), 'info');
 
         $error_message_string = "Can't move " . $message_string;
         $output = $this->exec('mkdir -p ' . $separate_repo_location . '; cd ' . $separate_repo_location . '; git rev-parse --is-inside-git-dir');
-        d($output);
         if (strpos($output, 'true') !== false) {
             $this->log(sprintf("%s Git repository already exists at <strong>%s</strong>", $error_message_string, $separate_repo_location));
             return false;
@@ -585,7 +600,8 @@ class Terminal extends Base
      * @param string $git_message
      * @return bool
      */
-    protected function gitAction(
+    protected
+    function gitAction(
         string $action = 'update',
         string $directory = '',
         string $branch = 'master',
@@ -607,7 +623,6 @@ class Terminal extends Base
         switch ($action) {
             case 'update':
                 $output = $this->exec($init . " git diff");
-                d($output);
                 if (strlen($output) > 0) {
                     $this->log(sprintf("%s Uncommitted changes in %s environment Git repo.",
                         $error_string, $this->environment));
@@ -639,7 +654,8 @@ class Terminal extends Base
     }
 
 
-    protected function updateWP($directory = '')
+    protected
+    function updateWP($directory = '')
     {
         $branch = 'master';
         $this->exec('
@@ -661,7 +677,8 @@ class Terminal extends Base
      * @param string $passphrase
      * @return bool|string
      */
-    protected function SSHKey(string $action = 'create', string $key_name = 'id_rsa', string $passphrase = '')
+    protected
+    function SSHKey(string $action = 'create', string $key_name = 'id_rsa', string $passphrase = '')
     {
         $this->log(sprintf(" %s %s environment SSH key named <strong>%s</strong>.",
             ucfirst($this->actions[$action]['present']), $this->environment, $key_name), 'info');
@@ -699,7 +716,8 @@ class Terminal extends Base
         return false;
     }
 
-    protected function localSSHKey(string $action = 'create', string $key_name = 'id_rsa', string $passphrase = '')
+    protected
+    function localSSHKey(string $action = 'create', string $key_name = 'id_rsa', string $passphrase = '')
     {
         $output = $this->exec(sprintf('sudo /home/james/PhpstormProjects/Deploy/Project/bash/ssh-keygen.sh %s %s /home/james/.ssh/',
             $passphrase, $key_name, '/home/james/.ssh/'));
@@ -716,12 +734,13 @@ class Terminal extends Base
      * @param int $port
      * @return bool
      */
-    protected function SSHConfig(string $action = 'create',
-                                 string $host = '',
-                                 string $hostname = '',
-                                 string $key_name = 'id_rsa',
-                                 string $user = '',
-                                 int $port = 22)
+    protected
+    function SSHConfig(string $action = 'create',
+                       string $host = '',
+                       string $hostname = '',
+                       string $key_name = 'id_rsa',
+                       string $user = '',
+                       int $port = 22)
     {
         if (!$this->validate_action($action, array('create', 'delete'), sprintf("Can't do %s environment SSH config stuff.", $this->environment)))
             return false;
@@ -778,7 +797,8 @@ class Terminal extends Base
         //return false;
     }
 
-    protected function file_exists(string $file = '')
+    protected
+    function file_exists(string $file = '')
     {
         if (empty($file)) {
             $this->log("Can't check if file exists. No file supplied to function.");
@@ -790,19 +810,22 @@ class Terminal extends Base
         return false;
     }
 
-    protected function dir_exists(string $dir = '')
+    protected
+    function dir_exists(string $dir = '')
     {
         if (empty($dir)) {
             $this->log("Can't check if directory exists. No directory supplied to function. ");
             return false;
         }
+
         $output = $this->exec('if test -d ' . $dir . '; then echo "exist"; fi');
         if (strpos($output, 'exist') !== false)
             return true;
         return false;
     }
 
-    protected function dir_is_empty(string $dir = '')
+    protected
+    function dir_is_empty(string $dir = '')
     {
         $error_string = "Can't check if directory empty.";
         if (empty($dir)) {
@@ -815,26 +838,41 @@ class Terminal extends Base
         }
 
         $output = $this->exec('find ' . $dir . ' -maxdepth 0 -empty -exec echo {} is empty. \;');
-        d($output);
         if (strpos($output, $dir . ' is empty') === false) {
             return false;
         }
         return true;
     }
 
-    protected function move_files($origin_dir, $location_dir)
+    protected
+    function move_files($origin_dir, $dest_dir)
     {
-        if (empty($origin_dir) || empty($location_dir)) {
-            $this->log("Can't move files between directories. Origin and/or location directory not supplied to function.");
+        $error_string = sprintf("Can't move files between directories in %s environment.", $this->environment);
+        if (empty($origin_dir)) {
+            $this->log(sprintf("%s Origin directory not supplied to function.", $error_string));
             return false;
         }
-        $origin_dir = rtrim($origin_dir, '/') . '/*';
-        $location_dir = rtrim($location_dir, '/') . '/';
+        if (empty($dest_dir)) {
+            $this->log(sprintf("%s Destination directory not supplied to function.", $error_string));
+            return false;
+        }
+        $this->log(sprintf("Moving files from <strong>%s</strong> directory to <strong>%s</strong> directory in %s environment.",
+            $origin_dir, $dest_dir, $this->environment), 'info');
+        if (!$this->dir_exists($origin_dir)) {
+            $this->log(sprintf("%s Origin directory <strong>%s</strong> doesn't exist.",
+                $error_string, $origin_dir));
+            return false;
+        }
+        if (!$this->dir_exists($dest_dir))
+            $this->exec('mkdir ' . $dest_dir);
 
-        $output = $this->exec('
-        mkdir ' . $location_dir . ';
-        shopt -s dotglob;
-        mv ' . $origin_dir . ' ' . $location_dir . ' ;');
+        $origin_dir = self::trailing_slash($origin_dir) . '*';
+        $dest_dir = self::trailing_slash($dest_dir);
+
+        $output = $this->exec(
+            'shopt -s dotglob; 
+            mv ' . $origin_dir . ' ' . $dest_dir . ' ;'
+        );
     }
 
     protected
@@ -849,14 +887,14 @@ class Terminal extends Base
             return false;
         }
         $this->log(sprintf("%s %s", ucfirst($this->actions[$action]['present']), $message), 'info');
-        $file = $directory . '/.gitignore';
+        $file = self::trailing_slash($directory) . '.gitignore';
         switch ($action) {
             case 'create':
                 if ($this->file_exists($file)) {
                     $this->log(sprintf("%s Gitignore file at <strong>%s</strong> already exists so no need to create.", $error_string, $directory));
                     return false;
                 }
-                if ($this->sftp->put($file,
+                if ($this->ssh->put($file,
                     dirname(__FILE__) . '/../configs/gitignore-template', SFTP::SOURCE_LOCAL_FILE))
                     $success = true;
                 break;
@@ -931,5 +969,17 @@ class Terminal extends Base
             $this->log(sprintf("%s Insufficient permissions to run the script. Try adding script to NOPASSWD in visudo.", $error_string));
             return false;
         }
+    }
+
+    public static function trailing_slash(string $dir = '')
+    {
+        if (empty($dir)) return false;
+        return rtrim($dir, '/') . '/';
+    }
+
+    public static function trailing_char(string $dir = '')
+    {
+        if (empty($dir)) return false;
+        return rtrim($dir, '/') . '/';
     }
 }

@@ -2,7 +2,6 @@
 
 namespace Phoenix;
 
-use phpseclib\Net\SSH2;
 use phpseclib\Crypt\RSA;
 use phpseclib\Net\SFTP;
 use Github\Client;
@@ -13,7 +12,7 @@ use Phoenix\Functions;
  * @property \stdClass $config
  * @property Bitbucket $bitbucket
  * @property Github $github
- * @property Terminal $terminal
+ * @property TerminalClient $terminal
  *
  * Class Deployer
  */
@@ -148,24 +147,26 @@ final class Deployer extends Base
             'condition' => array('update', 'update_local_stuff')),
 
         'transfer' => array('label' => 'Transfer'),
-        'transfer_from_live' => array('label' => 'From live',
+        'transfer_wp_db' => array('label' => 'WordPress DB',
             'condition' => array('transfer')),
-        'transfer_live_wp_to_staging' => array('label' => 'WordPress DB to staging server',
-            'condition' => array('transfer', 'transfer_from_live')),
-        'transfer_live_wp_to_local' => array('label' => 'WordPress DB to local server',
-            'condition' => array('transfer', 'transfer_from_live')),
-        'transfer_from_staging' => array('label' => 'From staging',
-            'condition' => array('transfer')),
-        'transfer_staging_wp_to_live' => array('label' => 'WordPress DB to live server',
-            'condition' => array('transfer', 'transfer_from_staging')),
-        'transfer_staging_wp_to_local' => array('label' => 'WordPress DB to local server',
-            'condition' => array('transfer', 'transfer_from_staging')),
-        'transfer_from_local' => array('label' => 'From local',
-            'condition' => array('transfer')),
-        'transfer_local_wp_to_live' => array('label' => 'WordPress DB to live server',
-            'condition' => array('transfer', 'transfer_from_local')),
-        'transfer_local_wp_to_staging' => array('label' => 'WordPress DB to staging server',
-            'condition' => array('transfer', 'transfer_from_local')),
+        'transfer_wp_db_from_live' => array('label' => 'From live',
+            'condition' => array('transfer', 'transfer_wp_db')),
+        'transfer_wp_db_live_to_staging' => array('label' => 'to staging server',
+            'condition' => array('transfer', 'transfer_wp_db_from_live', 'transfer_wp_db')),
+        'transfer_wp_db_live_to_local' => array('label' => 'to local server',
+            'condition' => array('transfer', 'transfer_wp_db_from_live', 'transfer_wp_db')),
+        'transfer_wp_db_from_staging' => array('label' => 'From staging',
+            'condition' => array('transfer', 'transfer_wp_db')),
+        'transfer_wp_db_staging_to_live' => array('label' => 'to live server',
+            'condition' => array('transfer', 'transfer_wp_db_from_staging', 'transfer_wp_db')),
+        'transfer_staging_wp_to_local' => array('label' => 'to local server',
+            'condition' => array('transfer', 'transfer_wp_db_from_staging', 'transfer_wp_db')),
+        'transfer_wp_db_from_local' => array('label' => 'From local',
+            'condition' => array('transfer', 'transfer_wp_db')),
+        'transfer_wp_db_local_to_live' => array('label' => 'to live server',
+            'condition' => array('transfer', 'transfer_wp_db_from_local', 'transfer_wp_db')),
+        'transfer_wp_db_local_to_staging' => array('label' => 'to staging server',
+            'condition' => array('transfer', 'transfer_wp_db_from_local', 'transfer_wp_db')),
     );
 
     public $template;
@@ -277,17 +278,17 @@ final class Deployer extends Base
                         $this->updateWP('staging');
                     break;
                 case 'transfer':
-                    if ($this->can_do('transfer_live_wp_to_staging'))
+                    if ($this->can_do('transfer_wp_db_live_to_staging'))
                         $this->transferDB('live', 'staging');
-                    if ($this->can_do('transfer_live_wp_to_local'))
+                    if ($this->can_do('transfer_wp_db_live_to_local'))
                         $this->transferDB('live', 'local');
-                    if ($this->can_do('transfer_staging_wp_to_live'))
+                    if ($this->can_do('transfer_wp_db_staging_to_live'))
                         $this->transferDB('staging', 'live');
-                    if ($this->can_do('transfer_staging_wp_to_local'))
+                    if ($this->can_do('transfer_wp_db_staging_to_local'))
                         $this->transferDB('staging', 'local');
-                    if ($this->can_do('transfer_local_wp_to_live'))
+                    if ($this->can_do('transfer_wp_db_local_to_live'))
                         $this->transferDB('local', 'live');
-                    if ($this->can_do('transfer_local_wp_to_staging'))
+                    if ($this->can_do('transfer_wp_db_local_to_staging'))
                         $this->transferDB('local', 'staging');
                     break;
             }
@@ -401,7 +402,7 @@ final class Deployer extends Base
 
     /**
      * @param string $environment
-     * @return bool|Terminal
+     * @return bool|TerminalClient
      */
     protected function terminal(string $environment = 'live')
     {
@@ -410,14 +411,14 @@ final class Deployer extends Base
         if (empty($this->_terminal))
             $this->_terminal = new \stdClass();
         //$error_string = sprintf("Can't connect %s environment via SSH.", $environment);
-        $terminal = new Terminal($environment);
+        $terminal = new TerminalClient($environment);
 
-        $ssh = $this->get_phpseclib('ssh', $environment);
-        if (!empty($ssh))
-            $terminal->set_ssh($ssh);
+        //$ssh = $this->get_phpseclib('ssh', $environment);
+        //if (!empty($ssh))
+        //     $terminal->set_ssh($ssh);
         $sftp = $this->get_phpseclib('sftp', $environment);
         if (!empty($sftp))
-            $terminal->set_sftp($sftp);
+            $terminal->set_ssh($sftp);
         return $this->_terminal->$environment = $terminal;
     }
 
@@ -500,8 +501,8 @@ final class Deployer extends Base
     {
         if (empty($this->_config)) {
             $base_config = include BASE_DIR . '/../configs/base-config.php';
-            $site_config = include BASE_DIR . '/../configs/sites/config-paradigm.php';
-            //$site_config = include BASE_DIR . '/../configs/sites/ahtgroup.php';
+            //$site_config = include BASE_DIR . '/../configs/sites/paradigm.php';
+            $site_config = include BASE_DIR . '/../configs/sites/ahtgroup.php';
 
             $config = array_merge_recursive($base_config, $site_config);
             $this->_config = array_to_object($config);
@@ -1313,6 +1314,7 @@ final class Deployer extends Base
     {
         $message = sprintf(' %s DB to %s environment', $from_environment, $dest_environment);
         $this->log('<h2>Migrating' . $message . '</h2>', 'info');
+
         $from_directory = $this->get_environ_dir($from_environment, 'web');
         $from_db_name = $this->config->environ->$from_environment->db->name ?? null;
         if ($from_environment != 'local') {
@@ -1320,10 +1322,15 @@ final class Deployer extends Base
             if (!empty($from_cpanel))
                 $from_db_name = $this->whm->db_prefix_check($from_db_name, $from_cpanel['user']);
         }
-        $from_filename = $from_db_name . '-' . $from_environment . date("-Y-m-d_H_i_s") . '.sql';
+        $date_format = "-Y-m-d_H_i_s";
+        $backups_dir = dirname(__FILE__) . '/../backups/';
+
+        $from_filename = $from_db_name . '-' . $from_environment . date($date_format) . '.sql';
 
         //backup destination DB before import
-        $export = $this->terminal($from_environment)->exportDB($from_directory, $from_filename);
+        //$export = $this->terminal($from_environment)->exportDB($from_directory, $from_filename, $backups_dir);
+        $export = $this->terminal($from_environment)->api('wp_db')->export($from_directory, $backups_dir . $from_filename);
+        //$export = $this->terminal($from_environment)->api('WPDB')
 
         if ($export) {
             $to_directory = $this->get_environ_dir($dest_environment, 'web');
@@ -1337,11 +1344,13 @@ final class Deployer extends Base
                 if (!empty($dest_cpanel))
                     $dest_db_name = $this->whm->db_prefix_check($dest_db_name, $dest_cpanel['user']);
             }
-            $backup_filename = $dest_db_name . '-' . $dest_environment . date("-Y-m-d_H_i_s") . '.sql';
-            $backup = $this->terminal($dest_environment)->exportDB($to_directory, $backup_filename);
-            if ($backup)
-                $import = $this->terminal($dest_environment)->importDB($to_directory,
-                    dirname(__FILE__) . '/../backups/', $from_filename . '.gz', $from_url, $dest_url);
+            $backup_filename = $dest_db_name . '-' . $dest_environment . date($date_format) . '.sql';
+            //$backup = $this->terminal($dest_environment)->exportDB($to_directory, $backup_filename, $backups_dir);
+            $backup = $this->terminal($dest_environment)->api('wp_db')->export($to_directory, $backups_dir . $backup_filename);
+            if ($backup) {
+                //$import = $this->terminal($dest_environment)->importDB($to_directory, $backups_dir . $from_filename . '.gz', $from_url, $dest_url);
+                $import = $this->terminal($dest_environment)->api('wp_db')->import($to_directory, $backups_dir . $from_filename . '.gz', $from_url, $dest_url);
+            }
         }
         if (!empty($export) && !empty($backup) && !empty($import)) {
             $this->log('<h3>Finished migrating ' . $message . '</h3>', 'success');
