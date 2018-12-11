@@ -276,6 +276,8 @@ final class Deployer extends Base
                         $this->updateWP('live');
                     if ($this->can_do('update_staging_stuff'))
                         $this->updateWP('staging');
+                    if ($this->can_do('update_local_stuff'))
+                        $this->updateWP('local');
                     break;
                 case 'transfer':
                     if ($this->can_do('transfer_wp_db_live_to_staging'))
@@ -422,6 +424,11 @@ final class Deployer extends Base
         return $this->_terminal->$environment = $terminal;
     }
 
+    /**
+     * @param string $protocol
+     * @param string $environment
+     * @return bool|SSH2|SFTP
+     */
     function get_phpseclib($protocol = 'ssh', string $environment = 'live')
     {
         $message = sprintf("%s environment %s connection.", $environment, $protocol);
@@ -502,7 +509,7 @@ final class Deployer extends Base
         if (empty($this->_config)) {
             $base_config = include BASE_DIR . '/../configs/base-config.php';
             //$site_config = include BASE_DIR . '/../configs/sites/paradigm.php';
-            $site_config = include BASE_DIR . '/../configs/sites/ahtgroup.php';
+            $site_config = include BASE_DIR . '/../configs/sites/wibble.php';
 
             $config = array_merge_recursive($base_config, $site_config);
             $this->_config = array_to_object($config);
@@ -1120,7 +1127,7 @@ final class Deployer extends Base
 
                     if (!$git_dir_is_empty) {
                         $this->terminal($environment)->exec('mkdir ' . $web_dir . '/../dummy');
-                        $this->terminal($environment)->move_files($web_dir, $web_dir . '/../dummy');
+                        $this->terminal($environment)->api()->move_files($web_dir, $web_dir . '/../dummy');
                     }
                     $ssh_url = str_replace('git@github.com', $key_name, $upstream_repository['ssh_url']);
                     //$ssh_url = $upstream_repository['ssh_url'];
@@ -1131,10 +1138,10 @@ final class Deployer extends Base
                         json_encode((object)['url' => $ssh_url, 'remote_name' => "origin"])
                     );
                     if (!$git_dir_is_empty) {
-                        $this->terminal($environment)->move_files($web_dir . '/../dummy', $web_dir);
+                        $this->terminal($environment)->api()->move_files($web_dir . '/../dummy', $web_dir);
                         $this->terminal($environment)->exec('rm -R ' . $web_dir . '/../dummy');
                     }
-                    $this->terminal($environment)->moveGit($web_dir, $separate_repo_location);
+                    $this->terminal($environment)->git()->move($web_dir, $separate_repo_location);
                 } else
                     $this->log("Can't upload deploy key or clone repository. Upstream repository not found.");
                 $gitignore = $this->terminal($environment)->gitignore('create', $web_dir);
@@ -1147,7 +1154,7 @@ final class Deployer extends Base
                 $ssh_key = $this->whm->delkey($key_name, $cPanel_account['user']);
                 $deploy_key = $this->github->deploy_key('remove', $repo_name, $key_title);
                 $downstream_repository = $this->whm->version_control('delete', $web_dir, '', '', $cPanel_account['user']);
-                $deleted_git_folder = $this->terminal($environment)->deleteGit($separate_repo_location);
+                $deleted_git_folder = $this->terminal($environment)->git()->delete($separate_repo_location);
                 $gitignore = $this->terminal($environment)->gitignore('delete', $web_dir);
                 if (!empty($ssh_key) && !empty($ssh_config) && !empty($deploy_key)
                     && !empty($downstream_repository) && !empty($deleted_git_folder) && !empty($gitignore)
@@ -1195,36 +1202,38 @@ final class Deployer extends Base
 
     function get_environ_dir(string $environment = 'live', $type = 'web')
     {
-        $root = $this->terminal($environment)->root;
         $error_string = sprintf("Couldn't determine %s environment %s directory.", $environment, $type);
-        if (!empty($root)) {
-            switch ($type) {
-                case 'web':
-                    switch ($environment) {
-                        case 'live':
-                            $dir = '/public_html';
-                            break;
-                        case 'staging':
-                            $dir = $this->config->environ->$environment->cpanel->subdomain->directory ?? '';
-                            break;
-                    }
-                    break;
-                case 'git':
-                    switch ($environment) {
-                        case 'live':
-                            $dir = '/git/website';
-                            break;
-                        case 'staging':
-                            $repo_name = $this->config->version_control->repo_name ?? '';
-                            if (empty($repo_name)) {
-                                $this->log($error_string . ' Version control repo name missing from config.');
-                                return false;
-                            }
-                            $dir = '/git/' . $repo_name . '/website';
-                            break;
-                    }
-                    break;
-            }
+        $root = $this->terminal($environment)->api()->root;
+        if (empty($root)) {
+            $this->log($error_string . " Couldn't get SSH root directory.");
+            return false;
+        }
+        switch ($type) {
+            case 'web':
+                switch ($environment) {
+                    case 'live':
+                        $dir = '/public_html';
+                        break;
+                    case 'staging':
+                        $dir = $this->config->environ->$environment->cpanel->subdomain->directory ?? '';
+                        break;
+                }
+                break;
+            case 'git':
+                switch ($environment) {
+                    case 'live':
+                        $dir = '/git/website';
+                        break;
+                    case 'staging':
+                        $repo_name = $this->config->version_control->repo_name ?? '';
+                        if (empty($repo_name)) {
+                            $this->log($error_string . ' Version control repo name missing from config.');
+                            return false;
+                        }
+                        $dir = '/git/' . $repo_name . '/website';
+                        break;
+                }
+                break;
         }
         if (empty($dir)) {
             $this->log($error_string);
@@ -1269,19 +1278,20 @@ final class Deployer extends Base
 
         switch ($action) {
             case 'install':
-                $this->terminal($environment)->WPCLI('install');
+                $this->terminal($environment)->wp_cli()->install();
                 $wp_args = $this->config->wordpress ?? null;
                 $wp_args->title = $this->config->project->title ?? 'Insert Site Title Here';
                 $wp_args->url = $this->get_environ_url($environment);
+                //$wp_args->debug = $this->get_environ_url($environment);
                 $db_args = (array)$this->config->environ->$environment->db ?? null;
                 $db_args['name'] = $this->whm->db_prefix_check($db_args['name']);
                 $db_args['username'] = $this->whm->db_prefix_check($db_args['username']);
-                $success = $this->terminal($environment)->WordPress('install', $directory, $db_args, (array)$wp_args);
+                $success = $this->terminal($environment)->wp()->install($directory, $db_args, (array)$wp_args);
                 break;
             case 'delete':
-                $deleted_wp = $this->terminal($environment)->WordPress('delete', $directory);
+                $deleted_wp = $this->terminal($environment)->WordPress()->delete($directory);
                 if ($deleted_wp)
-                    $deleted_wp_cli = $this->terminal($environment)->WPCLI('delete');
+                    $deleted_wp_cli = $this->terminal($environment)->wp_cli()->delete();
                 if ($deleted_wp && $deleted_wp_cli)
                     $success = true;
                 break;
@@ -1298,9 +1308,9 @@ final class Deployer extends Base
     {
         $directory = $this->get_environ_dir($environment, 'web');
         if (!empty($directory)) {
-            $git_update = $this->terminal($environment)->gitAction('update', $directory, 'dev');
-            $wp_update = $this->terminal($environment)->updateWP($directory);
-            $git_commit = $this->terminal($environment)->gitAction('commit', $directory, 'dev');
+            $git_update = $this->terminal($environment)->git()->update($directory, 'dev');
+            $wp_update = $this->terminal($environment)->wp()->update($directory);
+            $git_commit = $this->terminal($environment)->git()->commit($directory, 'dev');
         }
         if (!empty($git_update) && !empty($wp_update) && !empty($git_commit)) {
             $this->log(sprintf('Successfully updated WordPress in %s environment.', $environment), 'success');
@@ -1329,7 +1339,7 @@ final class Deployer extends Base
 
         //backup destination DB before import
         //$export = $this->terminal($from_environment)->exportDB($from_directory, $from_filename, $backups_dir);
-        $export = $this->terminal($from_environment)->api('wp_db')->export($from_directory, $backups_dir . $from_filename);
+        $export = $this->terminal($from_environment)->wp_db()->export($from_directory, $backups_dir . $from_filename);
         //$export = $this->terminal($from_environment)->api('WPDB')
 
         if ($export) {
@@ -1345,11 +1355,9 @@ final class Deployer extends Base
                     $dest_db_name = $this->whm->db_prefix_check($dest_db_name, $dest_cpanel['user']);
             }
             $backup_filename = $dest_db_name . '-' . $dest_environment . date($date_format) . '.sql';
-            //$backup = $this->terminal($dest_environment)->exportDB($to_directory, $backup_filename, $backups_dir);
-            $backup = $this->terminal($dest_environment)->api('wp_db')->export($to_directory, $backups_dir . $backup_filename);
+            $backup = $this->terminal($dest_environment)->wp_db()->export($to_directory, $backups_dir . $backup_filename);
             if ($backup) {
-                //$import = $this->terminal($dest_environment)->importDB($to_directory, $backups_dir . $from_filename . '.gz', $from_url, $dest_url);
-                $import = $this->terminal($dest_environment)->api('wp_db')->import($to_directory, $backups_dir . $from_filename . '.gz', $from_url, $dest_url);
+                $import = $this->terminal($dest_environment)->wp_db()->import($to_directory, $backups_dir . $from_filename . '.gz', $from_url, $dest_url);
             }
         }
         if (!empty($export) && !empty($backup) && !empty($import)) {

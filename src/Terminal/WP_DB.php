@@ -5,9 +5,6 @@ namespace Phoenix\Terminal;
 use phpseclib\Net\SFTP;
 
 /**
- *
- * @property string $main_string
- *
  * Class WP_DB
  * @package Phoenix\Terminal
  */
@@ -15,60 +12,37 @@ class WP_DB extends AbstractTerminal
 {
     const EXT = '.gz';
 
-    private $_main_string;
-
     /**
      * @param string $wp_dir
      * @param string $local_dest_filepath
      * @return bool
      */
-    function export(
+    public function export(
         string $wp_dir = '',
         string $local_dest_filepath = '')
     {
-        $error_string = "Can't export WP DB. ";
-        if (!$this->validate($wp_dir, $local_dest_filepath, $error_string)) {
+        $this->logStart($wp_dir, $local_dest_filepath);
+        if (!$this->validate($wp_dir, $local_dest_filepath)) {
             return false;
         }
-        $error_string = "Can't export " . $this->main_string('export');
-        $this->logStart("export", $wp_dir, $local_dest_filepath);
         $dest_paths = $this->generateDBFilePaths(self::trailing_slash($wp_dir) . basename($local_dest_filepath));
 
-        if ($this->file_exists($dest_paths['path']['uncompressed']) || $this->file_exists($dest_paths['path']['compressed'])) {
-            $this->log($error_string . " Backup file already exists in WordPress directory.");
-            return false;
-        }
-        $this->ssh->setTimeout(240); //exporting DB can take a while
+        if ($this->ssh->file_exists($dest_paths['path']['uncompressed']) || $this->ssh->file_exists($dest_paths['path']['compressed']))
+            return $this->logError("Backup file already exists in WordPress directory.");
+        //$this->ssh->setTimeout(240); //exporting DB can take a while
         $exec_commands = "cd " . $wp_dir . "; 
         wp db export --add-drop-table " . $dest_paths['name']['uncompressed'] . ";
         tar -vczf " . $dest_paths['name']['compressed'] . " " . $dest_paths['name']['uncompressed'] . ";";
-        d($exec_commands);
         $output = $this->exec($exec_commands);
-        $this->ssh->setTimeout(false); //exporting DB can take a while
-        d($output);
-        if (stripos($output, 'success') === false || stripos($output, 'error') !== false) {
-            d('fail');
-            $this->log($error_string . " WP DB export failed." . $output);
-            return false;
-        }
+        //$this->ssh->setTimeout(false); //exporting DB can take a while
         $success = false;
+        if (stripos($output, 'success') === false || stripos($output, 'error') !== false)
+            return $this->logFinish($output, $success);
         if ($this->ssh->get($dest_paths['path']['compressed'], self::trailing_char($local_dest_filepath, self::EXT))
             && $this->ssh->delete($dest_paths['path']['compressed'], false)
             && $this->ssh->delete($dest_paths['path']['uncompressed'], false))
             $success = true;
-
-        return $this->logFinish('export', $output, $success);
-        /*
-        $this->log("Successfully exported " . $message, 'success');
-        return true;
-    } else
-{
-$this->log($error_string . "  CLI export succeeded but couldn't download backup file." . $output);
-return false;
-        */
-
-//$this->log("Failed to export " . $message . $output);
-//return false;
+        return $this->logFinish($output, $success);
     }
 
     /**
@@ -78,41 +52,29 @@ return false;
      * @param string $dest_url
      * @return bool
      */
-    function import(
+    public function import(
         string $wp_dir = '',
         string $local_orig_filepath = '',
         string $old_url = '',
         string $dest_url = ''
     )
     {
-        $error_string = "Can't import WP DB. ";
-        if (!$this->validate($wp_dir, $local_orig_filepath, $error_string)) {
+        $this->logStart($wp_dir, $local_orig_filepath);
+        if (!$this->validate($wp_dir, $local_orig_filepath))
             return false;
-        }
-        $error_string = "Can't import " . $this->main_string('import');
-        $this->logStart("import", $wp_dir, $local_orig_filepath);
-
         $dest_paths = $this->generateDBFilePaths(self::trailing_slash($wp_dir) . basename($local_orig_filepath));
-        d($dest_paths['path']['compressed']);
-        d($dest_paths['path']['uncompressed']);
-        d($local_orig_filepath);
 
         if (!$this->ssh->put($dest_paths['path']['compressed'], $local_orig_filepath, SFTP::SOURCE_LOCAL_FILE)) {
-            if (!$this->ssh->put($dest_paths['path']['uncompressed'], $local_orig_filepath, SFTP::SOURCE_LOCAL_FILE)) {
-                $this->log($error_string . " Uploading DB file via SFTP failed.");
-                return false;
-            }
+            if (!$this->ssh->put($dest_paths['path']['uncompressed'], $local_orig_filepath, SFTP::SOURCE_LOCAL_FILE))
+                return $this->logError("Uploading DB file via SFTP failed.");
             $uncompressed_upload = true;
         }
         if (!empty($old_url) && !empty($dest_url)) {
-            if (strpos($dest_url, 'https://') !== 0 && strpos($dest_url, 'http://') !== 0) {
-                $this->log($error_string . " Destination URL doesn't contain https:// or http:// protocol.");
-                return false;
-            }
-            if (strpos($old_url, 'https://') !== 0 && strpos($old_url, 'http://') !== 0) {
-                $this->log($error_string . " Origin URL string doesn't contain https:// or http:// protocol.");
-                return false;
-            }
+            $url_error = " URL doesn't contain https:// or http:// protocol.";
+            if (strpos($dest_url, 'https://') !== 0 && strpos($dest_url, 'http://') !== 0)
+                return $this->logError("Destination" . $url_error);
+            if (strpos($old_url, 'https://') !== 0 && strpos($old_url, 'http://') !== 0)
+                return $this->logError("Origin" . $url_error);
         }
         $exec_commands = "cd " . $wp_dir . ";";
         if (empty($uncompressed_upload))
@@ -120,16 +82,13 @@ return false;
         $exec_commands .= "wp db import " . $dest_paths['name']['uncompressed'] . ";";
         $exec_commands .= $this->getSearchReplaceURLCommands($old_url, $dest_url);
 
-        d($exec_commands);
-
         $output = $this->exec($exec_commands, true);
         $success = (stripos($output, 'success') !== false && stripos($output, 'error') === false) ? true : false;
         if ($success)
             if (!$this->ssh->delete($dest_paths['path']['compressed'], false) || !$this->ssh->delete($dest_paths['path']['uncompressed'], false)) {
                 $success = false;
             }
-        //return $this->logFinish('import', );
-        return $this->logFinish('import', $output, $success);
+        return $this->logFinish($output, $success);
     }
 
 
@@ -171,50 +130,39 @@ return false;
     /**
      * @param string $wp_dir
      * @param string $local_filepath
-     * @param string $error_string
      * @return bool
      */
     private
-    function validate(string $wp_dir = '', string $local_filepath = '', string $error_string = '')
+    function validate(string $wp_dir = '', string $local_filepath = '')
     {
-        if (empty($wp_dir)) {
-            $this->log($error_string . " WordPress directory wasn't supplied to function.");
-            return false;
-        }
-        if (empty($local_filepath)) {
-            $this->log($error_string . " Local backup filepath wasn't supplied to function.");
-            return false;
-        }
-        if (!$this->dir_exists($wp_dir)) {
-            $this->log($error_string . sprintf(" WordPress directory <strong>%s</strong> doesn't exist.", $wp_dir));
-            return false;
-        }
-        if (!$this->client->api('WP_CLI')->install_if_missing()) {
-            $this->log($error_string . " WP CLI not installed.");
-            return false;
-        }
+        if (empty($wp_dir))
+            return $this->logError("WordPress directory wasn't supplied to function.");
+        if (empty($local_filepath))
+            return $this->logError("Local backup filepath wasn't supplied to function.");
+        if (!$this->dir_exists($wp_dir))
+            return $this->logError(sprintf(" WordPress directory <strong>%s</strong> doesn't exist.", $wp_dir));
+        if (!$this->client->WP_CLI()->install_if_missing())
+            return $this->logError("WP CLI missing and install failed.");
         return true;
     }
 
     /**
-     * @param string $action
      * @param string $wp_dir
      * @param string $filepath
      * @return bool|string
      */
-    private
-    function main_string(string $action = '', string $wp_dir = '', string $filepath = '')
+    protected
+    function mainStr(string $wp_dir = '', string $filepath = '')
     {
+        $action = $this->getCaller();
+
         if (func_num_args() == 0) {
-            $this->log('No action supplied to main string function.');
-            return false;
+            if (!empty($this->_mainStr[$action]))
+                return $this->_mainStr[$action];
         }
-        if (func_num_args() == 1) {
-            if (!empty($this->_main_string[$action]))
-                return $this->_main_string[$action];
-            return false;
-        }
-        $string = "%s %s environment WordPress database in directory <strong>%s</strong> %s local destination <strong>%s</strong>.";
+        $string = "%s %s environment WordPress database%s %s local destination%s.";
+        $wp_dir = !empty($wp_dir) ? ' in directory <strong>' . $wp_dir . '</strong>' : '';
+        $filepath = !empty($filepath) ? ' <strong>' . $filepath . '</strong>' : '';
         switch ($action) {
             case 'import':
                 $direction1 = "to";
@@ -224,35 +172,37 @@ return false;
                 $direction1 = "from";
                 $direction2 = "to";
                 break;
+            default:
+                $direction1 = $direction2 = '';
         }
-        return $this->_main_string[$action] = sprintf($string, $direction1, $this->environment, $wp_dir, $direction2, $filepath);
+        return $this->_mainStr[$action] = sprintf($string, $direction1, $this->environment, $wp_dir, $direction2, $filepath);
     }
 
+
     /**
-     * @param string $action
      * @param string $wp_dir
      * @param string $filepath
      */
-    private
-    function logStart(string $action = '', string $wp_dir = '', string $filepath = '')
+    protected
+    function logStart(string $wp_dir = '', string $filepath = '')
     {
-        $this->log(ucfirst($this->actions[$action]['present']) . ' ' . $this->main_string($action, $wp_dir, $filepath), 'info');
+        $this->log(ucfirst($this->actions[$this->getCaller()]['present']) . ' ' . $this->mainStr($wp_dir, $filepath), 'info');
     }
 
     /**
-     * @param string $action
      * @param string $output
-     * @param string $success
-     * @return bool
+     * @param bool $success
+     * @return bool|null
      */
-    private function logFinish($action = '', $output = '', $success = 'false')
+    protected function logFinish($output = '', $success = false)
     {
+        $action = $this->getCaller();
         if (!empty($action)) {
             if (!empty($success)) {
-                $this->log(sprintf('Successfully %s %s. %s', $this->actions[$action]['past'], $this->main_string($action), $output), 'success');
+                $this->log(sprintf('Successfully %s %s. %s', $this->actions[$action]['past'], $this->mainStr(), $output), 'success');
                 return true;
             }
-            $this->log(sprintf('Failed to %s %s. %s', $action, $this->main_string($action), $output));
+            $this->log(sprintf('Failed to %s %s. %s', $action, $this->mainStr(), $output));
             return false;
         }
         return null;

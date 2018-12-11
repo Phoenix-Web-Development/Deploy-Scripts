@@ -157,6 +157,8 @@ class Github extends Base
                     return false;
                 }
 
+                $this->client->repo()
+
                 $this->client->api('repo')->remove($this->user, $repo_name);
                 //remove method doesn't return anything so check if repo exists. But API sometimes doesn't update straight away so wait a couple seconds.
                 sleep(2);

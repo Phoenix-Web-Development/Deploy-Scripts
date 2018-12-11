@@ -26,15 +26,29 @@ class WP_CLI extends AbstractTerminal
      */
     public function delete()
     {
-        $this->logStart('delete');
-        $error_string = "Can't delete " . $this->getMainString();
+        return $this->uninstall();
+    }
+
+    /**
+     * @return bool
+     */
+    public function uninstall()
+    {
+        $this->logStart();
         if (!$this->check()) {
-            $this->log($error_string . ' WordPress CLI not installed.', 'info');
+            $this->log("Can't delete " . $this->mainStr() . ' WordPress CLI not installed.', 'info');
             return true;
         }
-        $output = $this->exec('rm ~/bin/wp', true);
-        $success = $this->check() ? false : true;
-        return $this->logFinish('delete', $output, $success);
+        $success = $this->ssh->delete('~/bin/wp') ? true : false;
+        return $this->logFinish('', $success);
+    }
+
+    /**
+     * @return bool
+     */
+    public function create()
+    {
+        return $this->install();
     }
 
     /**
@@ -42,10 +56,9 @@ class WP_CLI extends AbstractTerminal
      */
     public function install()
     {
-        $this->logStart('install');
-        $error_string = "Can't install " . $this->getMainString();
+        $this->logStart();
         if ($this->check()) {
-            $this->log($error_string . ' already installed.', 'info');
+            $this->log(sprintf("No need to install %s It's already installed.", $this->mainStr()), 'info');
             return true;
         }
         $output = $this->exec(
@@ -55,7 +68,7 @@ class WP_CLI extends AbstractTerminal
         mv wp-cli.phar ~/bin/wp; 
         echo -e "PATH=$PATH:$HOME/.local/bin:$HOME/bin\n\nexport PATH" >> ~/.bashrc;', true);
         $success = $this->check() ? true : false;
-        return $this->logFinish('install', $output, $success);
+        return $this->logFinish($output, $success);
     }
 
     /**
@@ -74,36 +87,8 @@ class WP_CLI extends AbstractTerminal
     /**
      * @return string
      */
-    private function getMainString()
+    protected function mainStr()
     {
         return sprintf("WP CLI in %s environment.", $this->environment);
     }
-
-    /**
-     * @param $action
-     */
-    private function logStart($action)
-    {
-        $this->log(ucfirst($this->actions[$action]['present']) . ' ' . $this->getMainString(), 'info');
-    }
-
-    /**
-     * @param string $action
-     * @param string $output
-     * @param string $success
-     * @return bool
-     */
-    private function logFinish($action = '', $output = '', $success = 'false')
-    {
-        if (!empty($action)) {
-            if (!empty($success)) {
-                $this->log(sprintf('Successfully %s %s. %s', $this->actions[$action]['past'], $this->getMainString(), $output), 'success');
-                return true;
-            }
-            $this->log(sprintf('Failed to %s %s. %s', $action, $this->getMainString(), $output));
-            return false;
-        }
-        return null;
-    }
-
 }
