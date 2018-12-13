@@ -21,7 +21,8 @@ class WP_DB extends AbstractTerminal
         string $wp_dir = '',
         string $local_dest_filepath = '')
     {
-        $this->logStart($wp_dir, $local_dest_filepath);
+        $this->mainStr($wp_dir, $local_dest_filepath);
+        $this->logStart();
         if (!$this->validate($wp_dir, $local_dest_filepath)) {
             return false;
         }
@@ -59,7 +60,8 @@ class WP_DB extends AbstractTerminal
         string $dest_url = ''
     )
     {
-        $this->logStart($wp_dir, $local_orig_filepath);
+        $this->mainStr($wp_dir, $local_orig_filepath);
+        $this->logStart();
         if (!$this->validate($wp_dir, $local_orig_filepath))
             return false;
         $dest_paths = $this->generateDBFilePaths(self::trailing_slash($wp_dir) . basename($local_orig_filepath));
@@ -82,7 +84,7 @@ class WP_DB extends AbstractTerminal
         $exec_commands .= "wp db import " . $dest_paths['name']['uncompressed'] . ";";
         $exec_commands .= $this->getSearchReplaceURLCommands($old_url, $dest_url);
 
-        $output = $this->exec($exec_commands, true);
+        $output = $this->exec($exec_commands);
         $success = (stripos($output, 'success') !== false && stripos($output, 'error') === false) ? true : false;
         if ($success)
             if (!$this->ssh->delete($dest_paths['path']['compressed'], false) || !$this->ssh->delete($dest_paths['path']['uncompressed'], false)) {
@@ -139,7 +141,7 @@ class WP_DB extends AbstractTerminal
             return $this->logError("WordPress directory wasn't supplied to function.");
         if (empty($local_filepath))
             return $this->logError("Local backup filepath wasn't supplied to function.");
-        if (!$this->dir_exists($wp_dir))
+        if (!$this->ssh->is_dir($wp_dir))
             return $this->logError(sprintf(" WordPress directory <strong>%s</strong> doesn't exist.", $wp_dir));
         if (!$this->client->WP_CLI()->install_if_missing())
             return $this->logError("WP CLI missing and install failed.");
@@ -197,6 +199,7 @@ class WP_DB extends AbstractTerminal
     protected function logFinish($output = '', $success = false)
     {
         $action = $this->getCaller();
+        $output = $this->format_output($output);
         if (!empty($action)) {
             if (!empty($success)) {
                 $this->log(sprintf('Successfully %s %s. %s', $this->actions[$action]['past'], $this->mainStr(), $output), 'success');

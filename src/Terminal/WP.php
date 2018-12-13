@@ -67,32 +67,14 @@ class WP extends AbstractTerminal
 
     /**
      * @param string $wp_dir
-     * @return bool
-     */
-    protected function validate(string $wp_dir = '')
-    {
-        if (empty($wp_dir))
-            return $this->logError("File directory missing from function input.");
-        $wp_dir = self::trailing_slash($wp_dir);
-        if (in_array($wp_dir, array('~/', self::trailing_slash($this->root))))
-            return $this->logError(sprintf("Shouldn't be %s WordPress in root directory <strong>%s</strong>.",
-                $this->actions[$this->getCaller()]['present'], $wp_dir));
-        if (!$this->dir_exists($wp_dir))
-            return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $wp_dir));
-        if (!$this->client->WPCLI()->install_if_missing())
-            return $this->logError("WP CLI missing and install failed.");
-        return true;
-    }
-
-    /**
-     * @param string $wp_dir
      * @param array $db_args
      * @param array $wp_args
      * @return bool
      */
     public function install(string $wp_dir = '', array $db_args = array(), array $wp_args = array())
     {
-        $this->logStart($wp_dir);
+        $this->mainStr($wp_dir);
+        $this->logStart();
         if (!$this->validate($wp_dir))
             return false;
         if ($this->check($wp_dir))
@@ -185,21 +167,31 @@ class WP extends AbstractTerminal
      */
     public function uninstall($wp_dir = '')
     {
-        $this->logStart($wp_dir);
+        $this->mainStr($wp_dir);
+        $this->logStart();
         if (!$this->validate($wp_dir))
             return false;
+        if (!$this->check($wp_dir))
+            return $this->logError("WordPress not installed so no need to uninstall.");
 
-        $db_clean = $this->check($wp_dir) ? ' wp db clean --yes;' : '';
-        $wp_files = self::WP_FILES;
-
+        $db_clean = ' wp db clean --yes;';
         $output = $this->exec("cd " . $wp_dir . ";"
-            . $db_clean .
-            "rm -R " . implode(' ', $wp_files) . ";"
+            . $db_clean
         );
+        $wp_files = self::WP_FILES;
+        foreach ($wp_files as $wp_file) {
+            $wp_file_path = self::trailing_slash($this->client->root) . $wp_files;
+            if ($this->ssh->file_exists($wp_file_path))
+                $this->ssh->delete($wp_file_path);
+        }
         $success = !$this->check($wp_dir) ? true : false;
         return $this->logFinish($output, $success);
     }
 
+    /**
+     * @param string $wp_dir
+     * @return bool
+     */
     public function update($wp_dir = '')
     {
         if (!$this->$this->validate())
@@ -219,11 +211,21 @@ class WP extends AbstractTerminal
 
     /**
      * @param string $wp_dir
+     * @return bool
      */
-    protected function logStart($wp_dir = '')
+    protected function validate(string $wp_dir = '')
     {
-        $this->log(sprintf('%s %s.', ucfirst($this->actions[$this->getCaller()]['present']),
-            $this->mainStr($wp_dir)), 'info');
+        if (empty($wp_dir))
+            return $this->logError("File directory missing from function input.");
+        $wp_dir = self::trailing_slash($wp_dir);
+        if (in_array($wp_dir, array('~/', self::trailing_slash($this->client->root))))
+            return $this->logError(sprintf("Shouldn't be %s WordPress in root directory <strong>%s</strong>.",
+                $this->actions[$this->getCaller()]['present'], $wp_dir));
+        if (!$this->ssh->is_dir($wp_dir))
+            return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $wp_dir));
+        if (!$this->client->WPCLI()->install_if_missing())
+            return $this->logError("WP CLI missing and install failed.");
+        return true;
     }
 
     /**

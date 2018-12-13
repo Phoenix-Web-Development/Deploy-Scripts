@@ -8,8 +8,6 @@ namespace Phoenix\Terminal;
  */
 class SSHConfig extends AbstractTerminal
 {
-    const FILEPATH = '~/.ssh/config';
-
     /**
      * @param string $host
      * @param string $hostname
@@ -25,21 +23,21 @@ class SSHConfig extends AbstractTerminal
         string $user = '',
         int $port = 22)
     {
-        $this->logStart($host, $hostname, $key_name, $user, $port);
-        if ($this->ssh->file_exists(self::FILEPATH))
-            $config_before = $this->ssh->get(self::FILEPATH);
+        $this->mainStr($host, $hostname, $key_name, $user, $port);
+        $this->logStart();
+        if ($this->ssh->file_exists($this->filepath()))
+            $config_before = $this->ssh->get($this->filepath());
         else {
             $config_before = '';
-            $this->ssh->touch(self::FILEPATH);
+            $this->ssh->touch($this->filepath());
         }
-        d($this->ssh->fileperms(self::FILEPATH));
-        if ($this->ssh->fileperms(self::FILEPATH) != '0600')
-            $this->ssh->chmod(0600, self::FILEPATH);
+        if ($this->ssh->fileperms($this->filepath()) != '0600')
+            $this->ssh->chmod(0600, $this->filepath());
         if ($this->check($host))
             return $this->logError(sprintf("Config entry for <strong>%s</strong> already exists.", $host));
         $output = $this->exec('echo -e "Host ' . $host . '\n  Hostname ' . $hostname . '\n  User ' . $user
-            . '\n  IdentityFile ~/.ssh/' . $key_name . '\n  Port ' . $port . '" >> ' . self::FILEPATH . ';', true);
-        $config_after = $this->ssh->get(self::FILEPATH);
+            . '\n  IdentityFile ~/.ssh/' . $key_name . '\n  Port ' . $port . '" >> ' . $this->filepath() . ';');
+        $config_after = $this->ssh->get($this->filepath());
         if ($config_before == $config_after)
             return $this->logFinish("Config file is unchanged after attempting to add to it. " . $output, false);
         $success = $this->check($host) ? true : false;
@@ -52,17 +50,18 @@ class SSHConfig extends AbstractTerminal
      */
     public function delete(string $host = '')
     {
-        $this->logStart($host);
-        if (!$this->ssh->file_exists(self::FILEPATH))
-            return $this->logError("Config file doesn't exist.");
+        $this->mainStr($host);
+        $this->logStart();
+        if (!$this->ssh->file_exists($this->filepath()))
+            return $this->logError(sprintf("Config file doesn't exist at <strong>%s</strong>.", $this->filepath()));
         if (!$this->check($host))
             return $this->logError(sprintf("Config entry for <strong>%s</strong> doesn't exist.", $host));
 
-        $config_before = $this->ssh->get(self::FILEPATH);
+        $config_before = $this->ssh->get($this->filepath());
 
-        $output = $this->exec('sed "s/^Host/\n&/" ' . self::FILEPATH . ' | sed "/^Host "' . $host
-            . '"$/,/^$/d;/^$/d" > ' . self::FILEPATH . '-dummy; mv ' . self::FILEPATH . '-dummy ' . self::FILEPATH . ';', true);
-        $config_after = $this->ssh->get(self::FILEPATH);
+        $output = $this->exec('sed "s/^Host/\n&/" ' . $this->filepath() . ' | sed "/^Host "' . $host
+            . '"$/,/^$/d;/^$/d" > ' . $this->filepath() . '-dummy; mv ' . $this->filepath() . '-dummy ' . $this->filepath() . ';');
+        $config_after = $this->ssh->get($this->filepath());
         if (strpos($output, "unterminated `s' command") !== false)
             return $this->logError($output);
         if ($config_before == $config_after)
@@ -77,9 +76,9 @@ class SSHConfig extends AbstractTerminal
      */
     public function check(string $host = '')
     {
-        if (!$this->ssh->file_exists(self::FILEPATH))
+        if (!$this->ssh->file_exists($this->filepath()))
             return false;
-        $config_entry_exists = $this->exec('grep "Host ' . $host . '" ' . self::FILEPATH);
+        $config_entry_exists = $this->exec('grep "Host ' . $host . '" ' . $this->filepath());
         return $config_entry_exists = (strlen($config_entry_exists) > 0 && strpos($config_entry_exists, 'Host ' . $host) !== false) ? true : false;
     }
 
@@ -108,5 +107,10 @@ class SSHConfig extends AbstractTerminal
         $user = !empty($user) ? sprintf(' and user <strong>%s</strong>', $user) : '';
         $port = !empty($port) ? sprintf(' and port <strong>%s</strong>', $port) : '';
         return $this->_mainStr = sprintf("%s environment SSH config%s%s%s%s%s", $this->environment, $host, $hostname, $key_name, $user, $port);
+    }
+
+    protected function filepath()
+    {
+        return self::trailing_slash($this->client->root) . '.ssh/config';
     }
 }

@@ -24,7 +24,6 @@ class Github extends Base
 
     protected function client(\Github\Client $client = null)
     {
-        d('github client');
         if (!empty($this->_client))
             return $this->_client;
         if (empty($client))
@@ -135,7 +134,6 @@ class Github extends Base
             return false;
         }
         $repo_exists = $this->find_repo($repo_name); //check if repo already exists
-        d($repo_exists);
         switch ($action) {
             case 'create':
                 if (!empty($repo_exists)) {
@@ -157,9 +155,7 @@ class Github extends Base
                     return false;
                 }
 
-                $this->client->repo()
-
-                $this->client->api('repo')->remove($this->user, $repo_name);
+                $this->client->repo()->remove($this->user, $repo_name);
                 //remove method doesn't return anything so check if repo exists. But API sometimes doesn't update straight away so wait a couple seconds.
                 sleep(2);
                 if (!$this->find_repo($repo_name)) {

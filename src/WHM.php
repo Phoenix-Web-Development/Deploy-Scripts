@@ -297,7 +297,7 @@ class WHM extends Base
         if (empty($cpanel_parameter)) {
             if (!empty($this->cpanel_accounts['active']))
                 return $this->cpanel_accounts['accounts'][$this->cpanel_accounts['active']];
-            $this->log(sprintf("Can't get cPanel account. %s is missing and no previously queried account to return.", ucfirst($type)), 'error');
+            $this->log(sprintf("Can't get cPanel account. %s is missing from function input.", ucfirst($type)), 'error');
             return false;
         }
         if (!in_array($type, array('user', 'domain'))) {
@@ -860,7 +860,7 @@ class WHM extends Base
             $this->log('Found' . $finish_message_append . '<h5>Subdomain Data:</h5>' . build_recursive_list($data), 'info');
             return $data;
         }
-        $this->log("Couldn't find" . $finish_message_append, 'secondary');
+        $this->log("Couldn't find" . $finish_message_append);
         return false;
     }
 
@@ -1150,7 +1150,12 @@ class WHM extends Base
      * @return bool
      */
     public
-    function genkey(string $key_name = '', string $key_pass = '', string $key_bits = '2048', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
+    function genkey(
+        string $key_name = '',
+        string $key_pass = '',
+        string $key_bits = '2048',
+        string $cpanel_parameter = '',
+        string $cpanel_parameter_type = 'user')
     {
         $error_string_append = "Can't generate cPanel SSH key. ";
         if (empty($key_name)) {
@@ -1162,7 +1167,7 @@ class WHM extends Base
             $this->log($error_string_append . "Couldn't find cPanel account to generate SSH key for.", 'error');
             return false;
         }
-        if ($ssh_key = $this->fetchkey($key_name)) {
+        if ($ssh_key = $this->fetchkey($key_name, 1, $cpanel_parameter, $cpanel_parameter_type)) {
             $this->log(sprintf("%s Key named <strong>%s</strong> already exists.", $error_string_append, $key_name), 'error');
             return $ssh_key;
         }
@@ -1431,7 +1436,7 @@ class WHM extends Base
             $this->log("Can't do version control stuff. Non valid action.");
             return false;
         }
-        $error_string_append = sprintf("Can't %s version control repository.", $action);
+        $error_string_append = sprintf("Can't %s cPanel version control repository.", $action);
         if (empty($repository_root) && $action != 'get') {
             $this->log(sprintf("%s Repository root function arg is missing.", $error_string_append));
             return false;
@@ -1477,6 +1482,11 @@ class WHM extends Base
                 break;
             case 'delete':
                 $function = 'delete';
+                $existing_repo = $this->version_control('get', $repository_root);
+                if (empty($existing_repo)) {
+                    $this->log(sprintf("%s No repository at <strong>%s</strong> to delete.", $error_string_append, $repository_root));
+                    return false;
+                }
                 $args = array(
                     'repository_root' => $repository_root,
                 );
@@ -1507,7 +1517,8 @@ class WHM extends Base
                     }
                     break;
                 case 'delete':
-                    if (!$this->version_control('get', $repository_root, $repo_name, $source_repository)) {
+                    //Can't call method "remove" on an undefined value
+                    if (!$this->version_control('get', $repository_root)) {
                         $success = true;
                     }
                     break;
@@ -1515,9 +1526,9 @@ class WHM extends Base
                     //$repos = $result['result']['result']['data'];
                     if (!empty($result['result']['result']['data'])) {
                         foreach ($result['result']['result']['data'] as $repo) {
-                            if (!empty($repo['repository_root']) && $repo['repository_root'] == $repository_root
-                                || !empty($repo['name']) && $repo['name'] == $repo_name
-                                || !empty($repo['source_repository']['url']) && $repo['source_repository']['url'] == $repository_url
+                            if ((!empty($repo['repository_root']) && $repo['repository_root'] == $repository_root)
+                                || (!empty($repo['name']) && $repo['name'] == $repo_name)
+                                || (!empty($repo['source_repository']['url']) && $repo['source_repository']['url'] == $repository_url)
                             )
                                 return $repo;
                         }

@@ -19,10 +19,10 @@ class Gitignore extends AbstractTerminal
         if (!$this->validate($directory))
             return false;
         $filepath = self::trailing_slash($directory) . '.gitignore';
-        if ($this->ssh->file_exists($filepath))
+        if ($this->ssh->file_exists($filepath) && strlen($this->ssh->get($filepath)) > 0)
             return $this->logError(sprintf("Gitignore file at <strong>%s</strong> already exists so no need to create.", $directory));
-        $success = $this->ssh->put($filepath, dirname(__FILE__) . '/../configs/gitignore-template', SFTP::SOURCE_LOCAL_FILE) ? true : false;
-        $this->logFinish('', $success);
+        $success = $this->ssh->put($filepath, BASE_DIR . '/../configs/gitignore-template', \phpseclib\Net\SFTP::SOURCE_LOCAL_FILE) ? true : false;
+        return $this->logFinish('', $success);
     }
 
     /**
@@ -35,10 +35,10 @@ class Gitignore extends AbstractTerminal
         if (!$this->validate($directory))
             return false;
         $filepath = self::trailing_slash($directory) . '.gitignore';
-        if (!$this->ssh->file_exists($file))
+        if (!$this->ssh->file_exists($filepath))
             return $this->logError(sprintf("Gitignore file at <strong>%s</strong> doesn't exist so no need to delete.", $directory));
         $success = $this->ssh->delete($filepath) ? true : false;
-        $this->logFinish('', $success);
+        return $this->logFinish('', $success);
     }
 
     /**
@@ -47,7 +47,7 @@ class Gitignore extends AbstractTerminal
      */
     protected function validate($directory = '')
     {
-        if (!$this->dir_exists($directory)) {
+        if (!$this->ssh->is_dir($directory)) {
             return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist", $directory));
         }
         return true;
@@ -59,6 +59,6 @@ class Gitignore extends AbstractTerminal
     protected
     function mainStr()
     {
-        return sprintf("%s environment gitignore file.", $this->environment);
+        return sprintf("%s environment gitignore file", $this->environment);
     }
 }

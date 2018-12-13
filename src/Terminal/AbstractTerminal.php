@@ -11,7 +11,6 @@ use phpseclib\Net\SFTP;
  * @property string $environment
  * @property string $mainStr
  * @property SFTP $ssh
- * @property array $root
  *
  * Class AbstractTerminal
  * @package Phoenix\Terminal
@@ -26,22 +25,7 @@ class AbstractTerminal extends Base
     /**
      * @var
      */
-    protected $_environment;
-
-    /**
-     * @var
-     */
     protected $_mainStr;
-
-    /**
-     * @var
-     */
-    protected $_root;
-
-    /**
-     * @var
-     */
-    protected $_ssh;
 
     /**
      * AbstractTerminal constructor.
@@ -49,10 +33,8 @@ class AbstractTerminal extends Base
      */
     public function __construct(TerminalClient $client)
     {
-        $this->client($client);
-        $this->ssh($client->ssh);
-        $this->environment($client->environment);
         parent::__construct();
+        $this->client = $client;
     }
     /*
         public function __call($method, $arguments)
@@ -84,87 +66,33 @@ class AbstractTerminal extends Base
         return $this->_client = $client;
     }
 
-
     /**
-     * @param SFTP|null $ssh
      * @return bool|SFTP
      */
-    protected function ssh(SFTP $ssh = null)
+    protected function ssh()
     {
-        if (func_num_args() == 0) {
-            if (!empty($this->_ssh))
-                return $this->_ssh;
-            return false;
-        }
-        return $this->_ssh = $ssh;
-    }
-
-    /**
-     * @param string|null $environment
-     * @return bool|string
-     */
-    protected function environment(string $environment = null)
-    {
-        if (func_num_args() == 0)
-            return $this->_environment;
-        if (is_string($environment))
-            return $this->_environment = $environment;
+        if ($this->client->ssh && method_exists($this->client->ssh, 'isConnected') && $this->client->ssh->isConnected())
+            return $this->client->ssh;
         return false;
     }
 
+    /**
+     * @return bool|string
+     */
+    protected function environment()
+    {
+        if (!empty($this->client->environment))
+            return $this->client->environment;
+        return false;
+    }
 
     /**
      * @param string $command
-     * @param bool $format
      * @return bool|string
      */
-    public function exec(string $command = '', bool $format = false)
+    protected function exec(string $command = '')
     {
-        $error_string = $this->log(sprintf('<code>exec()</code> failed to execute <code>%s</code> in %s environment terminal. ',
-            $command, $this->environment));
-
-        if ($this->ssh && method_exists($this->ssh, 'isConnected') && $this->ssh->isConnected()) {
-            if (!$this->ssh->isAuthenticated() && !empty(debug_backtrace()[1]['function'])) {
-                $this->log(sprintf("%s environment SSH exec() failed as you aren't authenticated. Exec() called by <code>%s()</code> function.",
-                    ucfirst($this->environment), debug_backtrace()[1]['function']), 'error');
-                return false;
-            }
-            $this->log(sprintf('<code>exec()</code> failed in %s environment terminal.', $this->environment));
-            $this->ssh->setTimeout(240); //downloading WP can take a while
-            d('Executing ' . $command);
-            $this->ssh->enablePTY();
-            $this->ssh->exec($command);
-            if ($this->ssh->isTimeout()) {
-                $this->log($error_string . "Timeout reached for <code>exec()</code>.");
-                return false;
-            }
-            $output = $this->ssh->read();
-            if ($this->ssh->isTimeout()) {
-                $this->log($error_string . "Timeout reached for <code>read()</code>.");
-                return false;
-            }
-            $this->ssh->setTimeout(false); //downloading WP can take a while
-            $this->ssh->disablePTY();
-            if ($this->ssh->isTimeout()) {
-                return false;
-            }
-            //$output = $this->ssh->read('imogen@r143 [~]');
-            //$this->ssh->write($command);
-            //$output .= $this->ssh->read('imogen@r143 [~]');
-        } elseif ($this->environment == 'local') {
-            //exec($command, $output);
-            exec($command, $raw_outputs);
-            $output = implode('<br>', $raw_outputs);
-            /*
-            foreach ($raw_outputs as $raw_output) {
-                $output .= $raw_output;
-            }
-            */
-        } else {
-            $this->log($error_string);
-            return false;
-        }
-        return $format ? $this->format_output($output) : $output;
+        return $this->client->exec($command);
     }
 
     /**
@@ -205,10 +133,12 @@ class AbstractTerminal extends Base
      * @param $dest_dir
      * @return bool
      */
-    protected
+    public
     function move_files($origin_dir = '', $dest_dir = '')
     {
-        $error_string = sprintf("Can't move files between directories in %s environment.", $this->environment);
+        $mainStr = sprintf(" files from <strong>%s</strong> directory to <strong>%s</strong> directory in %s environment.",
+            $origin_dir, $dest_dir, $this->environment);
+        $error_string = sprintf("Can't move " . $mainStr . ".", $this->environment);
         if (empty($origin_dir)) {
             $this->log(sprintf("%s Origin directory not supplied to function.", $error_string));
             return false;
@@ -217,40 +147,33 @@ class AbstractTerminal extends Base
             $this->log(sprintf("%s Destination directory not supplied to function.", $error_string));
             return false;
         }
-        $this->log(sprintf("Moving files from <strong>%s</strong> directory to <strong>%s</strong> directory in %s environment.",
-            $origin_dir, $dest_dir, $this->environment), 'info');
-        if (!$this->dir_exists($origin_dir)) {
+        $this->log("Moving " . $mainStr, 'info');
+        if (!$this->ssh->is_dir($origin_dir)) {
             $this->log(sprintf("%s Origin directory <strong>%s</strong> doesn't exist.",
                 $error_string, $origin_dir));
             return false;
         }
-        if (!$this->dir_exists($dest_dir))
-            $this->exec('mkdir ' . $dest_dir);
-
+        if (!$this->ssh->is_dir($dest_dir) && !$this->ssh->mkdir($dest_dir)) {
+            $this->log(sprintf("%s Failed to create directory at <strong>%s</strong> in %s environment.", $error_string, $dummy_dir, $this->environment));
+            return false;
+        }
         $origin_dir = self::trailing_slash($origin_dir) . '*';
         $dest_dir = self::trailing_slash($dest_dir);
 
         $output = $this->exec(
             'shopt -s dotglob; 
-            mv ' . $origin_dir . ' ' . $dest_dir . ' ;'
+            mv ' . $origin_dir . ' ' . $dest_dir . ' ; 
+            echo status is $?'
         );
-    }
-
-    /**
-     * @return mixed
-     */
-    protected function root()
-    {
-        if (!empty($this->_root))
-            return $this->_root;
-        $pwd = trim($this->exec('pwd')) ?? false;
-        if (!empty($pwd))
-            return $this->_root = $pwd;
-        $this->log(sprintf("Couldn't get %s environment root directory", $this->environment));
+        if (strpos($output, "status is 0") !== false) {
+            $this->log("Successfully moved " . $mainStr, 'success');
+            return true;
+        }
+        $this->log("Failed to move " . $mainStr);
         return false;
     }
 
-    protected
+    public
     function dir_is_empty(string $dir = '')
     {
         $error_string = "Can't check if directory empty.";
@@ -258,22 +181,16 @@ class AbstractTerminal extends Base
             $this->log(sprintf("%s No directory supplied to function.", $error_string));
             return false;
         }
-        if (!$this->dir_exists($dir)) {
+        if (!$this->ssh->is_dir($dir)) {
             $this->log(sprintf("%s Directory <strong>%s</strong> doesn't exist in %s environment. You should check if dir exists first.", $error_string, $this->environment));
             return null;
         }
 
         $output = $this->exec('find ' . $dir . ' -maxdepth 0 -empty -exec echo {} is empty. \;');
-        if (strpos($output, $dir . ' is empty') === false) {
-            return false;
+        if (strpos($output, $dir . ' is empty') !== false) {
+            return true;
         }
-        return true;
-    }
-
-    function whoami()
-    {
-        $whoami = trim($this->exec('whoami')) ?? false;
-        return $whoami;
+        return false;
     }
 
     /**
@@ -298,17 +215,15 @@ class AbstractTerminal extends Base
 
     protected function mainStr()
     {
-        return "I probably should have been called";
+        return "I probably shouldn't have been called";
     }
 
     /**
-     * @param string $arg1
-     * @param string $arg2
-     * @param string $arg3
+     *
      */
-    protected function logStart($arg1 = '', $arg2 = '', $arg3 = '')
+    protected function logStart()
     {
-        $this->log(ucfirst($this->actions[$this->getCaller()]['present']) . ' ' . $this->mainStr($arg1, $arg2, $arg3), 'info');
+        $this->log(ucfirst($this->actions[$this->getCaller()]['present']) . ' ' . $this->mainStr() . '.', 'info');
     }
 
     /**

@@ -16,7 +16,8 @@ class SSHKey extends AbstractTerminal
      */
     public function create(string $key_name = 'id_rsa', string $passphrase = '')
     {
-        $this->logStart($key_name);
+        $this->mainStr($key_name);
+        $this->logStart();
         if (!$this->validate($key_name))
             return false;
         $filepath = $this->filepath($key_name);
@@ -45,7 +46,8 @@ class SSHKey extends AbstractTerminal
      */
     public function delete(string $key_name = 'id_rsa')
     {
-        $this->logStart($key_name);
+        $this->mainStr($key_name);
+        $this->logStart();
         if (!$this->validate($key_name))
             return false;
         $filepath = $this->filepath($key_name);

@@ -39,7 +39,7 @@ class WP_CLI extends AbstractTerminal
             $this->log("Can't delete " . $this->mainStr() . ' WordPress CLI not installed.', 'info');
             return true;
         }
-        $success = $this->ssh->delete('~/bin/wp') ? true : false;
+        $success = $this->ssh->delete($this->filepath()) ? true : false;
         return $this->logFinish('', $success);
     }
 
@@ -64,9 +64,9 @@ class WP_CLI extends AbstractTerminal
         $output = $this->exec(
             'curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar; 
         chmod +x wp-cli.phar; 
-        mkdir ~/bin; 
-        mv wp-cli.phar ~/bin/wp; 
-        echo -e "PATH=$PATH:$HOME/.local/bin:$HOME/bin\n\nexport PATH" >> ~/.bashrc;', true);
+        mkdir ' . dirname($this->filepath()) . '; 
+        mv wp-cli.phar ' . $this->filepath() . '; 
+        echo -e "PATH=$PATH:$HOME/.local/bin:$HOME/bin\n\nexport PATH" >> ~/.bashrc;');
         $success = $this->check() ? true : false;
         return $this->logFinish($output, $success);
     }
@@ -90,5 +90,10 @@ class WP_CLI extends AbstractTerminal
     protected function mainStr()
     {
         return sprintf("WP CLI in %s environment.", $this->environment);
+    }
+
+    protected function filepath()
+    {
+        return self::trailing_slash($this->client->root) . 'bin/wp';
     }
 }

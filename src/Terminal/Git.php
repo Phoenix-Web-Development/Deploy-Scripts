@@ -15,9 +15,10 @@ class Git extends AbstractTerminal
      */
     public function move(string $worktree = '', string $separate_repo_path = '')
     {
-
-        $this->logStart($separate_repo_path, $worktree);
-
+        $this->mainStr($worktree, $separate_repo_path);
+        $this->logStart();
+        if (!$this->validate($worktree, $separate_repo_path))
+            return false;
         if (!$this->ssh->is_dir($separate_repo_path))
             $this->ssh->mkdir($separate_repo_path, -1, true);
 
@@ -29,9 +30,9 @@ class Git extends AbstractTerminal
         if ($is_empty !== null && !$is_empty)
             return $this->logError(sprintf("Directory already exists at <strong>%s</strong> and contains files.", $separate_repo_path));
 
-        $output = $this->exec('cd ' . $worktree . '; git init --separate-git-dir ' . $separate_repo_path, true);
-        $success = strpos($output, 'Reinitialized existing Git repository') !== false ? true : false;
-        $this->logFinish($output, $success);
+        $output = $this->exec('cd ' . $worktree . '; git init --separate-git-dir ' . $separate_repo_path);
+        $success = stripos($output, 'Reinitialized existing Git repository') !== false ? true : false;
+        return $this->logFinish($output, $success);
     }
 
     /**
@@ -41,12 +42,16 @@ class Git extends AbstractTerminal
      */
     public function delete(string $worktree = '', string $separate_repo_path = '')
     {
-        $this->logStart($separate_repo_path, $worktree);
-        if (!$this->validate($worktree))
+        $this->mainStr($worktree, $separate_repo_path);
+        $this->logStart();
+        if (!$this->validate($worktree, $separate_repo_path))
             return false;
-        $output = $this->exec('rm -rf ' . $separate_repo_path . ';');
-        $success = !$this->dir_exists($separate_repo_path) ? true : false;
-        $this->logFinish($output, $success);
+        $delete_repo = $this->ssh->delete($separate_repo_path, true);
+        if ($this->dir_is_empty(dirname($separate_repo_path)))
+            $delete_repo = $this->ssh->delete(dirname($separate_repo_path, true));
+        $delete_worktree_ref = $this->ssh->delete($worktree . '/.git');
+        $success = $delete_repo && $delete_worktree_ref ? true : false;
+        return $this->logFinish('', $success);
     }
 
     /**
@@ -56,7 +61,8 @@ class Git extends AbstractTerminal
      */
     public function update(string $worktree = '', string $branch = 'master')
     {
-        $this->logStart('', $worktree);
+        $this->mainStr($worktree);
+        $this->logStart();
         if (!$this->validate($worktree))
             return false;
 
@@ -67,7 +73,7 @@ class Git extends AbstractTerminal
             return $this->logError("Uncommitted changes in Git repo. " . $output);
         $output = $this->exec($init . " git pull;");
         $success = strpos($output, 'blegh') !== false ? true : false;
-        $this->logFinish($output, $success);
+        return $this->logFinish($output, $success);
     }
 
     /**
@@ -81,8 +87,9 @@ class Git extends AbstractTerminal
                            string $git_message = 'automated update of WordPress, plugins and themes'
     )
     {
-        $this->logStart('', $worktree);
-        if (!$this->$this->validate($worktree))
+        $this->mainStr($worktree);
+        $this->logStart();
+        if (!$this->validate($worktree))
             return false;
 
         $init = "cd " . $worktree . "; git checkout " . $branch . ";";
@@ -92,7 +99,7 @@ class Git extends AbstractTerminal
                 git push origin " . $branch . ";"
         );
         $success = strpos($output, 'blegh') !== false ? true : false;
-        $this->logFinish($output, $success);
+        return $this->logFinish($output, $success);
     }
 
     /**
@@ -100,14 +107,14 @@ class Git extends AbstractTerminal
      * @param string $worktree
      * @return bool
      */
-    protected function validate(string $repo_path = '', string $worktree = '')
+    protected function validate(string $worktree = '', string $repo_path = '')
     {
-        if (!$this->dir_exists($worktree)) {
+        if (empty($worktree))
+            return $this->logError("Worktree missing from method input.");
+        if (!$this->ssh->is_dir($worktree))
             return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $worktree));
-        }
-        $output = $this->exec('cd ' . $repo_path . '; git rev-parse --is-inside-git-dir');
-        if (strpos($output, 'true') === false)
-            return $this->logError(sprintf("Git repository doesn't exist at <strong>%s</strong>", $repo_path));
+        if (!in_array($this->getCaller(), array('commit', 'update')) && empty($repo_path))
+            return $this->logError("Repository path missing from method input.");
         return true;
     }
 
@@ -116,7 +123,7 @@ class Git extends AbstractTerminal
      * @param string $worktree
      * @return string
      */
-    protected function mainStr(string $repo_path = '', string $worktree = '')
+    protected function mainStr(string $worktree = '', string $repo_path = '')
     {
         if (func_num_args() == 0) {
             if (!empty($this->_mainStr[$this->getCaller()]))

@@ -18,6 +18,9 @@ use Phoenix\Functions;
  */
 final class Deployer extends Base
 {
+    /**
+     *
+     */
     const CONFIG = '/../configs/';
 
     /**
@@ -54,6 +57,9 @@ final class Deployer extends Base
      */
     public $staging_cpanel_key;
 
+    /**
+     * @var
+     */
     public $staging_cpanel_account;
     /**
      * @var array
@@ -169,6 +175,9 @@ final class Deployer extends Base
             'condition' => array('transfer', 'transfer_wp_db_from_local', 'transfer_wp_db')),
     );
 
+    /**
+     * @var Template
+     */
     public $template;
 
 
@@ -181,35 +190,6 @@ final class Deployer extends Base
             self::$_instance = new self();
         }
         return self::$_instance;
-    }
-
-    /**
-     * @param $name
-     * @param $value
-     */
-    function __set($name, $value)
-    {
-        if (method_exists($this, $name)) {
-            $this->$name($value);
-        } else {
-            // Getter/Setter not defined so set as property of object
-            $this->$name = $value;
-        }
-    }
-
-    /**
-     * @param $name
-     * @return null
-     */
-    function __get($name)
-    {
-        if (method_exists($this, $name)) {
-            return $this->$name();
-        } elseif (property_exists($this, $name)) {
-            // Getter/Setter not defined so return property if it exists
-            return $this->$name;
-        }
-        return null;
     }
 
     /**
@@ -297,6 +277,8 @@ final class Deployer extends Base
             $this->log(sprintf('<h2>Finished %s</h2>', ucfirst($this->actions[$action]['present'])), 'info');
         } else {
             $this->log(sprintf('Apache user is <strong>%s</strong>.', $this->terminal('local')->whoami()), 'info');
+            //if (!empty($this->terminal('staging')->whoami()))
+            //$this->log(sprintf('Staging Apache user is <strong>%s</strong>.', $this->terminal('staging')->whoami()), 'info');
             $diskspace = $this->getWHMDiskSpace();
 
             $plan = $this->config->environ->live->cpanel->create_account_args->plan ?? '';
@@ -415,12 +397,13 @@ final class Deployer extends Base
         //$error_string = sprintf("Can't connect %s environment via SSH.", $environment);
         $terminal = new TerminalClient($environment);
 
-        //$ssh = $this->get_phpseclib('ssh', $environment);
-        //if (!empty($ssh))
-        //     $terminal->set_ssh($ssh);
-        $sftp = $this->get_phpseclib('sftp', $environment);
-        if (!empty($sftp))
-            $terminal->set_ssh($sftp);
+        if ($environment != 'local') {
+            $sftp = $this->get_phpseclib('sftp', $environment);
+            if (!empty($sftp)) {
+                $terminal->ssh = $sftp;
+                //$terminal->ssh($sftp);
+            }
+        }
         return $this->_terminal->$environment = $terminal;
     }
 
@@ -472,6 +455,10 @@ final class Deployer extends Base
         return false;
     }
 
+    /**
+     * @param string $environment
+     * @return array|bool
+     */
     function get_environ_ssh_args(string $environment = 'live')
     {
         $error_string = sprintf("Can't connect %s environment via SSH.", $environment);
@@ -595,7 +582,7 @@ final class Deployer extends Base
             $function_name = $action . '_live_cpanel_account';
             $live_cpanel_account = $this->$function_name();
             //$live_account = call_user_func(array($this, $action . '_live_cpanel_account'));
-        } elseif ($actions['subdomain'] && $environment == 'staging') {
+        } elseif ($action == 'create' && $actions['subdomain'] && $environment == 'staging') {
             $function_name = $action . '_staging_subdomain';
             $staging_subdomain = $this->$function_name();
         }
@@ -613,6 +600,10 @@ final class Deployer extends Base
         }
         //if ($actions['version_control'])
         //$version_control = $this->versionControlInitialCommit($action, $environment);
+        if ($action == 'delete' && $actions['subdomain'] && $environment == 'staging') {
+            $function_name = $action . '_staging_subdomain';
+            $staging_subdomain = $this->$function_name();
+        }
 
         if (((!$actions['live_site'] || !empty($live_cpanel_account)) || (!$actions['subdomain'] || !empty($staging_subdomain)))
             && (!$actions['db'] || !empty($db) || ($action == 'delete' && !empty($live_cpanel_account)))
@@ -766,6 +757,10 @@ final class Deployer extends Base
         return false;
     }
 
+    /**
+     * @param string $environment
+     * @return bool
+     */
     function find_environ_cpanel(string $environment = 'live')
     {
         $error_string = sprintf("Can't find %s environment cPanel.", $environment);
@@ -1047,6 +1042,10 @@ final class Deployer extends Base
         return true;
     }
 
+    /**
+     * @param string $action
+     * @return bool
+     */
     function versionControlMainRepo(string $action = 'create')
     {
         if (!$this->validate_action($action, array('create', 'delete'), "Can't do main version control repository stuff."))
@@ -1114,7 +1113,7 @@ final class Deployer extends Base
                 $ssh_key = $this->whm->genkey($key_name, $passphrase, 2048, $cPanel_account['user']);
                 if (!empty($ssh_key)) {
                     $authkey = $this->whm->authkey($key_name);
-                    $ssh_config = $this->terminal($environment)->SSHConfig('create', $key_name, 'github.com', $key_name, 'git');
+                    $ssh_config = $this->terminal($environment)->ssh_config()->create($key_name, 'github.com', $key_name, 'git');
                 }
                 $upstream_repository = $this->github->find_repo($repo_name);
 
@@ -1123,11 +1122,12 @@ final class Deployer extends Base
                 if ($upstream_repository && !empty($ssh_key)) {
                     $deploy_key = $this->github->deploy_key('upload', $repo_name, $key_title, $ssh_key['key']);
 
-                    $git_dir_is_empty = $this->terminal($environment)->dir_is_empty($web_dir);
+                    $git_dir_is_empty = $this->terminal($environment)->api()->dir_is_empty($web_dir);
 
-                    if (!$git_dir_is_empty) {
-                        $this->terminal($environment)->exec('mkdir ' . $web_dir . '/../dummy');
-                        $this->terminal($environment)->api()->move_files($web_dir, $web_dir . '/../dummy');
+                    $dummy_dir = $web_dir . '/../dummy';
+                    if ($git_dir_is_empty === false) {
+                        if (!$this->terminal($environment)->api()->move_files($web_dir, $dummy_dir))
+                            break;
                     }
                     $ssh_url = str_replace('git@github.com', $key_name, $upstream_repository['ssh_url']);
                     //$ssh_url = $upstream_repository['ssh_url'];
@@ -1137,41 +1137,46 @@ final class Deployer extends Base
                         $downstream_repo_name,
                         json_encode((object)['url' => $ssh_url, 'remote_name' => "origin"])
                     );
-                    if (!$git_dir_is_empty) {
-                        $this->terminal($environment)->api()->move_files($web_dir . '/../dummy', $web_dir);
-                        $this->terminal($environment)->exec('rm -R ' . $web_dir . '/../dummy');
+                    if ($git_dir_is_empty === false) {
+                        $this->terminal($environment)->api()->move_files($dummy_dir, $web_dir);
+                        $this->terminal($environment)->ssh->delete($dummy_dir, true);
                     }
-                    $this->terminal($environment)->git()->move($web_dir, $separate_repo_location);
+                    $move_git = $this->terminal($environment)->git()->move($web_dir, $separate_repo_location);
                 } else
                     $this->log("Can't upload deploy key or clone repository. Upstream repository not found.");
-                $gitignore = $this->terminal($environment)->gitignore('create', $web_dir);
+                $gitignore = $this->terminal($environment)->gitignore()->create($web_dir);
                 if (!empty($ssh_key) && !empty($authkey) && !empty($ssh_config) && !empty($deploy_key)
-                    && !empty($downstream_repository) && !empty($gitignore))
+                    && !empty($downstream_repository) && !empty($move_git) && !empty($gitignore))
                     $success = true;
                 break;
             case 'delete':
-                $ssh_config = $this->terminal($environment)->SSHConfig('delete', 'github_' . $repo_name, 'github.com', 'github_' . $repo_name, 'git');
+                $ssh_config = $this->terminal($environment)->ssh_config()->delete('github_' . $repo_name, 'github.com', 'github_' . $repo_name, 'git');
                 $ssh_key = $this->whm->delkey($key_name, $cPanel_account['user']);
                 $deploy_key = $this->github->deploy_key('remove', $repo_name, $key_title);
-                $downstream_repository = $this->whm->version_control('delete', $web_dir, '', '', $cPanel_account['user']);
-                $deleted_git_folder = $this->terminal($environment)->git()->delete($separate_repo_location);
-                $gitignore = $this->terminal($environment)->gitignore('delete', $web_dir);
+                $downstream_repository = $this->whm->version_control('delete', $separate_repo_location, '', '', $cPanel_account['user']);
+                if (!$downstream_repository)
+                    $downstream_repository = $this->whm->version_control('delete', $web_dir, '', '', $cPanel_account['user']);
+                $deleted_git_folder = $this->terminal($environment)->git()->delete($web_dir, $separate_repo_location);
+                $gitignore = $this->terminal($environment)->gitignore()->delete($web_dir);
                 if (!empty($ssh_key) && !empty($ssh_config) && !empty($deploy_key)
                     && !empty($downstream_repository) && !empty($deleted_git_folder) && !empty($gitignore)
                 )
                     $success = true;
                 break;
         }
-
+//&TIO%3mEzk50
         if (!empty($success)) {
             $this->log(sprintf('Successfully %s %s', $this->actions[$action]['past'], $message_string), 'success');
             return true;
         }
         $this->log(sprintf("Something may have gone wrong while %s %s", $this->actions[$action]['present'], $message_string), 'error');
         return false;
-
     }
 
+    /**
+     * @param string $environment
+     * @return bool|string
+     */
     function get_environ_url(string $environment = 'live')
     {
         $error_string = sprintf("Can't get %s environment url.", $environment);
@@ -1200,10 +1205,15 @@ final class Deployer extends Base
         return $url;
     }
 
+    /**
+     * @param string $environment
+     * @param string $type
+     * @return bool|string
+     */
     function get_environ_dir(string $environment = 'live', $type = 'web')
     {
         $error_string = sprintf("Couldn't determine %s environment %s directory.", $environment, $type);
-        $root = $this->terminal($environment)->api()->root;
+        $root = $this->terminal($environment)->root;
         if (empty($root)) {
             $this->log($error_string . " Couldn't get SSH root directory.");
             return false;
@@ -1243,6 +1253,9 @@ final class Deployer extends Base
         return $directory;
     }
 
+    /**
+     * @return array
+     */
     function getWHMDiskSpace()
     {
         $accounts = $this->whm->get_cpanel_accounts();
@@ -1289,9 +1302,11 @@ final class Deployer extends Base
                 $success = $this->terminal($environment)->wp()->install($directory, $db_args, (array)$wp_args);
                 break;
             case 'delete':
-                $deleted_wp = $this->terminal($environment)->WordPress()->delete($directory);
-                if ($deleted_wp)
+                $deleted_wp = $this->terminal($environment)->wp()->delete($directory);
+                if ($deleted_wp && $environment == 'live')
                     $deleted_wp_cli = $this->terminal($environment)->wp_cli()->delete();
+                else
+                    $deleted_wp_cli = true;
                 if ($deleted_wp && $deleted_wp_cli)
                     $success = true;
                 break;
@@ -1304,6 +1319,10 @@ final class Deployer extends Base
         return false;
     }
 
+    /**
+     * @param string $environment
+     * @return bool
+     */
     function updateWP($environment = 'live')
     {
         $directory = $this->get_environ_dir($environment, 'web');
@@ -1320,6 +1339,11 @@ final class Deployer extends Base
         return false;
     }
 
+    /**
+     * @param string $from_environment
+     * @param string $dest_environment
+     * @return bool
+     */
     protected function transferDB(string $from_environment = '', string $dest_environment)
     {
         $message = sprintf(' %s DB to %s environment', $from_environment, $dest_environment);
@@ -1333,7 +1357,7 @@ final class Deployer extends Base
                 $from_db_name = $this->whm->db_prefix_check($from_db_name, $from_cpanel['user']);
         }
         $date_format = "-Y-m-d_H_i_s";
-        $backups_dir = dirname(__FILE__) . '/../backups/';
+        $backups_dir = BASE_DIR . '/../backups/';
 
         $from_filename = $from_db_name . '-' . $from_environment . date($date_format) . '.sql';
 
