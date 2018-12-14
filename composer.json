@@ -18,7 +18,6 @@
     "post-update-cmd": "@front-end-stuff",
     "post-install-cmd": "@front-end-stuff",
     "front-end-stuff": [
-      "cp vendor/twbs/bootstrap/dist/css/* public/css/",
       "cp vendor/twbs/bootstrap/dist/js/* public/js/",
       "cp vendor/components/jquery/jquery.min.js public/js/jquery.min.js; cp vendor/components/jquery/jquery.min.map public/js/jquery.min.map;"
     ]

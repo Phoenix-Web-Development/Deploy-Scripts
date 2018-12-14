@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Phoenix Deployment Script</title>
-    <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">
-    <link rel="stylesheet" type="text/css" href="css/style.css">
+    <link rel="stylesheet" type="text/css" href="css/phoenix.css">
     <script src="js/bootstrap.min.js"></script>
     <script src="js/jquery.min.js"></script>
     <script src="js/app.js"></script>
