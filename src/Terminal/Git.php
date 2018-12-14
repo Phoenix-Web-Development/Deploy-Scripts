@@ -24,7 +24,7 @@ class Git extends AbstractTerminal
 
         $output = $this->exec('cd ' . $separate_repo_path . '; git rev-parse --is-inside-git-dir');
         if (strpos($output, 'true') !== false)
-            return $this->logError(sprintf("Git repository already exists at <strong>%s</strong>. %s", $separate_repo_path, $output));
+            return $this->logError(sprintf("Git repository already exists at <strong>%s</strong>. %s", $separate_repo_path, $this->format_output($output)));
 
         $is_empty = $this->dir_is_empty($separate_repo_path);
         if ($is_empty !== null && !$is_empty)

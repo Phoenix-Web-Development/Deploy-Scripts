@@ -8,7 +8,7 @@ namespace Phoenix;
  *
  * Class Github
  */
-class Github extends Base
+class GithubClient extends Base
 {
     public $curl;
 
@@ -38,6 +38,24 @@ class Github extends Base
         if (empty($user))
             return false;
         return $this->_user = $user;
+    }
+
+
+    public function api($name = '')
+    {
+        $name = strtolower($name);
+        switch ($name) {
+            case 'webhook':
+                $api = new Github\Webhook($this);
+                break;
+            case '':
+                $api = new Github\AbstractGithub($this);
+        }
+        $error_string = sprintf("Can't execute <code>%s</code> Github method.", $name);
+        if (!empty($api))
+            return $api;
+        $this->log($error_string . " No Github connection was established.");
+        return new Terminal\Error($this);
     }
 
     /**
@@ -72,7 +90,7 @@ class Github extends Base
                     $this->log(sprintf("Can't upload GitHub deploy key. Key named <strong>%s</strong> already exists.", $key_title));
                     return false;
                 }
-                $uploaded_key = $this->client->api('repo')->keys()->create($this->user, $repo_name,
+                $uploaded_key = $this->client->repo()->keys()->create($this->user, $repo_name,
                     array('title' => $key_title, 'key' => $public_key));
                 if (!empty($uploaded_key) && $uploaded_key['title'] == $key_title) {
                     $success = true;
@@ -84,13 +102,13 @@ class Github extends Base
                     $this->log(sprintf("Can't remove GitHub deploy key. Key named <strong>%s</strong> doesn't exist.", $key_title));
                     return false;
                 }
-                $this->client->api('repo')->keys()->remove($this->user, $repo_name, $existing_key['id']);
+                $this->client->repo()->keys()->remove($this->user, $repo_name, $existing_key['id']);
                 if (!$this->deploy_key('get', $repo_name, $key_title)) {
                     $success = true;
                 }
                 break;
             case 'get':
-                $deploy_keys = $this->client->api('repo')->keys()->all($this->user, $repo_name);
+                $deploy_keys = $this->client->repo()->keys()->all($this->user, $repo_name);
                 if (!empty($deploy_keys)) {
                     foreach ($deploy_keys as $key) {
                         if ($key['title'] == $key_title) {
@@ -141,7 +159,7 @@ class Github extends Base
                     return false;
                 }
                 $domain = !empty($domain) && strpos($domain, 'https://') !== 0 && strpos($domain, 'http://') !== 0 ? 'https://' . $domain : $domain;
-                $created_repo = $this->client->api('repo')->create($repo_name, 'Website of ' . $repo_name, $domain,
+                $created_repo = $this->client->repo()->create($repo_name, 'Website of ' . $repo_name, $domain,
                     true, //false for private
                     null, false, false, false, null, true
                 );
@@ -182,7 +200,7 @@ class Github extends Base
             $this->log("Can't find GitHub repository. No repository name supplied to function.");
             return false;
         }
-        $repos = $this->client->api('user')->myRepositories();
+        $repos = $this->client->user()->myRepositories();
         if (!empty($repos)) {
             foreach ($repos as $repo) {
                 if ($repo['name'] == $repo_name) {

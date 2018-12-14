@@ -18,10 +18,7 @@ use Phoenix\Functions;
  */
 final class Deployer extends Base
 {
-    /**
-     *
-     */
-    const CONFIG = '/../configs/';
+
 
     /**
      * @var null
@@ -55,6 +52,9 @@ final class Deployer extends Base
     /**
      * @var
      */
+
+    public $configControl;
+
     public $staging_cpanel_key;
 
     /**
@@ -198,13 +198,16 @@ final class Deployer extends Base
     function __construct()
     {
         if (!defined('BASE_DIR')) define('BASE_DIR', dirname(__FILE__));
+        if (!defined('CONFIG_DIR')) define('CONFIG_DIR', dirname(__FILE__) . '/../configs/');
+
         foreach ($this->permissions as &$action) {
             if (!empty($action['condition']) && !is_array($action['condition']))
                 $action['condition'] = array($action['condition']);
         }
         new Logging();
         $this->process_request();
-        $this->template = new \Phoenix\Template();
+        $this->configControl = new ConfigControl();
+        $this->template = new Template();
 
         return true;
     }
@@ -226,9 +229,6 @@ final class Deployer extends Base
             $action = 'transfer';
         elseif ($this->can_do('delete'))
             $action = 'delete';
-        else
-            template()->get('form');
-
         if (!empty($action)) {
             switch ($action) {
                 case 'delete':
@@ -275,7 +275,9 @@ final class Deployer extends Base
                     break;
             }
             $this->log(sprintf('<h2>Finished %s</h2>', ucfirst($this->actions[$action]['present'])), 'info');
+            template()->get('reload');
         } else {
+            template()->get('form');
             $this->log(sprintf('Apache user is <strong>%s</strong>.', $this->terminal('local')->whoami()), 'info');
             //if (!empty($this->terminal('staging')->whoami()))
             //$this->log(sprintf('Staging Apache user is <strong>%s</strong>.', $this->terminal('staging')->whoami()), 'info');
@@ -456,6 +458,14 @@ final class Deployer extends Base
     }
 
     /**
+     * @return array|bool|\stdClass
+     */
+    protected function config()
+    {
+        return $this->configControl->getConfig();
+    }
+
+    /**
      * @param string $environment
      * @return array|bool
      */
@@ -486,22 +496,6 @@ final class Deployer extends Base
             return false;
         }
         return $ssh_args;
-    }
-
-    /**
-     * @return array|bool|\stdClass
-     */
-    protected function config()
-    {
-        if (empty($this->_config)) {
-            $base_config = include BASE_DIR . '/../configs/base-config.php';
-            //$site_config = include BASE_DIR . '/../configs/sites/paradigm.php';
-            $site_config = include BASE_DIR . '/../configs/sites/wibble.php';
-
-            $config = array_merge_recursive($base_config, $site_config);
-            $this->_config = array_to_object($config);
-        }
-        return $this->_config;
     }
 
     /**
@@ -593,8 +587,10 @@ final class Deployer extends Base
         //shared actions
         if ($actions['email_filters'])
             $email_filters = $this->email_filters($action, $environment);
-        if ($actions['version_control'])
+        if ($actions['version_control']) {
             $version_control = $this->environ_version_control($action, $environment);
+            //$version_control =
+        }
         if ($actions['wp']) {
             $wp = $this->wordpress($action, $environment);
         }

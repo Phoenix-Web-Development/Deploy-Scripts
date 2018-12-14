@@ -91,7 +91,7 @@ class WP extends AbstractTerminal
         if (stripos($output, 'success') === false && strpos($output, 'WordPress files seem to already be present here') === false)
             return $this->logError("WordPress download failed.");
 
-        $config_constants = $this->getConfig();
+        $config_constants = $this->getConfigConstants();
         $config_set = '';
         foreach ($config_constants as $config_constant => $constant) {
             $config_set .= sprintf("wp config set %s %s --raw --type=constant;", $config_constant, $constant);
@@ -133,7 +133,7 @@ class WP extends AbstractTerminal
     /**
      * @return array
      */
-    protected function getConfig()
+    protected function getConfigConstants()
     {
         $debug = false;
         $config_constants = array(

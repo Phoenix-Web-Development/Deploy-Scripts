@@ -196,8 +196,8 @@ class TerminalClient extends Base
     }
 
     /**
-     * @param $name
-     * @return bool|Terminal\Gitignore|Terminal\WP|Terminal\WP_CLI|Terminal\WP_DB
+     * @param string $name
+     * @return bool|Terminal\Error|Terminal\Git|Terminal\Gitignore|Terminal\SSHConfig|Terminal\SSHKey|Terminal\WP|Terminal\WP_CLI|Terminal\WP_DB
      */
     public function api($name = '')
     {

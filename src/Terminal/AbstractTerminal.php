@@ -2,8 +2,9 @@
 
 namespace Phoenix\Terminal;
 
-use Phoenix\Base;
+
 use Phoenix\TerminalClient;
+use Phoenix\BaseAbstract
 use phpseclib\Net\SFTP;
 
 /**
@@ -15,17 +16,13 @@ use phpseclib\Net\SFTP;
  * Class AbstractTerminal
  * @package Phoenix\Terminal
  */
-class AbstractTerminal extends Base
+class AbstractTerminal extends BaseAbstract
 {
     /**
      * @var
      */
     protected $_client;
 
-    /**
-     * @var
-     */
-    protected $_mainStr;
 
     /**
      * AbstractTerminal constructor.
@@ -36,21 +33,6 @@ class AbstractTerminal extends Base
         parent::__construct();
         $this->client = $client;
     }
-    /*
-        public function __call($method, $arguments)
-        {
-            $error_string = sprintf("Can't execute <code>%s</code> terminal function in %s environment.", $method, $this->environment);
-            if (method_exists($this, $method)) {
-                if (isset($this->ssh) || $this->environment == 'local' || $method == 'ssh') {
-                    return call_user_func_array(array($this, $method), $arguments);
-                }
-                $this->log($error_string . " No SSH connection was established.");
-                return false;
-            }
-            $this->log($error_string . " No method available.");
-            return false;
-        }
-    */
 
     /**
      * @param TerminalClient|null $client
@@ -154,7 +136,7 @@ class AbstractTerminal extends Base
             return false;
         }
         if (!$this->ssh->is_dir($dest_dir) && !$this->ssh->mkdir($dest_dir)) {
-            $this->log(sprintf("%s Failed to create directory at <strong>%s</strong> in %s environment.", $error_string, $dummy_dir, $this->environment));
+            $this->log(sprintf("%s Failed to create directory at <strong>%s</strong> in %s environment.", $error_string, $dest_dir, $this->environment));
             return false;
         }
         $origin_dir = self::trailing_slash($origin_dir) . '*';
@@ -213,68 +195,5 @@ class AbstractTerminal extends Base
         return rtrim($dir, $char) . $char;
     }
 
-    protected function mainStr()
-    {
-        return "I probably shouldn't have been called";
-    }
 
-    /**
-     *
-     */
-    protected function logStart()
-    {
-        $this->log(ucfirst($this->actions[$this->getCaller()]['present']) . ' ' . $this->mainStr() . '.', 'info');
-    }
-
-    /**
-     * @param string $output
-     * @param bool $success
-     * @return bool|null
-     */
-    protected function logFinish($output = '', $success = false)
-    {
-        $action = $this->getCaller();
-        if (!empty($action)) {
-            $output = $this->format_output($output);
-            if (!empty($success)) {
-                $this->log(sprintf('Successfully %s %s. %s', $this->actions[$this->getCaller()]['past'], $this->mainStr(), $output), 'success');
-                return true;
-            }
-            $this->log(sprintf('Failed to %s %s. %s', $this->getCaller(), $this->mainStr(), $output));
-            return false;
-        }
-        return null;
-    }
-
-    /**
-     * @param string $error
-     * @return bool
-     */
-    protected function logError($error = '')
-    {
-        $this->log(sprintf("Can't %s %s. %s", $this->getCaller(), $this->mainStr(), $error));
-        return false;
-    }
-
-    /**
-     * @return bool|mixed
-     */
-    protected function getCaller()
-    {
-        $dbt = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 4);
-        array_shift($dbt);
-        foreach ($dbt as $function) {
-            $caller = isset($function['function']) ? $function['function'] : null;
-            try {
-                $reflection = new \ReflectionMethod($this, $caller);
-                if ($reflection->isPublic()) {
-                    $caller = explode('\\', $caller);
-                    return end($caller);
-                }
-            } catch (\Exception $e) {
-                echo 'Caught exception: ', $e->getMessage(), "\n";
-            }
-        }
-        return false;
-    }
 }

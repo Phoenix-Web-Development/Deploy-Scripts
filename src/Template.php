@@ -99,6 +99,27 @@ class Template
         build_recursive_checkboxes($sorted_actions);
         return true;
     }
+
+    public function configRadios()
+    {
+        $file_list = ph_d()->configControl->getConfigFileList();
+        $config_selected = ph_d()->configControl->getConfigSelected();
+        foreach ($file_list as $file): ?>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="config-select"
+                       id="<?php echo $file['name']; ?>"
+                       value="<?php echo $file['name']; ?>"
+                    <?php if (!empty($config_selected) && $config_selected['name'] == $file['name']) echo ' checked'; ?>>
+                <label class="form-check-label" for="<?php echo $file['name']; ?>">
+                    <?php echo $file['name']; ?></label>
+            </div>
+        <?php endforeach;
+    }
+
+    public function configRadioHidden()
+    {
+
+    }
 }
 
 /**
