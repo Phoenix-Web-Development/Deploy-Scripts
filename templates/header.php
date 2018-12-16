@@ -10,7 +10,7 @@
 </head>
 <body>
 <header>
-    <div class="d-flex flex-column flex-md-row align-items-center p-3 px-md-4 mb-3 bg-white border-bottom shadow-sm">
+    <div class="d-flex flex-column flex-md-row align-items-center p-3 px-md-4 mb-3 bg-red border-bottom shadow-sm">
         <h1 class="my-0 mr-md-auto font-weight-normal">Phoenix Deployment Script</h1>
         <a class="btn btn-outline-primary" href="index.php">Back to form</a>
     </div>

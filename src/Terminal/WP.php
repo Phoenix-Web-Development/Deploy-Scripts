@@ -199,7 +199,8 @@ class WP extends AbstractTerminal
         if (!$this->check($wp_dir))
             return $this->logError(sprintf('WordPress not installed at <strong>%s</strong>.', $wp_dir));
         $branch = 'master';
-        $this->exec('cd ' . $wp_dir . ';                        
+        $this->exec(
+            'cd ' . $wp_dir . ';                        
         wp core update --locale="en_AU";
         wp core update-db;
         wp theme update --all; 

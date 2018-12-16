@@ -23,6 +23,11 @@ class Base
             'past' => 'checked',
             'action' => 'check'
         ),
+        'checkForChanges' => array(
+            'present' => 'checking for changes',
+            'past' => 'checked for changes',
+            'action' => 'check for changes'
+        ),
         'clone' => array(
             'present' => 'cloning',
             'past' => 'cloned',
@@ -82,6 +87,11 @@ class Base
             'present' => 'moving',
             'past' => 'moved',
             'action' => 'move'
+        ),
+        'pull' => array(
+            'present' => 'pulling',
+            'past' => 'pulled',
+            'action' => 'pull'
         ),
         'remove' => array(
             'present' => 'removing',

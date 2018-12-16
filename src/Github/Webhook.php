@@ -15,15 +15,12 @@ class Webhook extends AbstractGithub
      * @return bool|null
      * @throws \Github\Exception\MissingArgumentException
      */
-    function create(string $repo_name = '', string $url = '', string $secret = '')
+    public function create(string $repo_name = '', string $url = '', string $secret = '')
     {
-        $this->mainStr($repo_name);
+        $this->mainStr($repo_name, $url);
         $this->logStart();
-        if (!$this->validate())
+        if (!$this->validate($repo_name, $url, $secret))
             return false;
-        if (empty($url))
-            return $this->logError("Url not supplied to method.");
-
         $params = array(
             'name' => 'web',
             'events' => array('push'),
@@ -31,11 +28,14 @@ class Webhook extends AbstractGithub
             'config' => array(
                 'url' => $url,
                 'content_type' => 'json',
-                'insecure_ssl' => 0
+                'insecure_ssl' => 0,
+                'secret' => $secret
             )
         );
-        if (!empty($secret)) $params['config']['secret'] = $secret;
+        if ($this->get($repo_name, $url))
+            return $this->logError("Found existing webhook with the same url.", 'warning');
         $success = $this->client->client->repo()->hooks()->create($this->client->user, $repo_name, $params);
+        d($success);
         return $this->logFinish($success);
     }
 
@@ -43,57 +43,78 @@ class Webhook extends AbstractGithub
      * @param string $repo_name
      * @return bool|null
      */
-    function delete(string $repo_name = '')
+    public function delete(string $repo_name = '')
     {
         return $this->remove($repo_name);
     }
 
     /**
      * @param string $repo_name
+     * @param string $url
      * @return bool|null
      */
-    function remove(string $repo_name = '', string $url = '')
+    public function remove(string $repo_name = '', string $url = '')
     {
-        $this->mainStr($repo_name);
+        $this->mainStr($repo_name, $url);
         $this->logStart();
-        if (!$this->validate())
+        if (!$this->validate($repo_name, $url))
             return false;
-        //($username, $repository, $id)
-        $hooks = $this->list($repo_name);
-        $id = 1;
-        $this->client->client->repo()->hooks()->remove($this->client->user, $repo_name, $id);
+        $hook_to_remove = $this->get($repo_name, $url);
+
+        if (empty($hook_to_remove))
+            return $this->logError(sprintf("Couldn't find hook with url <strong>%s</strong> to remove.", $url), 'warning');
+        $success = $this->client->client->repo()->hooks()->remove($this->client->user, $repo_name, $hook_to_remove['id']);
         return $this->logFinish($success);
     }
 
     /**
-     * @param $repo_name
-     * @return bool|null
+     * @param string $repo_name
+     * @param string $url
+     * @return bool
      */
-    function list($repo_name)
+    public function get(string $repo_name = '', string $url = '')
     {
-        $this->mainStr($repo_name);
-        $this->logStart();
-        if (!$this->validate())
+        $this->mainStr($repo_name, $url);
+        if (!$this->validate($repo_name, $url))
             return false;
-        return $hooks = $this->client->client->repo()->hooks()->all($this->client->user, $repo_name);
+        $hooks = $this->client->client->repo()->hooks()->all($this->client->user, $repo_name);
+        foreach ($hooks as $hook) {
+            if ($hook['config']['url'] == $url) {
+                return $hook;
+            }
+        }
+        return false;
     }
 
     /**
      * @param string $repo_name
+     * @param string $url
+     * @param string $secret
      * @return bool
      */
-    function validate(string $repo_name = '')
+    protected function validate(string $repo_name = '', string $url = '', string $secret = '')
     {
         if (empty($repo_name))
             return $this->logError("Repository name not supplied to method.");
+        if (empty($url))
+            return $this->logError("Url not supplied to method.");
+        if (filter_var($url, FILTER_VALIDATE_URL) === FALSE)
+            return $this->logError("Invalid url supplied to method.");
+        if ($this->getCaller() == 'create') {
+            if (empty($secret))
+                return $this->logError("Webhook secret not supplied to method.");
+            if (strlen($secret) < 9)
+                return $this->logError("Webhook secret too short. Should be 8 chars long or greater.");
+        }
         return true;
     }
 
     /**
      * @param string $repo_name
+     * @param string $url
      * @return string
      */
-    function mainStr($repo_name = '')
+    protected function mainStr(string $repo_name = '', string $url = '')
     {
         if (func_num_args() == 0) {
             if (!empty($this->_mainStr))
@@ -101,6 +122,7 @@ class Webhook extends AbstractGithub
         }
 
         $repo_name = !empty($repo_name) ? sprintf(' in repository <strong>%s</strong>', $repo_name) : '';
-        return $this->_mainStr = sprintf(" Github Webhook", $this->environment, $wp_dir);
+        $url = !empty($url) ? sprintf(' with payload url <strong>%s</strong>', $url) : '';
+        return $this->_mainStr = " Github webhook" . $repo_name . $url;
     }
 }

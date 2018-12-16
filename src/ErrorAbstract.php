@@ -1,9 +1,10 @@
 <?php
 
-namespace Phoenix\Terminal;
+namespace Phoenix;
 
+//use
 
-class Error extends AbstractTerminal
+class ErrorAbstract extends BaseAbstract
 {
     /**
      * @param $name

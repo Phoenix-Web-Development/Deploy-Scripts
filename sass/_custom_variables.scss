@@ -3,4 +3,13 @@ $container-max-widths: (
         md: 720px,
         lg: 960px,
         xl: 1340px
-) !default;
+);
+
+$red: #ce0000; //ce
+$yellow: #ffff00;
+$green: #00d100;
+$pink: #a22b62;
+
+$alert-bg-level: -8; //-10
+$alert-border-level: -5; //-9
+$alert-color-level: 9; //6

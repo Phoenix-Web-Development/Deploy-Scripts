@@ -4,14 +4,16 @@ namespace Phoenix;
 
 use phpseclib\Crypt\RSA;
 use phpseclib\Net\SFTP;
+use phpseclib\Net\SSH2;
 use Github\Client;
-use Phoenix\Functions;
+
+//use Phoenix\Functions;
 
 /**
  * @property WHM $whm
  * @property \stdClass $config
  * @property Bitbucket $bitbucket
- * @property Github $github
+ * @property GithubClient $github
  * @property TerminalClient $terminal
  *
  * Class Deployer
@@ -45,16 +47,15 @@ final class Deployer extends Base
      */
     private $_whm;
 
-    /**
-     * @var array
-     */
-    private $_config = array();
+
     /**
      * @var
      */
-
     public $configControl;
 
+    /**
+     * @var
+     */
     public $staging_cpanel_key;
 
     /**
@@ -81,6 +82,8 @@ final class Deployer extends Base
             'condition' => array('create', 'create_live_stuff')),
         'create_live_wp' => array('label' => 'Install WordPress and WP CLI',
             'condition' => array('create', 'create_live_stuff')),
+        'create_live_initial_git_commit' => array('label' => 'Initial Git commit',
+            'condition' => array('create', 'create_live_stuff')),
 
         'create_staging_stuff' => array('label' => 'Staging stuff',
             'condition' => array('create')),
@@ -93,6 +96,8 @@ final class Deployer extends Base
         'create_staging_version_control' => array('label' => 'Setup version control',
             'condition' => array('create', 'create_staging_stuff')),
         'create_staging_wp' => array('label' => 'Install WordPress and WP CLI',
+            'condition' => array('create', 'create_staging_stuff')),
+        'create_staging_initial_git_commit' => array('label' => 'Initial Git commit',
             'condition' => array('create', 'create_staging_stuff')),
 
         'create_local_stuff' => array('label' => 'Create local stuff',
@@ -197,6 +202,7 @@ final class Deployer extends Base
      */
     function __construct()
     {
+        parent::__construct();
         if (!defined('BASE_DIR')) define('BASE_DIR', dirname(__FILE__));
         if (!defined('CONFIG_DIR')) define('CONFIG_DIR', dirname(__FILE__) . '/../configs/');
 
@@ -359,7 +365,7 @@ final class Deployer extends Base
     }
 
     /**
-     * @return bool|Client
+     * @return bool|GithubClient
      */
     protected function github()
     {
@@ -374,7 +380,7 @@ final class Deployer extends Base
             $this->log(sprintf("%s Github user missing from config.", $error_string));
             return false;
         }
-        $github = new Github;
+        $github = new GithubClient();
         $client = new \Github\Client;
         $token = $this->config->version_control->github->token ?? '';
         $client->authenticate($token, null, \Github\Client::AUTH_HTTP_TOKEN);
@@ -474,7 +480,9 @@ final class Deployer extends Base
         $error_string = sprintf("Can't connect %s environment via SSH.", $environment);
         switch ($environment) {
             case 'live':
-                if (!$this->find_cpanel_account($this->config->environ->live->domain, $this->config->environ->live->cpanel->account->username)) {
+                $live_domain = $this->config->environ->live->domain ?? '';
+                $live_username = $this->config->environ->live->cpanel->account->username ?? '';
+                if (!$this->find_cpanel_account($live_domain, $live_username)) {
                     $this->log($error_string . " Couldn't locate live cPanel account.");
                     return false;
                 }
@@ -491,7 +499,7 @@ final class Deployer extends Base
                 $ssh_args = $this->config->environ->staging->cpanel->accounts->$domain->ssh ?? array();
                 break;
         }
-        if (!isset($ssh_args->hostname, $ssh_args->port)) {
+        if (empty($ssh_args) && !isset($ssh_args->hostname, $ssh_args->port)) {
             $this->log(sprintf("%s %s cPanel account SSH args missing.", $error_string, ucfirst($environment)));
             return false;
         }
@@ -568,6 +576,7 @@ final class Deployer extends Base
             'email_filters' => $this->can_do($action . '_' . $environment . '_email_filters'),
             'version_control' => $this->can_do($action . '_' . $environment . '_version_control'),
             'wp' => $this->can_do($action . '_' . $environment . '_wp'),
+            'initial_commit' => $this->can_do($action . '_' . $environment . '_initial_git_commit')
         );
 
         //actual site environment and db - logic mess
@@ -588,12 +597,16 @@ final class Deployer extends Base
         if ($actions['email_filters'])
             $email_filters = $this->email_filters($action, $environment);
         if ($actions['version_control']) {
-            $version_control = $this->environ_version_control($action, $environment);
+            $version_control = $this->environVersionControl($action, $environment);
             //$version_control =
         }
         if ($actions['wp']) {
             $wp = $this->wordpress($action, $environment);
         }
+        if ($action == 'create' && $actions['initial_commit']) {
+            $inital_commit = $this->environInitialCommit($environment);
+        }
+
         //if ($actions['version_control'])
         //$version_control = $this->versionControlInitialCommit($action, $environment);
         if ($action == 'delete' && $actions['subdomain'] && $environment == 'staging') {
@@ -606,6 +619,7 @@ final class Deployer extends Base
             && (!$actions['email_filters'] || !empty($email_filters))
             && (!$actions['version_control'] || !empty($version_control))
             && (!$actions['wp'] || !empty($wp))
+            && (!$actions['initial_commit'] || !empty($inital_commit))
         ) {
             $this->log(sprintf('Successfully %s nominated %s stuff.', $this->actions[$action]['past'], $environment), 'success');
             return true;
@@ -695,7 +709,7 @@ final class Deployer extends Base
     {
 
         if ($this->can_do('create_local_version_control')) {
-            $this->environ_version_control('create', 'local');
+            $this->environVersionControl('create', 'local');
         }
         $key_name = $this->config->live->domain ?? '';
         $passphrase = $this->config->local->ssh_keys->live->passphrase ?? '';
@@ -1052,7 +1066,7 @@ final class Deployer extends Base
             return false;
         }
         $domain = $this->config->environ->live->domain ?? '';
-        $repository = $this->github->repo($action, $repo_name, $domain);
+        $repository = $this->github->repo()->$action($repo_name, $domain);
         if (!empty($repository)) {
             $this->log(sprintf('Successfully %s version control main repository.', $this->actions[$action]['past']), 'success');
             return true;
@@ -1065,8 +1079,9 @@ final class Deployer extends Base
      * @param string $action
      * @param string $environment
      * @return bool
+     * @throws \Github\Exception\MissingArgumentException
      */
-    function environ_version_control(string $action = 'create', string $environment = 'live')
+    function environVersionControl(string $action = 'create', string $environment = 'live')
     {
         if (!$this->validate_action($action, array('create', 'delete'), sprintf("Can't do %s environment version control stuff.", $environment)))
             return false;
@@ -1104,6 +1119,8 @@ final class Deployer extends Base
         $separate_repo_location = $this->get_environ_dir($environment, 'git');
         $downstream_repo_name = $repo_name . '_website';
         $key_title = ucfirst($environment) . ' cPanel';
+        $webhook_url = 'https://' . $cPanel_account['domain'] . '/github-webhook.php?github=yes';
+        $webhook_endpoint_config_dir = $this->get_environ_dir($environment, 'github_webhook_endpoint_config') . '/' . $repo_name . '.json';
         switch ($action) {
             case 'create':
                 $ssh_key = $this->whm->genkey($key_name, $passphrase, 2048, $cPanel_account['user']);
@@ -1111,61 +1128,96 @@ final class Deployer extends Base
                     $authkey = $this->whm->authkey($key_name);
                     $ssh_config = $this->terminal($environment)->ssh_config()->create($key_name, 'github.com', $key_name, 'git');
                 }
-                $upstream_repository = $this->github->find_repo($repo_name);
+                $upstream_repository = $this->github->repo()->get($repo_name);
 
                 //$is_empty = $this->dir_is_empty($separate_repo_location);
+                if ($upstream_repository) {
+                    if (!empty($ssh_key)) {
+                        $deploy_key = $this->github->deploy_key()->upload($repo_name, $key_title, $ssh_key['key']);
+                        $ssh_url = str_replace('git@github.com', $key_name, $upstream_repository['ssh_url']);
+                        $source_repository = json_encode((object)['url' => $ssh_url, 'remote_name' => "origin"]);
+                        $downstream_repository = $this->whm->version_control('get', $web_dir, $downstream_repo_name, $source_repository);
+                        if (empty($downstream_repository)) {
 
-                if ($upstream_repository && !empty($ssh_key)) {
-                    $deploy_key = $this->github->deploy_key('upload', $repo_name, $key_title, $ssh_key['key']);
+                            $git_dir_is_empty = $this->terminal($environment)->api()->dir_is_empty($web_dir);
 
-                    $git_dir_is_empty = $this->terminal($environment)->api()->dir_is_empty($web_dir);
+                            $dummy_dir = $web_dir . '/../dummy';
+                            if ($git_dir_is_empty === false) {
+                                if (!$this->terminal($environment)->api()->move_files($web_dir, $dummy_dir))
+                                    break;
+                            }
 
-                    $dummy_dir = $web_dir . '/../dummy';
-                    if ($git_dir_is_empty === false) {
-                        if (!$this->terminal($environment)->api()->move_files($web_dir, $dummy_dir))
-                            break;
+                            //$ssh_url = $upstream_repository['ssh_url'];
+
+                            $downstream_repository = $this->whm->version_control('clone',
+                                $web_dir,
+                                $downstream_repo_name,
+                                $source_repository
+                            );
+                            if ($git_dir_is_empty === false) {
+                                $this->terminal($environment)->api()->move_files($dummy_dir, $web_dir);
+                                $this->terminal($environment)->ssh->delete($dummy_dir, true);
+                            }
+                        }
+                        $move_git = $this->terminal($environment)->git()->move($web_dir, $separate_repo_location);
                     }
-                    $ssh_url = str_replace('git@github.com', $key_name, $upstream_repository['ssh_url']);
-                    //$ssh_url = $upstream_repository['ssh_url'];
 
-                    $downstream_repository = $this->whm->version_control('clone',
-                        $web_dir,
-                        $downstream_repo_name,
-                        json_encode((object)['url' => $ssh_url, 'remote_name' => "origin"])
-                    );
-                    if ($git_dir_is_empty === false) {
-                        $this->terminal($environment)->api()->move_files($dummy_dir, $web_dir);
-                        $this->terminal($environment)->ssh->delete($dummy_dir, true);
+                    if ($environment == 'staging') { //webhook
+                        $secret = $this->config->version_control->github->webhook->secret ?? '';
+                        $webhook_config = $this->terminal($environment)->githubWebhookEndpointConfig()->create($webhook_endpoint_config_dir, $web_dir, $secret);
+                        $webhook = $this->github->webhook()->create($repo_name, $webhook_url, $secret);
                     }
-                    $move_git = $this->terminal($environment)->git()->move($web_dir, $separate_repo_location);
                 } else
                     $this->log("Can't upload deploy key or clone repository. Upstream repository not found.");
                 $gitignore = $this->terminal($environment)->gitignore()->create($web_dir);
                 if (!empty($ssh_key) && !empty($authkey) && !empty($ssh_config) && !empty($deploy_key)
-                    && !empty($downstream_repository) && !empty($move_git) && !empty($gitignore))
+                    && !empty($downstream_repository) && !empty($move_git) && !empty($webhook) && !empty($webhook_config) && !empty($gitignore))
                     $success = true;
                 break;
             case 'delete':
                 $ssh_config = $this->terminal($environment)->ssh_config()->delete('github_' . $repo_name, 'github.com', 'github_' . $repo_name, 'git');
                 $ssh_key = $this->whm->delkey($key_name, $cPanel_account['user']);
-                $deploy_key = $this->github->deploy_key('remove', $repo_name, $key_title);
+                $deploy_key = $this->github->deploy_key()->remove($repo_name, $key_title);
                 $downstream_repository = $this->whm->version_control('delete', $separate_repo_location, '', '', $cPanel_account['user']);
                 if (!$downstream_repository)
                     $downstream_repository = $this->whm->version_control('delete', $web_dir, '', '', $cPanel_account['user']);
                 $deleted_git_folder = $this->terminal($environment)->git()->delete($web_dir, $separate_repo_location);
+
+                if ($environment == 'staging') { //webhook
+                    $webhook = $this->github->webhook()->remove($repo_name, $webhook_url);
+                    $webhook_config = $this->terminal($environment)->githubWebhookEndpointConfig()->delete($webhook_endpoint_config_dir);
+                }
+
                 $gitignore = $this->terminal($environment)->gitignore()->delete($web_dir);
                 if (!empty($ssh_key) && !empty($ssh_config) && !empty($deploy_key)
-                    && !empty($downstream_repository) && !empty($deleted_git_folder) && !empty($gitignore)
+                    && !empty($downstream_repository) && !empty($deleted_git_folder) && !empty($webhook) && !empty($webhook_config) && !empty($gitignore)
                 )
                     $success = true;
                 break;
         }
-//&TIO%3mEzk50
         if (!empty($success)) {
             $this->log(sprintf('Successfully %s %s', $this->actions[$action]['past'], $message_string), 'success');
             return true;
         }
         $this->log(sprintf("Something may have gone wrong while %s %s", $this->actions[$action]['present'], $message_string), 'error');
+        return false;
+    }
+
+    /**
+     * @param string $environment
+     * @return bool
+     */
+    function environInitialCommit(string $environment = 'live')
+    {
+        $mainStr = sprintf(" initial %s environment files to repository.", $environment);
+        $this->log("<h3>Committing" . $mainStr . "</h3>", 'info');
+        $web_dir = $this->get_environ_dir($environment, 'web');
+        $success = $this->terminal($environment)->git()->commit($web_dir, 'master', 'initial Deployer commit');
+        if (!empty($success)) {
+            $this->log(sprintf('Successfully committed %s', $mainStr), 'success');
+            return true;
+        }
+        $this->log(sprintf("Something may have gone wrong while committing %s", $mainStr));
         return false;
     }
 
@@ -1237,6 +1289,16 @@ final class Deployer extends Base
                             return false;
                         }
                         $dir = '/git/' . $repo_name . '/website';
+                        break;
+                }
+                break;
+            case 'github_webhook_endpoint_config':
+                switch ($environment) {
+                    case 'live':
+                        return false;
+                        break;
+                    case 'staging':
+                        $dir = '/.github_webhook_configs';
                         break;
                 }
                 break;
@@ -1323,7 +1385,7 @@ final class Deployer extends Base
     {
         $directory = $this->get_environ_dir($environment, 'web');
         if (!empty($directory)) {
-            $git_update = $this->terminal($environment)->git()->update($directory, 'dev');
+            $git_update = $this->terminal($environment)->git()->pull($directory, 'dev');
             $wp_update = $this->terminal($environment)->wp()->update($directory);
             $git_commit = $this->terminal($environment)->git()->commit($directory, 'dev');
         }

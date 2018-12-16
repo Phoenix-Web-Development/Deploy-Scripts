@@ -52,32 +52,13 @@ class BaseAbstract extends Base
     }
 
     /**
-     * @param string $output
-     * @param bool $success
-     * @return bool|null
-     */
-    protected function logFinish($output = '', $success = false)
-    {
-        $action = $this->getCaller();
-        if (!empty($action)) {
-            $output = $this->format_output($output);
-            if (!empty($success)) {
-                $this->log(sprintf('Successfully %s %s. %s', $this->actions[$this->getCaller()]['past'], $this->mainStr(), $output), 'success');
-                return true;
-            }
-            $this->log(sprintf('Failed to %s %s. %s', $this->getCaller(), $this->mainStr(), $output));
-            return false;
-        }
-        return null;
-    }
-
-    /**
      * @param string $error
+     * @param string $type
      * @return bool
      */
-    protected function logError($error = '')
+    protected function logError($error = '', $type = 'error')
     {
-        $this->log(sprintf("Can't %s %s. %s", $this->getCaller(), $this->mainStr(), $error));
+        $this->log(sprintf("Can't %s %s. %s", $this->actions[$this->getCaller()]['action'], $this->mainStr(), $error), $type);
         return false;
     }
 }

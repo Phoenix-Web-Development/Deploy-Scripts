@@ -12,6 +12,8 @@ use phpseclib\Net\SFTP;
  * @method Terminal\SSHConfig ssh_config()
  * @method Terminal\SSHKey sshkey()
  * @method Terminal\SSHKey ssh_key()
+ * @method Terminal\GithubWebhookEndpointConfig github_webhook_endpoint_config()
+ * @method Terminal\GithubWebhookEndpointConfig githubWebhookEndpointConfig()
  * @method Terminal\WP wp()
  * @method Terminal\WP wordpress()
  * @method Terminal\WP_CLI wp_cli()
@@ -29,12 +31,21 @@ use phpseclib\Net\SFTP;
  *
  * Class Terminal
  */
-class TerminalClient extends Base
+class TerminalClient extends BaseClient
 {
+    /**
+     * @var string
+     */
     public $environment;
 
+    /**
+     * @var
+     */
     protected $_prompt;
 
+    /**
+     * @var
+     */
     protected $_ssh;
 
     /**
@@ -56,34 +67,66 @@ class TerminalClient extends Base
     }
 
     /**
-     * @param $name
-     * @param $args
-     * @return bool|Terminal\Gitignore|Terminal\WP|Terminal\WP_CLI|Terminal\WP_DB
+     * @param string $name
+     * @return bool|Terminal\Error|Terminal\Git|Terminal\Gitignore|Terminal\SSHConfig|Terminal\SSHKey|Terminal\WP|Terminal\WP_CLI|Terminal\WP_DB
      */
-    public function __call($name, $args)
+    public function api($name = '')
     {
-        $api = $this->api($name);
-        if (!empty($api))
+        $name = strtolower($name);
+        switch ($name) {
+            case 'git':
+                $api = new Terminal\Git($this);
+                break;
+            case 'gitignore':
+                $api = new Terminal\Gitignore($this);
+                break;
+            case 'sshconfig':
+            case 'ssh_config':
+                $api = new Terminal\SSHConfig($this);
+                break;
+            case 'sshkey':
+            case 'ssh_key':
+                $api = new Terminal\SSHKey($this);
+                break;
+            case 'github_webhook_endpoint_config':
+            case 'githubwebhookendpointconfig':
+                $api = new Terminal\GithubWebhookEndpointConfig($this);
+                break;
+            case 'wp':
+            case 'wordpress':
+                $api = new Terminal\WP($this);
+                break;
+            case 'wp_cli':
+            case 'wpcli':
+            case 'wordpress_cli':
+            case 'wordpresscli':
+                $api = new Terminal\WP_CLI($this);
+                break;
+            case 'wp_db':
+            case 'wpdb':
+            case 'wordpress_db':
+            case 'wordpressdb':
+                $api = new Terminal\WP_DB($this);
+                break;
+            case '':
+                $api = new Terminal\AbstractTerminal($this);
+        }
+        $error_string = sprintf("Can't execute <code>%s</code> terminal method in %s environment.",
+            $name, $this->environment);
+        if (empty($api))
+            return false;
+        if (($this->ssh && method_exists($this->ssh, 'isConnected') && $this->ssh->isConnected()) || $this->environment == 'local') {
             return $api;
-        $this->log(sprintf("Undefined method <strong>%s</strong> called from TerminalClient ", $name));
-        return false;
+            //return call_user_func_array(array($this, $method), $arguments);
+        }
+        $this->log($error_string . " No SSH connection was established.");
+        return new ErrorAbstract($this);
     }
 
     /**
-     * @param \phpseclib\Net\SFTP|null $ssh
-     * @return bool|\phpseclib\Net\SFTP
+     * @param SFTP|null $ssh
+     * @return bool|SFTP
      */
-    /*
-    public function set_ssh(SFTP $ssh = null)
-    {
-        if (empty($ssh))
-            return false;
-        $this->ssh = $ssh;
-        sleep(1);
-        $this->prompt();
-        return $this->ssh = $ssh;
-    }
-*/
     protected function ssh(SFTP $ssh = null)
     {
         if (func_num_args() == 0) {
@@ -97,6 +140,9 @@ class TerminalClient extends Base
         return $this->_ssh;
     }
 
+    /**
+     * @return bool|string
+     */
     protected function prompt()
     {
         if (!empty($this->_prompt))
@@ -114,6 +160,9 @@ class TerminalClient extends Base
         return $this->_prompt = $prompt;
     }
 
+    /**
+     * @return bool|string
+     */
     function whoami()
     {
         $whoami = trim($this->exec('whoami')) ?? false;
@@ -165,10 +214,15 @@ class TerminalClient extends Base
             $this->log($error_string);
             return false;
         }
-        return $output;
+        return trim($output);
     }
 
 
+    /**
+     * @param array $commands
+     * @param bool $format
+     * @return bool|string
+     */
     protected function read_write(array $commands = array(), bool $format = false)
     {
 
@@ -196,59 +250,6 @@ class TerminalClient extends Base
     }
 
     /**
-     * @param string $name
-     * @return bool|Terminal\Error|Terminal\Git|Terminal\Gitignore|Terminal\SSHConfig|Terminal\SSHKey|Terminal\WP|Terminal\WP_CLI|Terminal\WP_DB
-     */
-    public function api($name = '')
-    {
-        $name = strtolower($name);
-        switch ($name) {
-            case 'git':
-                $api = new Terminal\Git($this);
-                break;
-            case 'gitignore':
-                $api = new Terminal\Gitignore($this);
-                break;
-            case 'sshconfig':
-            case 'ssh_config':
-                $api = new Terminal\SSHConfig($this);
-                break;
-            case 'sshkey':
-            case 'ssh_key':
-                $api = new Terminal\SSHKey($this);
-                break;
-            case 'wp':
-            case 'wordpress':
-                $api = new Terminal\WP($this);
-                break;
-            case 'wp_cli':
-            case 'wpcli':
-            case 'wordpress_cli':
-            case 'wordpresscli':
-                $api = new Terminal\WP_CLI($this);
-                break;
-            case 'wp_db':
-            case 'wpdb':
-            case 'wordpress_db':
-            case 'wordpressdb':
-                $api = new Terminal\WP_DB($this);
-                break;
-            case '':
-                $api = new Terminal\AbstractTerminal($this);
-        }
-        $error_string = sprintf("Can't execute <code>%s</code> terminal method in %s environment.",
-            $name, $this->environment);
-        if (empty($api))
-            return false;
-        if (($this->ssh && method_exists($this->ssh, 'isConnected') && $this->ssh->isConnected()) || $this->environment == 'local') {
-            return $api;
-            //return call_user_func_array(array($this, $method), $arguments);
-        }
-        $this->log($error_string . " No SSH connection was established.");
-        return new Terminal\Error($this);
-    }
-
-    /**
      * @return mixed
      */
     protected function root()
@@ -262,6 +263,12 @@ class TerminalClient extends Base
         return false;
     }
 
+    /**
+     * @param string $action
+     * @param string $key_name
+     * @param string $passphrase
+     * @return bool|string
+     */
     public
     function localSSHKey(string $action = 'create', string $key_name = 'id_rsa', string $passphrase = '')
     {
@@ -271,6 +278,10 @@ class TerminalClient extends Base
         return $output;
     }
 
+    /**
+     * @param string $dir
+     * @return bool
+     */
     public
     function dir_exists(string $dir = '')
     {
@@ -285,6 +296,12 @@ class TerminalClient extends Base
         return false;
     }
 
+    /**
+     * @param string $action
+     * @param string $domain
+     * @param string $directory
+     * @return bool
+     */
     public
     function virtualHost(string $action = 'create', string $domain = '', string $directory = '')
     {

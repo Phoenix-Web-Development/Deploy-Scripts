@@ -977,7 +977,7 @@ class WHM extends Base
                             $is_different = false;
                     }
                     if (isset($is_different) && !$is_different) {
-                        $this->log($error_string_append . "Identical email filter already exists.");
+                        $this->log($error_string_append . "Identical email filter already exists.", 'warning');
                         return false;
                     } else
                         $this->log("Overwriting existing email filter which has the following attributes: " . build_recursive_list($queried_filter));
@@ -1168,7 +1168,7 @@ class WHM extends Base
             return false;
         }
         if ($ssh_key = $this->fetchkey($key_name, 1, $cpanel_parameter, $cpanel_parameter_type)) {
-            $this->log(sprintf("%s Key named <strong>%s</strong> already exists.", $error_string_append, $key_name), 'error');
+            $this->log(sprintf("%s Key named <strong>%s</strong> already exists.", $error_string_append, $key_name), 'warning');
             return $ssh_key;
         }
 
@@ -1346,7 +1346,7 @@ class WHM extends Base
         }
         if (($key['authstatus'] == 'authorized' && $action == 'authorize') || ($key['authstatus'] == 'not authorized' && $action == 'deauthorize')) {
             $this->log(sprintf("%s Key named <strong>%s</strong> is already %s.",
-                $error_string_append, $key_name, $this->actions[$action]['past']), 'error');
+                $error_string_append, $key_name, $this->actions[$action]['past']), 'warning');
             return false;
         }
 
@@ -1469,7 +1469,7 @@ class WHM extends Base
                     elseif (!empty($existing_repo['source_repository']['url']) && $existing_repo['source_repository']['url'] == $repository_url)
                         $existing_repo_error = sprintf('with remote url <strong>%s</strong>', $repository_url);
                     if (!empty($existing_repo_error)) {
-                        $this->log(sprintf("%s Repository %s already exists.", $error_string_append, $existing_repo_error));
+                        $this->log(sprintf("%s Repository %s already exists.", $error_string_append, $existing_repo_error), 'warning');
                         return false;
                     }
                 }

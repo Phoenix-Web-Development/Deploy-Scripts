@@ -31,10 +31,13 @@ class SSHConfig extends AbstractTerminal
             $config_before = '';
             $this->ssh->touch($this->filepath());
         }
-        if ($this->ssh->fileperms($this->filepath()) != '0600')
+        $perms = substr(decoct($this->ssh->fileperms($this->filepath())), -3, 3);
+        if ($perms != '600') {
+            $this->log(sprintf("SSH Config file permissions <strong>%s</strong> are wrong. Setting to 0600.", $perms), 'warning');
             $this->ssh->chmod(0600, $this->filepath());
+        }
         if ($this->check($host))
-            return $this->logError(sprintf("Config entry for <strong>%s</strong> already exists.", $host));
+            return $this->logError(sprintf("Config entry for <strong>%s</strong> already exists.", $host), 'warning');
         $output = $this->exec('echo -e "Host ' . $host . '\n  Hostname ' . $hostname . '\n  User ' . $user
             . '\n  IdentityFile ~/.ssh/' . $key_name . '\n  Port ' . $port . '" >> ' . $this->filepath() . ';');
         $config_after = $this->ssh->get($this->filepath());

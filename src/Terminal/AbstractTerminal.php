@@ -4,7 +4,7 @@ namespace Phoenix\Terminal;
 
 
 use Phoenix\TerminalClient;
-use Phoenix\BaseAbstract
+use Phoenix\BaseAbstract;
 use phpseclib\Net\SFTP;
 
 /**
@@ -85,8 +85,8 @@ class AbstractTerminal extends BaseAbstract
     function format_output(string $output = '')
     {
         if (!empty($output)) {
-            $output = self::trailing_char($output, '</code>');
-            $prepend = "<code><strong>Terminal output:</strong> ";
+            $output = self::trailing_char($output, '</pre>');
+            $prepend = "<pre><strong>Terminal output:</strong> ";
             $output = $prepend . ltrim($output, $prepend);
             return $output;
         }
@@ -164,7 +164,7 @@ class AbstractTerminal extends BaseAbstract
             return false;
         }
         if (!$this->ssh->is_dir($dir)) {
-            $this->log(sprintf("%s Directory <strong>%s</strong> doesn't exist in %s environment. You should check if dir exists first.", $error_string, $this->environment));
+            $this->log(sprintf("%s Directory <strong>%s</strong> doesn't exist in %s environment. You should check if dir exists first.", $error_string, $dir, $this->environment));
             return null;
         }
 
@@ -195,5 +195,23 @@ class AbstractTerminal extends BaseAbstract
         return rtrim($dir, $char) . $char;
     }
 
-
+    /**
+     * @param string $output
+     * @param bool $success
+     * @return bool|null
+     */
+    protected function logFinish($output = '', $success = false)
+    {
+        $action = $this->getCaller();
+        if (!empty($action)) {
+            $output = $this->format_output($output);
+            if (!empty($success)) {
+                $this->log(sprintf('Successfully %s %s. %s', $this->actions[$this->getCaller()]['past'], $this->mainStr(), $output), 'success');
+                return true;
+            }
+            $this->log(sprintf('Failed to %s %s. %s', $this->getCaller(), $this->mainStr(), $output));
+            return false;
+        }
+        return null;
+    }
 }
