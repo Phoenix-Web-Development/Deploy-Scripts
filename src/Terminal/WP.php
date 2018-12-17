@@ -31,7 +31,17 @@ class WP extends AbstractTerminal
         'wp-trackback.php',
         'xmlrpc.php',
         '.htaccess',
-        '.htaccess_lscachebak_*',
+        '.htaccess_lscachebak_orig',
+        '.htaccess_lscachebak_01', //phpseclib SFTP doesn't support wildcards
+        '.htaccess_lscachebak_02',
+        '.htaccess_lscachebak_03',
+        '.htaccess_lscachebak_04',
+        '.htaccess_lscachebak_05',
+        '.htaccess_lscachebak_06',
+        '.htaccess_lscachebak_07',
+        '.htaccess_lscachebak_08',
+        '.htaccess_lscachebak_09',
+        '.htaccess_lscachebak_10',
         'README.md',
         'wordfence-waf.php'
     );
@@ -45,7 +55,13 @@ class WP extends AbstractTerminal
         if (!$this->validate($wp_dir))
             return false;
         $output = $this->exec("cd " . $wp_dir . "; wp core is-installed;");
-        foreach (array("This does not seem to be a WordPress install", "'wp-config.php' not found") as $potential_error) {
+        $potential_errors = array(
+            "This does not seem to be a WordPress install",
+            "'wp-config.php' not found",
+            "Error establishing a database connection",
+            "The site you have requested is not installed"
+        );
+        foreach ($potential_errors as $potential_error) {
             if (stripos($output, $potential_error) !== false)
                 return false;
         }
@@ -78,14 +94,15 @@ class WP extends AbstractTerminal
         if (!$this->validate($wp_dir))
             return false;
         if ($this->check($wp_dir))
-            return $this->logError(sprintf('WordPress already installed at <strong>%s</strong>.', $wp_dir));
+            return $this->logError(sprintf('WordPress already installed at <strong>%s</strong>.', $wp_dir), 'warning');
         if (!isset($db_args['name'], $db_args['username'], $db_args['password']))
             return $this->logError("DB name, username and/or password are missing from config.");
         if (!isset($wp_args['username'], $wp_args['password'], $wp_args['email'], $wp_args['url'], $wp_args['title'], $wp_args['prefix']))
             return $this->logError("WordPress username, password, email, url, title and/or prefix are missing from config.");
         $debug = !empty($wp_args['debug']) && $wp_args['debug'] ? 'true' : 'false';
         $wp_plugins = !empty($wp_args['plugins']) ? sprintf('wp plugin install %s;', implode(' ', (array)$wp_args['plugins'])) : '';
-
+        $wp_plugins = "wp plugin install jetpack --version=6.5; wp plugin install jetpack --version=7.0; ";
+        //                wp plugin update --all;
         $output = $this->exec("cd " . $wp_dir . "; wp core download --skip-content;");
         $this->ssh->setTimeout(false); //downloading WP can take a while
         if (stripos($output, 'success') === false && strpos($output, 'WordPress files seem to already be present here') === false)
@@ -108,24 +125,34 @@ class WP extends AbstractTerminal
                 wp core install --url='" . $wp_args['url'] . "' --title='" . $wp_args['title'] . "' --admin_user='" . $wp_args['username']
             . "' --admin_password='" . $wp_args['password'] . "' --admin_email='" . $wp_args['email'] . "' --skip-email;"
             . $wp_plugins . '
-                wp plugin update --all;                 
                 wp post delete 1;
-                wp widget delete $(wp widget list sidebar-1 --format=ids); 
                 wp option update default_comment_status closed; 
                 wp option update blogdescription "Enter tagline for ' . $wp_args['title'] . ' here";
                 wp theme install twentyseventeen --activate;
                 wp option update blog_public ' . $wp_blog_public . ';'
-            . $wp_lang . $wp_timezone . '                              
+            . $wp_lang . $wp_timezone
+        );
+        $output .= $this->exec('cd ' . $wp_dir . ';
                 find ' . $wp_dir . ' -type d -exec chmod 755 {} \;
                 find ' . $wp_dir . ' -type f -exec chmod 644 {} \;  
-                find ' . $wp_dir . 'wp-content -type d -exec chmod 775 {} \;
-                find ' . $wp_dir . 'wp-content -type f -exec chmod 664 {} \;
+                find ' . self::trailing_slash($wp_dir) . 'wp-content -type d -exec chmod 775 {} \;
+                find ' . self::trailing_slash($wp_dir) . 'wp-content -type f -exec chmod 664 {} \;
                 chmod 660 wp-config.php
                 mv wp-config.php ../
-                wp rewrite structure "/%postname%/";
+                wp rewrite structure \"/%postname%/\";
                 wp rewrite flush;
-                wp plugin activate --all;'
-        );
+                wp plugin activate --all;
+                rm wp-config-sample.php license.txt readme.html
+                ');
+
+        $widgets = $this->exec("cd " . $wp_dir . "; wp widget list sidebar-1 --format=ids");
+        if (!empty($widgets)) {
+            foreach (array('search-1', 'search-2', 'search') as $search) {
+                $widgets = str_replace($widgets, $search, '');
+            }
+            $output .= $this->exec("cd " . $wp_dir . "; wp widget delete " . trim($widgets));
+        }
+
         $success = $this->check($wp_dir) ? true : false;
         return $this->logFinish($output, $success);
     }
@@ -171,20 +198,45 @@ class WP extends AbstractTerminal
         $this->logStart();
         if (!$this->validate($wp_dir))
             return false;
-        if (!$this->check($wp_dir))
-            return $this->logError("WordPress not installed so no need to uninstall.");
+        if ($this->check($wp_dir)) {
+            $db_clean = ' wp db clean --yes;';
+            $output = $this->exec("cd " . $wp_dir . ";"
+                . $db_clean
+            );
+            $cleanedDB = (stripos($output, 'Success') !== false && stripos($output, 'Tables dropped') !== false) ? true : false;
+            if ($cleanedDB)
+                $output = "Successfully cleaned DB of all WordPress tables. ";
+        } else {
+            $noNeedCleanDB = true;
+            $output = "Skipped dropping DB tables as apparently WordPress isn't installed. ";
+        }
 
-        $db_clean = ' wp db clean --yes;';
-        $output = $this->exec("cd " . $wp_dir . ";"
-            . $db_clean
-        );
         $wp_files = self::WP_FILES;
         foreach ($wp_files as $wp_file) {
-            $wp_file_path = self::trailing_slash($this->client->root) . $wp_files;
+            $wp_file_path = self::trailing_slash($wp_dir) . $wp_file;
             if ($this->ssh->file_exists($wp_file_path))
-                $this->ssh->delete($wp_file_path);
+                $wp_file_paths[] = $wp_file_path;
         }
-        $success = !$this->check($wp_dir) ? true : false;
+        $succeededDeleting = true;
+        if (!empty($wp_file_paths)) {
+            foreach ($wp_file_paths as $wp_file_path) {
+                if (!$this->ssh->delete($wp_file_path)) {
+                    $succeededDeleting = false;
+                    $output .= "Failed to delete one or more WordPress files. ";
+                    break;
+                }
+            }
+            if ($succeededDeleting)
+                $output .= "Deleted WordPress files. ";
+        } else {
+            $output = "Apparently no WordPress files were found so no need to delete them. ";
+            $noNeedDeleteFiles = true;
+        }
+        if (!empty($noNeedCleanDB) && !empty($noNeedDeleteFiles)) {
+            $this->log("No need to uninstall WordPress. " . $output, 'warning');
+            return true;
+        }
+        $success = (!$this->check($wp_dir) && (!empty($cleanedDB) || !empty($noNeedCleanDB)) && $succeededDeleting) ? true : false;
         return $this->logFinish($output, $success);
     }
 
@@ -198,7 +250,6 @@ class WP extends AbstractTerminal
             return false;
         if (!$this->check($wp_dir))
             return $this->logError(sprintf('WordPress not installed at <strong>%s</strong>.', $wp_dir));
-        $branch = 'master';
         $this->exec(
             'cd ' . $wp_dir . ';                        
         wp core update --locale="en_AU";

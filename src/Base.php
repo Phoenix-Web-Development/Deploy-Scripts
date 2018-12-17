@@ -113,6 +113,11 @@ class Base
             'past' => 'uninstalled',
             'action' => 'uninstall'
         ),
+        'update' => array(
+            'present' => 'updating',
+            'past' => 'updated',
+            'action' => 'update'
+        ),
         'upload' => array(
             'present' => 'uploading',
             'past' => 'uploaded',

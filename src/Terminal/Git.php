@@ -36,7 +36,7 @@ class Git extends AbstractTerminal
             }
             return $this->logError(sprintf("Directory already exists at <strong>%s</strong> and contains files.", $separate_repo_path));
         }
-        $output = $this->exec('cd ' . $worktree . '; git init --separate-git-dir ' . $separate_repo_path);
+        $output = $this->exec('cd ' . $worktree . '; git init --separate-git-dir ' . $separate_repo_path . '; git reset --hard origin/master');
         $success = stripos($output, 'Reinitialized existing Git repository') !== false ? true : false;
         return $this->logFinish($output, $success);
     }
@@ -81,7 +81,7 @@ class Git extends AbstractTerminal
         if (!empty($changes))
             return $this->logError("Uncommitted changes in Git repo. " . $changes);
         if ($this->isBranch($worktree, $branch, 'up') === false)
-            return $this->logError(sprintf("No upstream branch called <strong>%s</strong>", $branch));
+            return $this->logError(sprintf("No upstream branch called <strong>%s</strong>.", $branch));
         $cd = "cd " . $worktree . "; ";
         $this->exec($cd . "git fetch --all");
         $currentBranch = $this->getCurrentBranch($worktree);
@@ -98,9 +98,9 @@ class Git extends AbstractTerminal
             $strCheckout = "git checkout " . $strNewLocalBranch . $branch . "; " . $strSetUpstream;
         }
         $commands = $cd . $strCheckout . " git pull --porcelain;";
-        d($commands);
+
         $output = $this->exec($commands);
-        d($output);
+
         $success = strpos($output, 'blegh') !== false ? true : false;
         return $this->logFinish($output, $success);
     }
@@ -162,18 +162,29 @@ class Git extends AbstractTerminal
      * @param string $worktree
      * @return bool
      */
-    public function checkForChanges(string $worktree = '')
+    protected function checkForChanges(string $worktree = '')
     {
         $this->mainStr($worktree);
         if (!$this->validate($worktree))
             return null;
         $output = $this->exec("cd " . $worktree . "; git status --porcelain");
-        d($output);
         if (strlen($output) == 0)
             return false;
         return $output;
     }
-
+    /*
+        public function createBranch(string $worktree = '', string $branch = '')
+        {
+            $this->mainStr($worktree);
+            if (!$this->validate($worktree))
+                return null;
+            $cd = "cd " . $worktree . "; ";
+            $currentBranch = trim($this->exec($cd . "git checkout -b " . $branch));
+            if (strlen($currentBranch) > 0)
+                return $currentBranch;
+            return false;
+        }
+    */
     /**
      * Determine whether repo includes a certain branch
      *
@@ -182,9 +193,8 @@ class Git extends AbstractTerminal
      * @param string $stream
      * @return bool|null
      */
-    public function isBranch(string $worktree = '', string $branch = '', string $stream = 'down')
+    protected function isBranch(string $worktree = '', string $branch = '', string $stream = 'down')
     {
-        $this->mainStr($worktree);
         if (!$this->validate($worktree))
             return null;
         $cd = "cd " . $worktree . "; ";
@@ -210,9 +220,8 @@ class Git extends AbstractTerminal
      * @param string $branch
      * @return bool|null
      */
-    public function branchHasUpstream(string $worktree = '', string $branch = '')
+    protected function branchHasUpstream(string $worktree = '', string $branch = '')
     {
-        $this->mainStr($worktree);
         if (!$this->validate($worktree))
             return null;
         $cd = "cd " . $worktree . "; ";
@@ -226,9 +235,8 @@ class Git extends AbstractTerminal
         return null;
     }
 
-    public function getCurrentBranch(string $worktree = '')
+    protected function getCurrentBranch(string $worktree = '')
     {
-        $this->mainStr($worktree);
         if (!$this->validate($worktree))
             return null;
         $cd = "cd " . $worktree . "; ";
@@ -276,7 +284,7 @@ class Git extends AbstractTerminal
                 return false;
         }
         $output = $this->exec('cd ' . $dir . '; git rev-parse ' . $parseFor);
-        if (strpos($output, 'true') !== false)
+        if (stripos($output, 'true') !== false)
             return true;
         return false;
     }
@@ -303,18 +311,20 @@ class Git extends AbstractTerminal
     }
 
     /**
-     * @param string $repo_path
      * @param string $worktree
+     * @param string $repo_path
+     * @param string $branch
      * @return string
      */
     protected function mainStr(string $worktree = '', string $repo_path = '', $branch = '')
     {
+        $action = $this->getCaller();
         if (func_num_args() == 0) {
-            if (!empty($this->_mainStr[$this->getCaller()]))
-                return $this->_mainStr[$this->getCaller()];
+            if (!empty($this->_mainStr[$action]))
+                return $this->_mainStr[$action];
         }
         $string = sprintf("%s environment Git repository", $this->environment); //update/commit
-        switch ($this->getCaller()) {
+        switch ($action) {
             case 'move':
                 $repo_path_str = " to <strong>" . $repo_path . "</strong>";
                 $worktree_str = " separate from worktree at <strong>%s</strong>";
@@ -330,6 +340,6 @@ class Git extends AbstractTerminal
             $string .= sprintf($worktree_str, $worktree);
         if (!empty($branch))
             $string .= " on branch <strong>" . $branch . "</strong>";
-        return $this->_mainStr[$this->getCaller()] = $string;
+        return $this->_mainStr[$action] = $string;
     }
 }

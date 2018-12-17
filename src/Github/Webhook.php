@@ -35,7 +35,6 @@ class Webhook extends AbstractGithub
         if ($this->get($repo_name, $url))
             return $this->logError("Found existing webhook with the same url.", 'warning');
         $success = $this->client->client->repo()->hooks()->create($this->client->user, $repo_name, $params);
-        d($success);
         return $this->logFinish($success);
     }
 
@@ -96,6 +95,10 @@ class Webhook extends AbstractGithub
     {
         if (empty($repo_name))
             return $this->logError("Repository name not supplied to method.");
+        if (!$this->client->repo()->get($repo_name)) {
+            $type = $this->getCaller() == 'remove' ? 'warning' : 'error';
+            return $this->logError(sprintf("Github repository <strong>%s</strong> doesn't exist.", $repo_name), $type);
+        }
         if (empty($url))
             return $this->logError("Url not supplied to method.");
         if (filter_var($url, FILTER_VALIDATE_URL) === FALSE)

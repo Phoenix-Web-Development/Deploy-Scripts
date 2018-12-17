@@ -103,6 +103,8 @@ class DeployKey extends AbstractGithub
     {
         if (empty($repo_name))
             return $this->logError("Repository name not supplied to method.");
+        if (!$this->client->repo()->get($repo_name))
+            return $this->logError(sprintf("Github repository <strong>%s</strong> doesn't exist.", $repo_name), 'warning');
         if (empty($key_title))
             return $this->logError("Key title not supplied to method.");
         return true;
@@ -121,8 +123,8 @@ class DeployKey extends AbstractGithub
                 return $this->_mainStr;
         }
         $repo_name = !empty($repo_name) ? sprintf(' for repository <strong>%s</strong>', $repo_name) : '';
-        $key_title = !empty($url) ? sprintf(' with key title <strong>%s</strong>', $key_title) : '';
-        $public_key = !empty($url) ? sprintf(' and public key <strong>%s</strong>', $public_key) : '';
+        $key_title = !empty($key_title) ? sprintf(' with key title <strong>%s</strong>', $key_title) : '';
+        $public_key = !empty($public_key) ? sprintf(' and public key <strong>%s</strong>', $public_key) : '';
         return $this->_mainStr = " GitHub deploy key" . $repo_name . $key_title . $public_key;
     }
 }

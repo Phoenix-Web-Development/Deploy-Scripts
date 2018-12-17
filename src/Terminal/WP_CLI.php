@@ -58,7 +58,7 @@ class WP_CLI extends AbstractTerminal
     {
         $this->logStart();
         if ($this->check()) {
-            $this->log(sprintf("No need to install %s It's already installed.", $this->mainStr()), 'info');
+            $this->log(sprintf("No need to install %s It's already installed.", $this->mainStr()), 'success');
             return true;
         }
         $output = $this->exec(

@@ -491,8 +491,10 @@ final class Deployer extends Base
             case 'staging':
                 $subdomain = $this->find_staging_cpanel();
                 if (!$subdomain) {
-                    $this->log(sprintf("%s Apparently subdomain <strong>%s</strong> doesn't exist in your staging cPanel accounts.",
-                        $error_string, $this->config->environ->staging->cpanel->subdomain->slug));
+                    $slug = $this->config->environ->staging->cpanel->subdomain->slug ?? '';
+                    $slug = !empty($slug) ? "<strong>" . $slug . "</strong> " : '';
+                    $this->log(sprintf("%s Apparently subdomain %sdoesn't exist in your staging cPanel accounts.",
+                        $error_string, $slug));
                     return false;
                 }
                 $domain = $subdomain['domain'];
@@ -558,6 +560,7 @@ final class Deployer extends Base
      * @param string $action
      * @param string $environment
      * @return bool
+     * @throws \Github\Exception\MissingArgumentException
      */
     function do_environ_stuff($action = 'create', $environment = 'live')
     {
@@ -680,7 +683,7 @@ final class Deployer extends Base
         $staging_cpanel_account = $this->find_staging_cpanel();
         if ($staging_cpanel_account) {
             $this->log(sprintf("%sSubdomain with slug <strong>%s</strong> already exists in cPanel account with user <strong>%s</strong>. ",
-                $error_string, $config->subdomain->slug, $staging_cpanel_account['user']), 'error');
+                $error_string, $config->subdomain->slug, $staging_cpanel_account['user']), 'warning');
             return false;
         }
         //search for the lowest # staging cPanel account with enough available space and inodes
@@ -906,7 +909,7 @@ final class Deployer extends Base
 
         $cPanel_account = $this->find_cpanel_account($domain, $username);
         if (!$cPanel_account) {
-            $this->log(sprintf($error_string . "Apparently account with domain <strong>%s</strong> and username <strong>%s</strong> doesn't exist.", $domain, $username), 'error');
+            $this->log(sprintf($error_string . "Apparently account with domain <strong>%s</strong> and username <strong>%s</strong> doesn't exist.", $domain, $username), 'warning');
             return false;
         }
         if (!empty($this->whm->protected_accounts)) {
@@ -987,7 +990,14 @@ final class Deployer extends Base
 
         $this->log(sprintf("Deleting staging site subdomain <strong>%s</strong> in cPanel account with username <strong>%s</strong>.",
             $slug, $staging_cpanel_account['user']), 'info');
-        if ($this->whm->delete_subdomain($slug)) {
+        $deleted_subdomain = $this->whm->delete_subdomain($slug);
+
+        $directory = $this->get_environ_dir('staging', 'web');
+        if (!empty($directory)) {
+            $deletedSubdomainDirectory = $this->terminal('staging')->ssh->delete($directory);
+            $prunedSubdomainDirectoryTree = $this->terminal('staging')->api()->pruneDirTree(dirname($directory));
+        }
+        if (!empty($deleted_subdomain) && !empty($deletedSubdomainDirectory) && !empty($prunedSubdomainDirectoryTree)) {
             return true;
         }
         $this->log(sprintf("Something went wrong deleting subdomain in account with user <strong>%s</strong>.", $staging_cpanel_account['user']), 'error');
@@ -1086,7 +1096,7 @@ final class Deployer extends Base
         if (!$this->validate_action($action, array('create', 'delete'), sprintf("Can't do %s environment version control stuff.", $environment)))
             return false;
 
-        $this->log(sprintf('<h2>%s %s version control components.</h2>', ucfirst($this->actions[$action]['present']), $environment), 'info');
+        $this->log(sprintf('<h3>%s %s version control components.</h3>', ucfirst($this->actions[$action]['present']), $environment), 'info');
         $message_string = sprintf('%s version control components.', $environment);
         $error_string = sprintf("Can't %s %s", $action, $message_string);
         if ($environment == 'local') {
@@ -1130,55 +1140,74 @@ final class Deployer extends Base
                 }
                 $upstream_repository = $this->github->repo()->get($repo_name);
 
-                //$is_empty = $this->dir_is_empty($separate_repo_location);
                 if ($upstream_repository) {
                     if (!empty($ssh_key)) {
                         $deploy_key = $this->github->deploy_key()->upload($repo_name, $key_title, $ssh_key['key']);
                         $ssh_url = str_replace('git@github.com', $key_name, $upstream_repository['ssh_url']);
                         $source_repository = json_encode((object)['url' => $ssh_url, 'remote_name' => "origin"]);
                         $downstream_repository = $this->whm->version_control('get', $web_dir, $downstream_repo_name, $source_repository);
+                        d($downstream_repository);
+
                         if (empty($downstream_repository)) {
 
+
                             $git_dir_is_empty = $this->terminal($environment)->api()->dir_is_empty($web_dir);
+                            d($git_dir_is_empty);
 
-                            $dummy_dir = $web_dir . '/../dummy';
+                            $dummy_dir = $root . '/dummy';
                             if ($git_dir_is_empty === false) {
-                                if (!$this->terminal($environment)->api()->move_files($web_dir, $dummy_dir))
-                                    break;
+                                $moved_to_dummy = $this->terminal($environment)->api()->move_files($web_dir, $dummy_dir);
+
                             }
+                            d($moved_to_dummy);
+                            if ($git_dir_is_empty === true || !empty($moved_to_dummy))
+                                $downstream_repository = $this->whm->version_control('clone',
+                                    $web_dir,
+                                    $downstream_repo_name,
+                                    $source_repository
+                                );
 
-                            //$ssh_url = $upstream_repository['ssh_url'];
+                            d($downstream_repository);
 
-                            $downstream_repository = $this->whm->version_control('clone',
-                                $web_dir,
-                                $downstream_repo_name,
-                                $source_repository
-                            );
-                            if ($git_dir_is_empty === false) {
-                                $this->terminal($environment)->api()->move_files($dummy_dir, $web_dir);
-                                $this->terminal($environment)->ssh->delete($dummy_dir, true);
+                            if (!empty($downstream_repository) && $git_dir_is_empty === false && !empty($moved_to_dummy)) {
+                                d('blegh');
+                                $dummy_dir = $root . '/dummy';
+                                $moved_to_web_dir = $this->terminal($environment)->api()->move_files($dummy_dir, $web_dir);
+                                d($moved_to_web_dir);
+                                if ($moved_to_web_dir)
+                                    $this->terminal($environment)->ssh->delete($dummy_dir, true);
                             }
                         }
                         $move_git = $this->terminal($environment)->git()->move($web_dir, $separate_repo_location);
+                        d($move_git);
                     }
 
                     if ($environment == 'staging') { //webhook
                         $secret = $this->config->version_control->github->webhook->secret ?? '';
                         $webhook_config = $this->terminal($environment)->githubWebhookEndpointConfig()->create($webhook_endpoint_config_dir, $web_dir, $secret);
                         $webhook = $this->github->webhook()->create($repo_name, $webhook_url, $secret);
+
+                        $this->terminal($environment)->git()->commit($web_dir, 'dev', 'create dev branch');
+
                     }
                 } else
                     $this->log("Can't upload deploy key or clone repository. Upstream repository not found.");
                 $gitignore = $this->terminal($environment)->gitignore()->create($web_dir);
+
+                $this->terminal($environment)->exec('git config --global user.name "James Jones"; git config --global user.email "james.jones@phoenixweb.com.au"');
                 if (!empty($ssh_key) && !empty($authkey) && !empty($ssh_config) && !empty($deploy_key)
-                    && !empty($downstream_repository) && !empty($move_git) && !empty($webhook) && !empty($webhook_config) && !empty($gitignore))
+                    && !empty($downstream_repository) && !empty($move_git) && ((!empty($webhook) && !empty($webhook_config)) || $environment != 'staging') && !empty($gitignore))
                     $success = true;
                 break;
             case 'delete':
+
                 $ssh_config = $this->terminal($environment)->ssh_config()->delete('github_' . $repo_name, 'github.com', 'github_' . $repo_name, 'git');
                 $ssh_key = $this->whm->delkey($key_name, $cPanel_account['user']);
+
                 $deploy_key = $this->github->deploy_key()->remove($repo_name, $key_title);
+
                 $downstream_repository = $this->whm->version_control('delete', $separate_repo_location, '', '', $cPanel_account['user']);
+
                 if (!$downstream_repository)
                     $downstream_repository = $this->whm->version_control('delete', $web_dir, '', '', $cPanel_account['user']);
                 $deleted_git_folder = $this->terminal($environment)->git()->delete($web_dir, $separate_repo_location);
@@ -1190,9 +1219,10 @@ final class Deployer extends Base
 
                 $gitignore = $this->terminal($environment)->gitignore()->delete($web_dir);
                 if (!empty($ssh_key) && !empty($ssh_config) && !empty($deploy_key)
-                    && !empty($downstream_repository) && !empty($deleted_git_folder) && !empty($webhook) && !empty($webhook_config) && !empty($gitignore)
+                    && !empty($downstream_repository) && !empty($deleted_git_folder) && ((!empty($webhook) && !empty($webhook_config)) || $environment != 'staging') && !empty($gitignore)
                 )
                     $success = true;
+
                 break;
         }
         if (!empty($success)) {
@@ -1343,7 +1373,7 @@ final class Deployer extends Base
             return false;
         $action = $action == 'create' ? 'install' : $action;
 
-        $this->log(sprintf('<h2>%s WordPress and WP CLI</h2>', ucfirst($this->actions[$action]['present'])), 'info');
+        $this->log(sprintf('<h3>%s %s WordPress and WP CLI</h3>', ucfirst($this->actions[$action]['present']), $environment), 'info');
 
         $directory = $this->get_environ_dir($environment, 'web');
 
@@ -1354,9 +1384,12 @@ final class Deployer extends Base
                 $wp_args->title = $this->config->project->title ?? 'Insert Site Title Here';
                 $wp_args->url = $this->get_environ_url($environment);
                 //$wp_args->debug = $this->get_environ_url($environment);
-                $db_args = (array)$this->config->environ->$environment->db ?? null;
-                $db_args['name'] = $this->whm->db_prefix_check($db_args['name']);
-                $db_args['username'] = $this->whm->db_prefix_check($db_args['username']);
+                $db_args['name'] = $this->config->environ->$environment->db->name ?? '';
+                $db_args['username'] = $this->config->environ->$environment->db->username ?? '';
+                $cpanel = $this->find_environ_cpanel($environment);
+                $db_args['name'] = $this->whm->db_prefix_check($db_args['name'], $cpanel['user']);
+                $db_args['username'] = $this->whm->db_prefix_check($db_args['username'], $cpanel['user']);
+                $db_args['password'] = $this->config->environ->$environment->db->password ?? '';
                 $success = $this->terminal($environment)->wp()->install($directory, $db_args, (array)$wp_args);
                 break;
             case 'delete':
@@ -1384,16 +1417,23 @@ final class Deployer extends Base
     function updateWP($environment = 'live')
     {
         $directory = $this->get_environ_dir($environment, 'web');
-        if (!empty($directory)) {
-            $git_update = $this->terminal($environment)->git()->pull($directory, 'dev');
-            $wp_update = $this->terminal($environment)->wp()->update($directory);
-            $git_commit = $this->terminal($environment)->git()->commit($directory, 'dev');
+        $errorString = sprintf("Can't update WordPress in %s environment. ", $environment);
+        if (empty($directory)) {
+            $this->log($errorString . " Couldn't get web directory.");
+            return false;
         }
+        $git_update = $this->terminal($environment)->git()->pull($directory, 'dev');
+        if (!$git_update) {
+            $this->log($errorString . " Git pull was unsuccessful.");
+            return false;
+        }
+        $wp_update = $this->terminal($environment)->wp()->update($directory);
+        $git_commit = $this->terminal($environment)->git()->commit($directory, 'dev');
         if (!empty($git_update) && !empty($wp_update) && !empty($git_commit)) {
             $this->log(sprintf('Successfully updated WordPress in %s environment.', $environment), 'success');
             return true;
         }
-        $this->log(sprintf('Failed to update WordPress in %s environment.', $environment), 'error');
+        $this->log(sprintf('Failed to update WordPress in %s environment.', $environment));
         return false;
     }
 
@@ -1402,7 +1442,7 @@ final class Deployer extends Base
      * @param string $dest_environment
      * @return bool
      */
-    protected function transferDB(string $from_environment = '', string $dest_environment)
+    protected function transferDB(string $from_environment = '', string $dest_environment = '')
     {
         $message = sprintf(' %s DB to %s environment', $from_environment, $dest_environment);
         $this->log('<h2>Migrating' . $message . '</h2>', 'info');

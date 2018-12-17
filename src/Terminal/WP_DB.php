@@ -199,7 +199,7 @@ class WP_DB extends AbstractTerminal
     protected function logFinish($output = '', $success = false)
     {
         $action = $this->getCaller();
-        $output = $this->format_output($output);
+        $output = $this->client->format_output($output);
         if (!empty($action)) {
             if (!empty($success)) {
                 $this->log(sprintf('Successfully %s %s. %s', $this->actions[$action]['past'], $this->mainStr(), $output), 'success');

@@ -43,7 +43,6 @@ class GithubWebhookEndpointConfig extends AbstractTerminal
             return false;
         if (!$this->ssh->file_exists($filepath))
             return $this->logError("Config file doesn't exist.", 'warning');
-
         $success = $this->ssh->delete($filepath) ? true : false;
         return $this->logFinish('', $success);
     }

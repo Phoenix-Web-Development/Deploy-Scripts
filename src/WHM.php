@@ -467,7 +467,7 @@ class WHM extends Base
         //check account exists
         $cpanel_account = $this->get_cpanel_account($cpanel_parameter, $type);
         if (!$cpanel_account) {
-            $this->log(sprintf("Can't delete cPanel account with %s %s. Apparently it doesn't exist.", $type, $cpanel_account[$type]), 'error');
+            $this->log(sprintf("Can't delete cPanel account with %s %s. Apparently it doesn't exist.", $type, $cpanel_account[$type]), 'warning');
             return false;
         }
         $finish_message_append = sprintf(" cPanel account with domain <strong>%s</strong> and username <strong>%s</strong>.",
@@ -619,7 +619,7 @@ class WHM extends Base
                 if (!empty($existing_privileges)) {
                     //@TODO This check only applies for ALL PRIVILEGES. But that's all we use at the moment.
                     if (count($existing_privileges) == 1 && $this->cpanel_api_functions[$api_function]['privileges'] == $existing_privileges[0]) {
-                        $this->log("Can't set" . $finish_message_append . ' Existing DB privileges are identical.');
+                        $this->log("Can't set" . $finish_message_append . ' Existing DB privileges are identical.', 'warning');
                         return false;
                     }
                     $this->log("Overwriting existing email DB user privileges which are: " . build_recursive_list($existing_privileges), 'info');
@@ -860,7 +860,7 @@ class WHM extends Base
             $this->log('Found' . $finish_message_append . '<h5>Subdomain Data:</h5>' . build_recursive_list($data), 'info');
             return $data;
         }
-        $this->log("Couldn't find" . $finish_message_append);
+        $this->log("Couldn't find" . $finish_message_append, 'info');
         return false;
     }
 
@@ -996,6 +996,17 @@ class WHM extends Base
                 break;
             case 'delete':
                 $api_function = 'delete_filter';
+                $queried_filter = $this->get_email_filter( //check if identical email filter exists because API doesn't check this
+                    $account,
+                    $filter_name,
+                    $cpanel_parameter,
+                    $cpanel_parameter_type
+                );
+                if (empty($queried_filter)) {
+                    $this->log($error_string_append . "Specified email filter doesn't exist.", 'warning');
+                    return false;
+                }
+
                 break;
             case 'get':
             default:
@@ -1188,7 +1199,7 @@ class WHM extends Base
         $finish_message_append .= $result['message'];
         if ($result['success']) {
             $this->log('Successfully generated' . $finish_message_append, 'success');
-            return $this->fetchkey($key_name);
+            return $this->fetchkey($key_name, 1, $cpanel_parameter, $cpanel_parameter_type);
         }
         $this->log('Failed to generate' . $finish_message_append);
         return false;
@@ -1393,17 +1404,19 @@ class WHM extends Base
         $finish_message_append = sprintf(" SSH key named <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.",
             $key_name, $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
         $this->log(ucfirst($this->actions[$action]['present']) . $finish_message_append, 'info');
+        if (!$this->fetchkey($key_name, 1, $cpanel_parameter, $cpanel_parameter_type)) {
+            $this->log(sprintf("%s Key named <strong>%s</strong> doesn't exist.", $error_string_append, $key_name), 'warning');
+            return false;
+        }
         $input = array_merge($this->_cpanel_api_functions['SSH']['delkey'], array(
             'cpanel_jsonapi_user' => $cpanel_account['user'],
             'cpanel_jsonapi_module' => 'SSH',
             'name' => $key_name,
         ));
 
-        if (!$result = $this->api_call('cpanel', array_merge($input, array('pub' => 1)))
-        )
+        if (!$result = $this->api_call('cpanel', array_merge($input, array('pub' => 1))))
             return false;
-        if (!$result = $this->api_call('cpanel', array_merge($input, array('pub' => 0)))
-        )
+        if (!$result = $this->api_call('cpanel', array_merge($input, array('pub' => 0))))
             return false;
         $finish_message_append .= $result['message'];
         if ($result['success']) {
@@ -1441,6 +1454,7 @@ class WHM extends Base
             $this->log(sprintf("%s Repository root function arg is missing.", $error_string_append));
             return false;
         }
+        d($cpanel_parameter);
         $cpanel_account = $this->get_cpanel_account($cpanel_parameter, $cpanel_parameter_type);
         if (!$cpanel_account) {
             $this->log($error_string_append . " Couldn't find cPanel account.", 'error');
@@ -1484,7 +1498,7 @@ class WHM extends Base
                 $function = 'delete';
                 $existing_repo = $this->version_control('get', $repository_root);
                 if (empty($existing_repo)) {
-                    $this->log(sprintf("%s No repository at <strong>%s</strong> to delete.", $error_string_append, $repository_root));
+                    $this->log(sprintf("%s No repository at <strong>%s</strong> to delete.", $error_string_append, $repository_root), 'warning');
                     return false;
                 }
                 $args = array(
@@ -1518,7 +1532,7 @@ class WHM extends Base
                     break;
                 case 'delete':
                     //Can't call method "remove" on an undefined value
-                    if (!$this->version_control('get', $repository_root)) {
+                    if (!$this->version_control('get', $repository_root, $repo_name, $source_repository)) {
                         $success = true;
                     }
                     break;

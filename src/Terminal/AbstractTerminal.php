@@ -10,7 +10,6 @@ use phpseclib\Net\SFTP;
 /**
  * @property TerminalClient $client
  * @property string $environment
- * @property string $mainStr
  * @property SFTP $ssh
  *
  * Class AbstractTerminal
@@ -77,38 +76,6 @@ class AbstractTerminal extends BaseAbstract
         return $this->client->exec($command);
     }
 
-    /**
-     * @param string $output
-     * @return bool|string
-     */
-    public
-    function format_output(string $output = '')
-    {
-        if (!empty($output)) {
-            $output = self::trailing_char($output, '</pre>');
-            $prepend = "<pre><strong>Terminal output:</strong> ";
-            $output = $prepend . ltrim($output, $prepend);
-            return $output;
-        }
-        return false;
-    }
-
-    /**
-     * @param string $dir
-     * @return bool
-     */
-    public function dir_exists(string $dir = '')
-    {
-        if (empty($dir)) {
-            $this->log("Can't check if directory exists. No directory supplied to function. ");
-            return false;
-        }
-
-        $output = $this->exec('if test -d ' . $dir . '; then echo "exist"; fi');
-        if (strpos($output, 'exist') !== false)
-            return true;
-        return false;
-    }
 
     /**
      * @param $origin_dir
@@ -139,22 +106,36 @@ class AbstractTerminal extends BaseAbstract
             $this->log(sprintf("%s Failed to create directory at <strong>%s</strong> in %s environment.", $error_string, $dest_dir, $this->environment));
             return false;
         }
-        $origin_dir = self::trailing_slash($origin_dir) . '*';
-        $dest_dir = self::trailing_slash($dest_dir);
-
+        //$origin_dir = self::trailing_slash($origin_dir) . '*';
+        //$dest_dir = self::trailing_slash($dest_dir);
+        /*
         $output = $this->exec(
-            'shopt -s dotglob; 
-            mv ' . $origin_dir . ' ' . $dest_dir . ' ; 
+            'shopt -s dotglob;
+
+            mv --force ' . $origin_dir . ' ' . $dest_dir . ' ; 
             echo status is $?'
         );
-        if (strpos($output, "status is 0") !== false) {
-            $this->log("Successfully moved " . $mainStr, 'success');
-            return true;
+        */
+        $origin_dir = self::trailing_slash($origin_dir);
+        $dest_dir = self::trailing_slash($dest_dir);
+        $output = $this->exec('(cd ' . $origin_dir . ' && tar c .) | (cd ' . $dest_dir . ' && tar xf -); echo $? status');
+
+        $deleted_origin_contents = '';
+        if (strpos($output, "0 status") !== false) {
+            $deleted_origin_contents = $this->exec("shopt -s dotglob; rm -r " . $origin_dir . "*; echo $? status");
+            if (strpos($deleted_origin_contents, "0 status") !== false) {
+                $this->log("Successfully moved " . $mainStr . $this->client->format_output($output . $deleted_origin_contents), 'success');
+                return true;
+            }
         }
-        $this->log("Failed to move " . $mainStr);
+        $this->log("Failed to move " . $mainStr . $this->client->format_output($output . $deleted_origin_contents));
         return false;
     }
 
+    /**
+     * @param string $dir
+     * @return bool|null
+     */
     public
     function dir_is_empty(string $dir = '')
     {
@@ -172,6 +153,56 @@ class AbstractTerminal extends BaseAbstract
         if (strpos($output, $dir . ' is empty') !== false) {
             return true;
         }
+        return false;
+    }
+
+    /**
+     * @param string $dir
+     * @return bool
+     */
+    public
+    function pruneDirTree(string $dir = '')
+    {
+        $error_string = "Can't prune directories";
+        $dirStr = !empty($dir) ? " starting with <strong>" . $dir . "</strong>" : '';
+        $this->log(sprintf("Pruning empty directories%s.", $dirStr), 'info');
+        if (empty($dir)) {
+            $this->log(sprintf("%s No directory supplied to function.", $error_string));
+            return false;
+        }
+        if (!$this->ssh->is_dir($dir)) {
+            $this->log(sprintf("%s <strong>%s</strong> is not a directory.", $error_string, $dir));
+            return false;
+        }
+        $root = self::trailing_slash($this->client->root);
+        if (self::trailing_slash($dir) == $root || self::trailing_slash(dirname($dir)) == $root) {
+            $this->log(sprintf("%s Shouldn't be pruning root directory.", $error_string, $dir));
+            return false;
+        }
+        $continue = true;
+        $success = true;
+        $upstream_dir = $dir;
+        $message = '';
+        while ($continue) {
+            if ($this->dir_is_empty($upstream_dir)) {
+                $deleted_upstream = $this->ssh->delete($upstream_dir, true);
+                if ($deleted_upstream) {
+                    $message .= sprintf("Deleted empty directory <strong>%s</strong>. ", $upstream_dir);
+                    $upstream_dir = dirname($upstream_dir);
+                } else {
+                    $message .= sprintf("Failed to delete <strong>%s</strong> even though it is empty.", $upstream_dir);
+                    $continue = false;
+                }
+            } else {
+                $message .= sprintf("Didn't delete <strong>%s</strong> as it contains files and/or directories.", $upstream_dir);
+                $continue = false;
+            }
+        }
+        if ($success) {
+            $this->log(sprintf("Successfully pruned <strong>%s</strong> directory tree. ", $dir) . $message, 'success');
+            return true;
+        }
+        $this->log(sprintf("Failed to prune <strong>%s</strong> directory tree.", $dir) . $message);
         return false;
     }
 
@@ -204,7 +235,7 @@ class AbstractTerminal extends BaseAbstract
     {
         $action = $this->getCaller();
         if (!empty($action)) {
-            $output = $this->format_output($output);
+            $output = $this->client->format_output($output);
             if (!empty($success)) {
                 $this->log(sprintf('Successfully %s %s. %s', $this->actions[$this->getCaller()]['past'], $this->mainStr(), $output), 'success');
                 return true;

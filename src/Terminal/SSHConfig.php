@@ -58,7 +58,7 @@ class SSHConfig extends AbstractTerminal
         if (!$this->ssh->file_exists($this->filepath()))
             return $this->logError(sprintf("Config file doesn't exist at <strong>%s</strong>.", $this->filepath()));
         if (!$this->check($host))
-            return $this->logError(sprintf("Config entry for <strong>%s</strong> doesn't exist.", $host));
+            return $this->logError(sprintf("Config entry for <strong>%s</strong> doesn't exist.", $host), 'warning');
 
         $config_before = $this->ssh->get($this->filepath());
 

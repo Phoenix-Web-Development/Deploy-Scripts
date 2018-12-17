@@ -4,6 +4,12 @@ namespace Phoenix;
 
 use Phoenix\Base;
 
+/**
+ * @property string $mainStr
+ *
+ * Class BaseAbstract
+ * @package Phoenix
+ */
 class BaseAbstract extends Base
 {
     /**
@@ -11,6 +17,9 @@ class BaseAbstract extends Base
      */
     protected $_mainStr;
 
+    /**
+     * BaseAbstract constructor.
+     */
     public function __construct()
     {
         parent::__construct();
@@ -21,7 +30,7 @@ class BaseAbstract extends Base
      */
     protected function getCaller()
     {
-        $dbt = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 4);
+        $dbt = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5);
         array_shift($dbt);
         foreach ($dbt as $function) {
             $caller = isset($function['function']) ? $function['function'] : null;
@@ -38,6 +47,9 @@ class BaseAbstract extends Base
         return false;
     }
 
+    /**
+     * @return string
+     */
     protected function mainStr()
     {
         return "I probably shouldn't have been called";

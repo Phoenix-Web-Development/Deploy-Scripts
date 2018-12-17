@@ -22,7 +22,7 @@ class Repository extends AbstractGithub
 
 
         if ($this->get($repo_name))
-            return $this->logError(sprintf("Repository named <strong>%s</strong> already exists.", $repo_name));
+            return $this->logError(sprintf("Repository named <strong>%s</strong> already exists.", $repo_name), 'warning');
 
         $url = !empty($url) && strpos($url, 'https://') !== 0 && strpos($url, 'http://') !== 0 ? 'https://' . $url : $url;
         $created_repo = $this->client->client->repo()->create($repo_name, 'Website of ' . $repo_name, $url,
@@ -55,7 +55,7 @@ class Repository extends AbstractGithub
             return false;
 
         if (!$this->get($repo_name))
-            return $this->logError(sprintf("Repository named <strong>%s</strong> doesn't exist.", $repo_name));
+            return $this->logError(sprintf("Repository named <strong>%s</strong> doesn't exist.", $repo_name), 'warning');
         $this->client->client->repo()->remove($this->client->user, $repo_name);
         //remove method doesn't return anything so check if repo exists. But API sometimes doesn't update straight away so wait a couple seconds.
         sleep(2);

@@ -176,8 +176,8 @@ class TerminalClient extends BaseClient
      */
     public function exec(string $command = '')
     {
-        $error_string = sprintf('<code>exec()</code> failed to execute <code>%s</code> in %s environment terminal. ',
-            $command, $this->environment);
+        $error_string = sprintf('<code>exec()</code> failed to execute command in %s environment terminal. Commands: %s',
+            $this->environment, $this->format_output($command));
 
         //d($this);
         if ($this->environment == 'local') {
@@ -189,7 +189,11 @@ class TerminalClient extends BaseClient
                 $output .= $raw_output;
             }
             */
-        } elseif ($this->ssh && method_exists($this->ssh, 'isConnected') && $this->ssh->isConnected()) {
+        } elseif ($this->ssh && method_exists($this->ssh, 'isConnected')) {
+            if (!$this->ssh->isConnected()) {
+                $this->log($error_string . "SSH is not connected.");
+                return false;
+            }
             if (!$this->ssh->isAuthenticated() && !empty(debug_backtrace()[1]['function'])) {
                 $this->log(sprintf("%s environment SSH exec() failed as you aren't authenticated. Exec() called by <code>%s()</code> function.",
                     ucfirst($this->environment), debug_backtrace()[1]['function']), 'error');
@@ -209,6 +213,7 @@ class TerminalClient extends BaseClient
                 return false;
             }
             $this->ssh->setTimeout(false); //downloading WP can take a while
+            sleep(3);
             $this->ssh->disablePTY();
         } else {
             $this->log($error_string);
@@ -279,24 +284,6 @@ class TerminalClient extends BaseClient
     }
 
     /**
-     * @param string $dir
-     * @return bool
-     */
-    public
-    function dir_exists(string $dir = '')
-    {
-        if (empty($dir)) {
-            $this->log("Can't check if directory exists. No directory supplied to function. ");
-            return false;
-        }
-
-        $output = $this->exec('if test -d ' . $dir . '; then echo "exist"; fi');
-        if (strpos($output, 'exist') !== false)
-            return true;
-        return false;
-    }
-
-    /**
      * @param string $action
      * @param string $domain
      * @param string $directory
@@ -314,5 +301,21 @@ class TerminalClient extends BaseClient
             $this->log(sprintf("%s Insufficient permissions to run the script. Try adding script to NOPASSWD in visudo.", $error_string));
             return false;
         }
+    }
+
+    /**
+     * @param string $output
+     * @return bool|string
+     */
+    public
+    function format_output(string $output = '')
+    {
+        if (!empty($output)) {
+            $output = '</pre>' . rtrim($output, '</pre>');
+            $prepend = "<pre><strong>Terminal output:</strong> ";
+            $output = $prepend . ltrim($output, $prepend);
+            return $output;
+        }
+        return false;
     }
 }
