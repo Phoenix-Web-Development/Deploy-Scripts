@@ -77,21 +77,21 @@ class Git extends AbstractTerminal
         $this->logStart();
         if (!$this->validate($worktree))
             return false;
-        $changes = $this->checkForChanges($worktree);
+        $changes = $this->getChanges($worktree);
         if (!empty($changes))
             return $this->logError("Uncommitted changes in Git repo. " . $changes);
-        if ($this->isBranch($worktree, $branch, 'up') === false)
+        if ($this->client->gitBranch()->check($worktree, $branch, 'up') === false)
             return $this->logError(sprintf("No upstream branch called <strong>%s</strong>.", $branch));
         $cd = "cd " . $worktree . "; ";
         $this->exec($cd . "git fetch --all");
-        $currentBranch = $this->getCurrentBranch($worktree);
+        $currentBranch = $this->client->gitBranch()->getCurrent($worktree);
 
 
         $strCheckout = '';
         if ($currentBranch != $branch) {
             $strNewLocalBranch = '';
             $strSetUpstream = '';
-            if ($this->isBranch($worktree, $branch) === false) {
+            if ($this->client->gitBranch()->check($worktree, $branch) === false) {
                 $strNewLocalBranch = ' -b ';
                 $strSetUpstream = "git branch --set-upstream-to=origin/" . $branch . " " . $branch . "; ";
             }
@@ -124,17 +124,17 @@ class Git extends AbstractTerminal
         $this->logStart();
         if (!$this->validate($worktree))
             return false;
-        if ($this->checkForChanges($worktree) === false)
+        if ($this->getChanges($worktree) === false)
             return $this->logError("No changes in repository to commit.");
         $cd = "cd " . $worktree . "; ";
         $this->exec($cd . "git fetch --all");
 
-        $currentBranch = $this->getCurrentBranch($worktree);
+        $currentBranch = $this->client->gitBranch()->getCurrent($worktree);
 
         $strCheckout = '';
         if ($currentBranch != $branch) {
             $strNewLocalBranch = '';
-            if ($this->isBranch($worktree, $branch) === false) {
+            if ($this->client->gitBranch()->check($worktree, $branch) === false) {
                 $strNewLocalBranch = ' -b ';
                 $newBranch = true;
             }
@@ -142,9 +142,9 @@ class Git extends AbstractTerminal
             $strCheckout = "git checkout " . $strNewLocalBranch . $branch . "; ";
         }
         $strNewRemoteBranch = '';
-        if (!empty($newBranch) && $this->isBranch($worktree, $branch, 'up') === true)
+        if (!empty($newBranch) && $this->client->gitBranch()->check($worktree, $branch, 'up') === true)
             return $this->logError(sprintf("Upstream branch <strong>%s</strong> already exists. Should probably pull from this first.", $branch));
-        if (!empty($newBranch) || $this->isBranch($worktree, $branch, 'up') === false || $this->branchHasUpstream($worktree, $branch) === false)
+        if (!empty($newBranch) || $this->client->gitBranch()->check($worktree, $branch, 'up') === false || $this->client->gitBranch()->hasUpstream($worktree, $branch) === false)
             $strNewRemoteBranch = ' --set-upstream origin ' . $branch;
         $commands = $cd . $strCheckout . "
                         git add . --all;
@@ -152,17 +152,27 @@ class Git extends AbstractTerminal
                         git push --porcelain " . $strNewRemoteBranch . ";";
         $output = $this->exec($commands);
         $status = $this->exec($cd . "git status");
-        if (substr(trim($output), -4) === 'Done' && $this->checkForChanges($worktree) === false && strpos($status, "Your branch is ahead of") === false)
+        if (substr(trim($output), -4) === 'Done' && $this->getChanges($worktree) === false && strpos($status, "Your branch is ahead of") === false)
             $success = true;
         else $success = false;
         return $this->logFinish($output, $success);
+    }
+
+    public function check(string $worktree = '')
+    {
+        $this->mainStr($worktree);
+        if (!$this->validate($worktree))
+            return null;
+        if ($this->isGitWorktree($worktree))
+            return true;
+        return false;
     }
 
     /**
      * @param string $worktree
      * @return bool
      */
-    protected function checkForChanges(string $worktree = '')
+    protected function getChanges(string $worktree = '')
     {
         $this->mainStr($worktree);
         if (!$this->validate($worktree))
@@ -171,79 +181,6 @@ class Git extends AbstractTerminal
         if (strlen($output) == 0)
             return false;
         return $output;
-    }
-    /*
-        public function createBranch(string $worktree = '', string $branch = '')
-        {
-            $this->mainStr($worktree);
-            if (!$this->validate($worktree))
-                return null;
-            $cd = "cd " . $worktree . "; ";
-            $currentBranch = trim($this->exec($cd . "git checkout -b " . $branch));
-            if (strlen($currentBranch) > 0)
-                return $currentBranch;
-            return false;
-        }
-    */
-    /**
-     * Determine whether repo includes a certain branch
-     *
-     * @param string $worktree
-     * @param string $branch
-     * @param string $stream
-     * @return bool|null
-     */
-    protected function isBranch(string $worktree = '', string $branch = '', string $stream = 'down')
-    {
-        if (!$this->validate($worktree))
-            return null;
-        $cd = "cd " . $worktree . "; ";
-        if ($stream == 'down') {
-            $exists = $this->exec($cd . "git show-ref --verify refs/heads/" . $branch);
-            $strFail = 'not a valid ref';
-            $strSuccess = "refs/heads/" . $branch;
-        } elseif ($stream == 'up') {
-            $exists = $this->exec($cd . "git branch --remotes --contains " . $branch);
-            $strFail = 'error: malformed object name ' . $branch;
-            $strSuccess = "origin/" . $branch;
-        } else
-            return $this->logError("Stream should be set to upstream or downstream only.");
-        if (strpos($exists, $strFail) !== false)
-            return false;
-        if (strpos($exists, $strSuccess) !== false)
-            return true;
-        return null;
-    }
-
-    /**
-     * @param string $worktree
-     * @param string $branch
-     * @return bool|null
-     */
-    protected function branchHasUpstream(string $worktree = '', string $branch = '')
-    {
-        if (!$this->validate($worktree))
-            return null;
-        $cd = "cd " . $worktree . "; ";
-        $upstream = $this->exec($cd . "git rev-parse --abbrev-ref " . $branch . "@{upstream}");
-        if (strpos($upstream, "fatal: no upstream configured for branch '" . $branch . "'") !== false)
-            return false;
-        if (strpos($upstream, "fatal: no such branch: '" . $branch . "'") !== false)
-            return false;
-        if (strpos($upstream, "origin/'" . $branch . "'") !== false)
-            return true;
-        return null;
-    }
-
-    protected function getCurrentBranch(string $worktree = '')
-    {
-        if (!$this->validate($worktree))
-            return null;
-        $cd = "cd " . $worktree . "; ";
-        $currentBranch = trim($this->exec($cd . "git symbolic-ref --short HEAD"));
-        if (strlen($currentBranch) > 0)
-            return $currentBranch;
-        return false;
     }
 
     /**
@@ -300,9 +237,9 @@ class Git extends AbstractTerminal
             return $this->logError("Worktree missing from method input.");
         if (!$this->ssh->is_dir($worktree))
             return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $worktree));
-        if (!$this->isGitWorktree($worktree))
-            return $this->logError("Nominated git worktree directory is not a git worktree.");
         $action = $this->getCaller();
+        if ($action != 'check' || !$this->isGitWorktree($worktree))
+            return $this->logError("Nominated git worktree directory is not a git worktree.");
         if (in_array($action, array('delete', 'move'))) {
             if (empty($repo_path))
                 return $this->logError("Repository path missing from method input.");

@@ -1126,7 +1126,7 @@ final class Deployer extends Base
             return false;
         }
         $web_dir = $this->get_environ_dir($environment, 'web');
-        $separate_repo_location = $this->get_environ_dir($environment, 'git');
+        $repo_location = $this->get_environ_dir($environment, 'git');
         $downstream_repo_name = $repo_name . '_website';
         $key_title = ucfirst($environment) . ' cPanel';
         $webhook_url = 'https://' . $cPanel_account['domain'] . '/github-webhook.php?github=yes';
@@ -1160,13 +1160,14 @@ final class Deployer extends Base
 
                             }
                             d($moved_to_dummy);
-                            if ($git_dir_is_empty === true || !empty($moved_to_dummy))
+                            if ($git_dir_is_empty === true || !empty($moved_to_dummy)) {
                                 $downstream_repository = $this->whm->version_control('clone',
-                                    $web_dir,
+                                    $repo_location,
                                     $downstream_repo_name,
                                     $source_repository
                                 );
-
+                                sleep(3); //wait for dust to settle on clone before moving files
+                            }
                             d($downstream_repository);
 
                             if (!empty($downstream_repository) && $git_dir_is_empty === false && !empty($moved_to_dummy)) {
@@ -1178,7 +1179,7 @@ final class Deployer extends Base
                                     $this->terminal($environment)->ssh->delete($dummy_dir, true);
                             }
                         }
-                        $move_git = $this->terminal($environment)->git()->move($web_dir, $separate_repo_location);
+                        $move_git = $this->terminal($environment)->git()->move($web_dir, $repo_location);
                         d($move_git);
                     }
 
@@ -1206,11 +1207,11 @@ final class Deployer extends Base
 
                 $deploy_key = $this->github->deploy_key()->remove($repo_name, $key_title);
 
-                $downstream_repository = $this->whm->version_control('delete', $separate_repo_location, '', '', $cPanel_account['user']);
+                $downstream_repository = $this->whm->version_control('delete', $repo_location, '', '', $cPanel_account['user']);
 
                 if (!$downstream_repository)
                     $downstream_repository = $this->whm->version_control('delete', $web_dir, '', '', $cPanel_account['user']);
-                $deleted_git_folder = $this->terminal($environment)->git()->delete($web_dir, $separate_repo_location);
+                $deleted_git_folder = $this->terminal($environment)->git()->delete($web_dir, $repo_location);
 
                 if ($environment == 'staging') { //webhook
                     $webhook = $this->github->webhook()->remove($repo_name, $webhook_url);

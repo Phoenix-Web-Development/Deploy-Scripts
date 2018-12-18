@@ -7,6 +7,8 @@ use phpseclib\Net\SFTP;
 /**
  *
  * @method Terminal\Git git()
+ * @method Terminal\GitBranch gitBranch()
+ * @method Terminal\GitBranch git_branch()
  * @method Terminal\Gitignore gitignore()
  * @method Terminal\SSHConfig sshconfig()
  * @method Terminal\SSHConfig ssh_config()
@@ -76,6 +78,10 @@ class TerminalClient extends BaseClient
         switch ($name) {
             case 'git':
                 $api = new Terminal\Git($this);
+                break;
+            case 'gitbranch':
+            case 'git_branch':
+                $api = new Terminal\GitBranch($this);
                 break;
             case 'gitignore':
                 $api = new Terminal\Gitignore($this);
