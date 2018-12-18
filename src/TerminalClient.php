@@ -6,10 +6,13 @@ use phpseclib\Net\SFTP;
 
 /**
  *
+ * @method Terminal\DotGitFile dotGitFile()
+ * @method Terminal\DotGitFile dot_git_file()
  * @method Terminal\Git git()
  * @method Terminal\GitBranch gitBranch()
  * @method Terminal\GitBranch git_branch()
  * @method Terminal\Gitignore gitignore()
+ * @method Terminal\Htaccess htaccess()
  * @method Terminal\SSHConfig sshconfig()
  * @method Terminal\SSHConfig ssh_config()
  * @method Terminal\SSHKey sshkey()
@@ -76,6 +79,10 @@ class TerminalClient extends BaseClient
     {
         $name = strtolower($name);
         switch ($name) {
+            case 'dotgitfile':
+            case 'dot_git_file':
+                $api = new Terminal\DotGitFile($this);
+                break;
             case 'git':
                 $api = new Terminal\Git($this);
                 break;
@@ -85,6 +92,9 @@ class TerminalClient extends BaseClient
                 break;
             case 'gitignore':
                 $api = new Terminal\Gitignore($this);
+                break;
+            case 'htaccess':
+                $api = new Terminal\Htaccess($this);
                 break;
             case 'sshconfig':
             case 'ssh_config':

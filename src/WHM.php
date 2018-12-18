@@ -1494,7 +1494,7 @@ class WHM extends Base
                     'source_repository' => $source_repository
                 );
                 break;
-            case 'delete':
+            case 'delete': //only deletes cPanel entry, doesn't delete actual Git directory
                 $function = 'delete';
                 $existing_repo = $this->version_control('get', $repository_root);
                 if (empty($existing_repo)) {

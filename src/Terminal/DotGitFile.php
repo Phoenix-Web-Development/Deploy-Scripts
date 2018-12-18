@@ -6,22 +6,24 @@ namespace Phoenix\Terminal;
  * Class Gitignore
  * @package Phoenix\Terminal
  */
-class Gitignore extends AbstractTerminal
+class DotGitFile extends AbstractTerminal
 {
 
     /**
      * @param string $worktree
-     * @return bool
+     * @param string $repo_location
+     * @return bool|null
      */
-    public function create(string $worktree = '')
+    public function create(string $worktree = '', string $repo_location = '')
     {
+        $this->mainStr($worktree);
         $this->logStart();
         if (!$this->validate($worktree))
             return false;
-        $filepath = self::trailing_slash($worktree) . '.gitignore';
+        $filepath = self::trailing_slash($worktree) . '.git';
         if ($this->ssh->file_exists($filepath) && strlen($this->ssh->get($filepath)) > 0)
-            return $this->logError(sprintf("Gitignore file at <strong>%s</strong> already exists so no need to create.", $worktree), 'warning');
-        $success = $this->ssh->put($filepath, BASE_DIR . '/../configs/gitignore-template', \phpseclib\Net\SFTP::SOURCE_LOCAL_FILE) ? true : false;
+            return $this->logError(sprintf("Dot Git file at <strong>%s</strong> already exists so no need to create.", $worktree), 'warning');
+        $success = $this->ssh->put($filepath, "gitdir: " . self::trailing_slash($repo_location) . '.git');
         return $this->logFinish('', $success);
     }
 
@@ -31,12 +33,13 @@ class Gitignore extends AbstractTerminal
      */
     public function delete(string $worktree = '')
     {
+        $this->mainStr($worktree);
         $this->logStart();
         if (!$this->validate($worktree))
             return false;
-        $filepath = self::trailing_slash($worktree) . '.gitignore';
+        $filepath = self::trailing_slash($worktree) . '.git';
         if (!$this->ssh->file_exists($filepath))
-            return $this->logError(sprintf("Gitignore file at <strong>%s</strong> doesn't exist so no need to delete.", $worktree), 'warning');
+            return $this->logError(sprintf("Dot Git file at <strong>%s</strong> doesn't exist so no need to delete.", $worktree), 'warning');
         $success = $this->ssh->delete($filepath) ? true : false;
         return $this->logFinish('', $success);
     }
@@ -50,8 +53,6 @@ class Gitignore extends AbstractTerminal
         if (!$this->ssh->is_dir($worktree)) {
             return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $worktree));
         }
-        if (!$this->client->git()->check($worktree))
-            return $this->logError(sprintf("Directory <strong>%s</strong> is not a Git worktree.", $worktree));
         return true;
     }
 
@@ -67,6 +68,6 @@ class Gitignore extends AbstractTerminal
                 return $this->_mainStr;
         }
         $worktree = !empty($worktree) ? sprintf(' in directory <strong>%s</strong>', $worktree) : '';
-        return $this->_mainStr = sprintf("%s environment gitignore file%s", $this->environment, $worktree);
+        return $this->_mainStr = sprintf("%s environment .git file%s", $this->environment, $worktree);
     }
 }

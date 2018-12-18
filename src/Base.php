@@ -28,6 +28,11 @@ class Base
             'past' => 'checked for changes',
             'action' => 'check for changes'
         ),
+        'checkout' => array(
+            'present' => 'checking out',
+            'past' => 'checked out',
+            'action' => 'checkout'
+        ),
         'clone' => array(
             'present' => 'cloning',
             'past' => 'cloned',
@@ -93,10 +98,25 @@ class Base
             'past' => 'pulled',
             'action' => 'pull'
         ),
+        'prepend' => array(
+            'present' => 'prepending',
+            'past' => 'prepended',
+            'action' => 'prepend'
+        ),
+        'purge' => array(
+            'present' => 'purging',
+            'past' => 'purged',
+            'action' => 'purge'
+        ),
         'remove' => array(
             'present' => 'removing',
             'past' => 'removed',
             'action' => 'remove'
+        ),
+        'reset' => array(
+            'present' => 'resetting',
+            'past' => 'reset',
+            'action' => 'reset'
         ),
         'set' => array(
             'present' => 'setting',

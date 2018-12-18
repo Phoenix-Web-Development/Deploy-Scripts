@@ -1145,42 +1145,20 @@ final class Deployer extends Base
                         $deploy_key = $this->github->deploy_key()->upload($repo_name, $key_title, $ssh_key['key']);
                         $ssh_url = str_replace('git@github.com', $key_name, $upstream_repository['ssh_url']);
                         $source_repository = json_encode((object)['url' => $ssh_url, 'remote_name' => "origin"]);
-                        $downstream_repository = $this->whm->version_control('get', $web_dir, $downstream_repo_name, $source_repository);
-                        d($downstream_repository);
+                        $downstream_repository = $this->whm->version_control('clone',
+                            $repo_location,
+                            $downstream_repo_name,
+                            $source_repository
+                        );
 
-                        if (empty($downstream_repository)) {
-
-
-                            $git_dir_is_empty = $this->terminal($environment)->api()->dir_is_empty($web_dir);
-                            d($git_dir_is_empty);
-
-                            $dummy_dir = $root . '/dummy';
-                            if ($git_dir_is_empty === false) {
-                                $moved_to_dummy = $this->terminal($environment)->api()->move_files($web_dir, $dummy_dir);
-
-                            }
-                            d($moved_to_dummy);
-                            if ($git_dir_is_empty === true || !empty($moved_to_dummy)) {
-                                $downstream_repository = $this->whm->version_control('clone',
-                                    $repo_location,
-                                    $downstream_repo_name,
-                                    $source_repository
-                                );
-                                sleep(3); //wait for dust to settle on clone before moving files
-                            }
-                            d($downstream_repository);
-
-                            if (!empty($downstream_repository) && $git_dir_is_empty === false && !empty($moved_to_dummy)) {
-                                d('blegh');
-                                $dummy_dir = $root . '/dummy';
-                                $moved_to_web_dir = $this->terminal($environment)->api()->move_files($dummy_dir, $web_dir);
-                                d($moved_to_web_dir);
-                                if ($moved_to_web_dir)
-                                    $this->terminal($environment)->ssh->delete($dummy_dir, true);
-                            }
+                        if ($this->terminal($environment)->git()->waitForUnlock($repo_location)) {
+                            $dotGit = $this->terminal($environment)->dotGitFile()->create($web_dir, $repo_location);
+                            $gitignore = $this->terminal($environment)->gitignore()->create($web_dir);
+                            $gitPurge = $this->terminal($environment)->git()->purge($repo_location);
+                            if ($downstream_repository)
+                                $gitReset = $this->terminal($environment)->git()->reset($web_dir, 'master');
                         }
-                        $move_git = $this->terminal($environment)->git()->move($web_dir, $repo_location);
-                        d($move_git);
+
                     }
 
                     if ($environment == 'staging') { //webhook
@@ -1188,39 +1166,55 @@ final class Deployer extends Base
                         $webhook_config = $this->terminal($environment)->githubWebhookEndpointConfig()->create($webhook_endpoint_config_dir, $web_dir, $secret);
                         $webhook = $this->github->webhook()->create($repo_name, $webhook_url, $secret);
 
-                        $this->terminal($environment)->git()->commit($web_dir, 'dev', 'create dev branch');
+                        $checkoutDevBranch = $this->terminal($environment)->gitBranch()->checkout($web_dir, 'dev');
+                        if ($checkoutDevBranch) {
+                            if ($this->terminal($environment)->gitBranch()->check($web_dir, 'dev', 'up'))
+                                $syncDevBranch = $this->terminal($environment)->git()->pull($web_dir, 'dev');
+                            else
+                                $syncDevBranch = $this->terminal($environment)->git()->commit($web_dir, 'dev', 'create dev branch');
+                        }
 
                     }
                 } else
                     $this->log("Can't upload deploy key or clone repository. Upstream repository not found.");
-                $gitignore = $this->terminal($environment)->gitignore()->create($web_dir);
 
                 $this->terminal($environment)->exec('git config --global user.name "James Jones"; git config --global user.email "james.jones@phoenixweb.com.au"');
-                if (!empty($ssh_key) && !empty($authkey) && !empty($ssh_config) && !empty($deploy_key)
-                    && !empty($downstream_repository) && !empty($move_git) && ((!empty($webhook) && !empty($webhook_config)) || $environment != 'staging') && !empty($gitignore))
+                if (!empty($ssh_key)
+                    && !empty($authkey)
+                    && !empty($ssh_config)
+                    && !empty($deploy_key)
+                    && !empty($downstream_repository)
+                    && !empty($dotGit)
+                    && !empty($gitignore)
+                    && !empty($gitPurge)
+                    && !empty($gitReset)
+                    && ($environment != 'staging'
+                        || (!empty($webhook) && !empty($webhook_config) && !empty($checkoutDevBranch) && !empty($syncDevBranch)))
+                )
                     $success = true;
                 break;
             case 'delete':
-
-                $ssh_config = $this->terminal($environment)->ssh_config()->delete('github_' . $repo_name, 'github.com', 'github_' . $repo_name, 'git');
+                $gitignore = $this->terminal($environment)->gitignore()->delete($web_dir);
                 $ssh_key = $this->whm->delkey($key_name, $cPanel_account['user']);
-
+                $ssh_config = $this->terminal($environment)->ssh_config()->delete('github_' . $repo_name, 'github.com', 'github_' . $repo_name, 'git');
                 $deploy_key = $this->github->deploy_key()->remove($repo_name, $key_title);
-
                 $downstream_repository = $this->whm->version_control('delete', $repo_location, '', '', $cPanel_account['user']);
-
-                if (!$downstream_repository)
-                    $downstream_repository = $this->whm->version_control('delete', $web_dir, '', '', $cPanel_account['user']);
-                $deleted_git_folder = $this->terminal($environment)->git()->delete($web_dir, $repo_location);
+                $deleted_git_folder = $this->terminal($environment)->git()->delete($repo_location);
 
                 if ($environment == 'staging') { //webhook
                     $webhook = $this->github->webhook()->remove($repo_name, $webhook_url);
                     $webhook_config = $this->terminal($environment)->githubWebhookEndpointConfig()->delete($webhook_endpoint_config_dir);
                 }
+                $dotGit = $this->terminal($environment)->ssh->delete($web_dir . '/.git');
 
-                $gitignore = $this->terminal($environment)->gitignore()->delete($web_dir);
-                if (!empty($ssh_key) && !empty($ssh_config) && !empty($deploy_key)
-                    && !empty($downstream_repository) && !empty($deleted_git_folder) && ((!empty($webhook) && !empty($webhook_config)) || $environment != 'staging') && !empty($gitignore)
+                if (!empty($gitignore)
+                    && !empty($ssh_key)
+                    && !empty($ssh_config)
+                    && !empty($deploy_key)
+                    && !empty($downstream_repository)
+                    && !empty($deleted_git_folder)
+                    && ((!empty($webhook) && !empty($webhook_config)) || $environment != 'staging')
+                    && !empty($dotGit)
                 )
                     $success = true;
 
@@ -1391,7 +1385,10 @@ final class Deployer extends Base
                 $db_args['name'] = $this->whm->db_prefix_check($db_args['name'], $cpanel['user']);
                 $db_args['username'] = $this->whm->db_prefix_check($db_args['username'], $cpanel['user']);
                 $db_args['password'] = $this->config->environ->$environment->db->password ?? '';
-                $success = $this->terminal($environment)->wp()->install($directory, $db_args, (array)$wp_args);
+                $installed = $this->terminal($environment)->wp()->install($directory, $db_args, (array)$wp_args);
+                $htaccess = $this->terminal($environment)->htaccess()->prepend($directory);
+                if (!empty($installed) && !empty($htaccess))
+                    $success = true;
                 break;
             case 'delete':
                 $deleted_wp = $this->terminal($environment)->wp()->delete($directory);

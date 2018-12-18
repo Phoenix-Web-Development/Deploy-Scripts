@@ -139,12 +139,12 @@ class WP extends AbstractTerminal
                 find ' . self::trailing_slash($wp_dir) . 'wp-content -type f -exec chmod 664 {} \;
                 chmod 660 wp-config.php
                 mv wp-config.php ../
-                wp rewrite structure \"/%postname%/\";
+                wp rewrite structure "/%postname%/";
                 wp rewrite flush;
                 wp plugin activate --all;
                 rm wp-config-sample.php license.txt readme.html
                 ');
-
+        // /%postname%/
         $widgets = $this->exec("cd " . $wp_dir . "; wp widget list sidebar-1 --format=ids");
         if (!empty($widgets)) {
             foreach (array('search-1', 'search-2', 'search') as $search) {
@@ -152,7 +152,6 @@ class WP extends AbstractTerminal
             }
             $output .= $this->exec("cd " . $wp_dir . "; wp widget delete " . trim($widgets));
         }
-
         $success = $this->check($wp_dir) ? true : false;
         return $this->logFinish($output, $success);
     }

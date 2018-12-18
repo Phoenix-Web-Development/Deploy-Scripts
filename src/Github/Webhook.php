@@ -62,7 +62,8 @@ class Webhook extends AbstractGithub
 
         if (empty($hook_to_remove))
             return $this->logError(sprintf("Couldn't find hook with url <strong>%s</strong> to remove.", $url), 'warning');
-        $success = $this->client->client->repo()->hooks()->remove($this->client->user, $repo_name, $hook_to_remove['id']);
+        $this->client->client->repo()->hooks()->remove($this->client->user, $repo_name, $hook_to_remove['id']);
+        $success = !$this->get($repo_name, $url) ? true : false;
         return $this->logFinish($success);
     }
 
