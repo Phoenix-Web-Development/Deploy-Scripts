@@ -52,7 +52,7 @@ class GitBranch extends AbstractTerminal
         $cd = "cd " . $worktree . "; ";
         if ($stream == 'down') {
             $exists = $this->exec($cd . "git show-ref --verify refs/heads/" . $branch);
-            $strFails = array('not a valid ref');
+            $strFails = array('fatal', 'not a valid ref');
             $strSuccess = "refs/heads/" . $branch;
         } elseif ($stream == 'up') {
             $exists = $this->exec($cd . "git branch --remotes --contains " . $branch);
@@ -60,12 +60,12 @@ class GitBranch extends AbstractTerminal
             $strSuccess = "origin/" . $branch;
         } else
             return $this->logError("Stream should be set to upstream or downstream only.");
-        if (strpos($exists, $strSuccess) !== false)
-            return true;
         foreach ($strFails as $strFail) {
-            if (strpos($exists, $strFail) !== false)
+            if (stripos($exists, $strFail) !== false)
                 return false;
         }
+        if (strpos($exists, $strSuccess) !== false)
+            return true;
         return null;
     }
 
@@ -90,13 +90,13 @@ class GitBranch extends AbstractTerminal
             $strNewLocalBranch = '-b ';
 
             if ($this->check($worktree, $branch, 'up') === true)
-                $strSetUpstream = "; git branch --set-upstream-to=origin/" . $branch . " " . $branch . "; ";
+                $strSetUpstream = "; git branch --set-upstream-to=origin/" . $branch . " " . $branch . "";
         }
         $command = $cd . "git checkout " . $strNewLocalBranch . $branch . $strSetUpstream;
         $output = $this->exec($command);
 
         $success = ($this->getCurrent($worktree) == $branch) ? true : false;
-        $this->logFinish($output, $success);
+        $this->logFinish($output, $success, $command);
         if ($success)
             return $branch;
         return false;

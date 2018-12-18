@@ -36,9 +36,10 @@ class Git extends AbstractTerminal
             }
             return $this->logError(sprintf("Directory already exists at <strong>%s</strong> and contains files.", $separate_repo_path));
         }
-        $output = $this->exec('cd ' . $worktree . '; git init --separate-git-dir ' . $separate_repo_path . '; git reset --hard origin/master');
+        $command = 'cd ' . $worktree . '; git init --separate-git-dir ' . $separate_repo_path . '; git reset --hard origin/master';
+        $output = $this->exec($command);
         $success = stripos($output, 'Reinitialized existing Git repository') !== false ? true : false;
-        return $this->logFinish($output, $success);
+        return $this->logFinish($output, $success, $command);
     }
 
     /**
@@ -74,12 +75,16 @@ class Git extends AbstractTerminal
         if (!$this->validate($worktree))
             return false;
         $command = 'cd ' . $worktree . '; git rm --force -r .; git clean --force -xd';
-        d($command);
         $output = $this->exec($command);
         $success = (true) ? true : false;
-        return $this->logFinish($output, $success);
+        return $this->logFinish($output, $success, $command);
     }
 
+    /**
+     * @param string $worktree
+     * @param string $branch
+     * @return bool|null
+     */
     public function reset(string $worktree = '', string $branch = 'master')
     {
         $this->mainStr($worktree, $branch);
@@ -93,10 +98,11 @@ class Git extends AbstractTerminal
             if (!$this->client->gitBranch()->checkout($worktree, $branch))
                 return $this->logError(sprintf("Couldn't checkout branch <strong>%s</strong>.", $branch));
         }
-        $output = $this->exec('cd ' . $worktree . '; git reset --hard origin/' . $branch);
+        $command = 'cd ' . $worktree . '; git reset --hard origin/' . $branch;
+        $output = $this->exec($command);
         //HEAD is now at 973d34a Merge branch 'master' of github_phoenixmelb:jamesjonesphoenix/phoenixmelb
         $success = strpos($output, "HEAD is now at") !== false ? true : false;
-        return $this->logFinish($output, $success);
+        return $this->logFinish($output, $success, $command);
     }
 
     /**
@@ -124,9 +130,8 @@ class Git extends AbstractTerminal
             $currentBranch = $this->client->gitBranch()->checkout($worktree, $branch);
         if ($currentBranch != $branch)
             return $this->logError(sprintf("Couldn't checkout branch <strong>%s</strong>.", $branch));
-        $output = $this->exec($cd . "git pull --verbose;");
-        d('git pull');
-        d($output);
+        $command = $cd . "git pull --verbose;";
+        $output = $this->exec($command);
         $errorStrs = array('error: ', 'would be overwritten');
         foreach ($errorStrs as $errorStr) {
             if (stripos($output, $errorStr) !== false) {
@@ -143,7 +148,7 @@ class Git extends AbstractTerminal
                 }
             }
         }
-        return $this->logFinish($output, $success);
+        return $this->logFinish($output, $success, $command);
     }
 
     /**
@@ -166,8 +171,10 @@ class Git extends AbstractTerminal
         if (!$this->validate($worktree))
             return false;
         $upstreamBranch = $this->client->gitBranch()->check($worktree, $branch, 'up');
-        if ($this->getChanges($worktree) === false && $upstreamBranch === true)
-            return $this->logError("No changes in repository to commit.");
+        if ($this->getChanges($worktree) === false && $upstreamBranch === true) {
+            $this->log("No need to " . $this->mainStr() . ". No changes in repository to commit.", 'info');
+            return true;
+        }
         $cd = "cd " . $worktree . "; ";
         $this->exec($cd . "git fetch --all");
 
@@ -204,7 +211,7 @@ class Git extends AbstractTerminal
         if (substr(trim($output), -4) === 'Done' && $this->getChanges($worktree) === false && strpos($status, "Your branch is ahead of") === false)
             $success = true;
         else $success = false;
-        return $this->logFinish($output, $success);
+        return $this->logFinish($output, $success, $commands);
     }
 
     public function check(string $worktree = '')
@@ -221,11 +228,13 @@ class Git extends AbstractTerminal
      */
     public function waitForUnlock(string $repo_path = '')
     {
+        $filePath = self::trailing_slash($repo_path) . ".git/index.lock";
         for ($i = 0; $i <= 15; $i++) {
             sleep(1);
-            if ($this->ssh->file_exists(self::trailing_slash($repo_path) . ".git/index.lock"))
+            if (!$this->ssh->file_exists($filePath))
                 return true;
         }
+        $this->log(sprintf("Waiting for %s environment Git repository to unlock failed. Waited <strong>%s</strong> seconds for file <strong>%s</strong> to delete.", $this->environment, $i, $filePath));
         return false;
     }
 

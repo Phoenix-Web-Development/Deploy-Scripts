@@ -204,7 +204,8 @@ final class Deployer extends Base
     {
         parent::__construct();
         if (!defined('BASE_DIR')) define('BASE_DIR', dirname(__FILE__));
-        if (!defined('CONFIG_DIR')) define('CONFIG_DIR', dirname(__FILE__) . '/../configs/');
+        if (!defined('CONFIG_DIR')) define('CONFIG_DIR', BASE_DIR . '/../configs/');
+        if (!defined('BACKUPS_DIR')) define('BACKUPS_DIR', BASE_DIR . '/../backups/');
 
         foreach ($this->permissions as &$action) {
             if (!empty($action['condition']) && !is_array($action['condition']))
@@ -1151,7 +1152,7 @@ final class Deployer extends Base
                             $source_repository
                         );
 
-                        if ($this->terminal($environment)->git()->waitForUnlock($repo_location)) {
+                        if ($downstream_repository && $this->terminal($environment)->git()->waitForUnlock($repo_location)) {
                             $dotGit = $this->terminal($environment)->dotGitFile()->create($web_dir, $repo_location);
                             $gitignore = $this->terminal($environment)->gitignore()->create($web_dir);
                             $gitPurge = $this->terminal($environment)->git()->purge($repo_location);
@@ -1195,11 +1196,11 @@ final class Deployer extends Base
                 break;
             case 'delete':
                 $gitignore = $this->terminal($environment)->gitignore()->delete($web_dir);
+                $downstream_repository = $this->whm->version_control('delete', $repo_location, '', '', $cPanel_account['user']);
+                $deleted_git_folder = $this->terminal($environment)->git()->delete($repo_location);
                 $ssh_key = $this->whm->delkey($key_name, $cPanel_account['user']);
                 $ssh_config = $this->terminal($environment)->ssh_config()->delete('github_' . $repo_name, 'github.com', 'github_' . $repo_name, 'git');
                 $deploy_key = $this->github->deploy_key()->remove($repo_name, $key_title);
-                $downstream_repository = $this->whm->version_control('delete', $repo_location, '', '', $cPanel_account['user']);
-                $deleted_git_folder = $this->terminal($environment)->git()->delete($repo_location);
 
                 if ($environment == 'staging') { //webhook
                     $webhook = $this->github->webhook()->remove($repo_name, $webhook_url);
@@ -1208,10 +1209,10 @@ final class Deployer extends Base
                 $dotGit = $this->terminal($environment)->ssh->delete($web_dir . '/.git');
 
                 if (!empty($gitignore)
+                    && !empty($downstream_repository)
                     && !empty($ssh_key)
                     && !empty($ssh_config)
                     && !empty($deploy_key)
-                    && !empty($downstream_repository)
                     && !empty($deleted_git_folder)
                     && ((!empty($webhook) && !empty($webhook_config)) || $environment != 'staging')
                     && !empty($dotGit)
@@ -1374,7 +1375,8 @@ final class Deployer extends Base
 
         switch ($action) {
             case 'install':
-                $this->terminal($environment)->wp_cli()->install();
+                $WPCLI = $this->terminal($environment)->wp_cli()->install();
+                $WPCLIConfig = $this->terminal($environment)->wpcliconfig()->create();
                 $wp_args = $this->config->wordpress ?? null;
                 $wp_args->title = $this->config->project->title ?? 'Insert Site Title Here';
                 $wp_args->url = $this->get_environ_url($environment);
@@ -1387,16 +1389,19 @@ final class Deployer extends Base
                 $db_args['password'] = $this->config->environ->$environment->db->password ?? '';
                 $installed = $this->terminal($environment)->wp()->install($directory, $db_args, (array)$wp_args);
                 $htaccess = $this->terminal($environment)->htaccess()->prepend($directory);
-                if (!empty($installed) && !empty($htaccess))
+                if (!empty($WPCLI) && !empty($WPCLIConfig) && !empty($installed) && !empty($htaccess))
                     $success = true;
                 break;
             case 'delete':
                 $deleted_wp = $this->terminal($environment)->wp()->delete($directory);
-                if ($deleted_wp && $environment == 'live')
+                if ($deleted_wp && $environment == 'live') {
                     $deleted_wp_cli = $this->terminal($environment)->wp_cli()->delete();
-                else
+                    $deletedWPConfig = $this->terminal($environment)->wpcliconfig()->delete();
+                } else {
                     $deleted_wp_cli = true;
-                if ($deleted_wp && $deleted_wp_cli)
+                    $deletedWPConfig = true;
+                }
+                if ($deleted_wp && $deleted_wp_cli && $deletedWPConfig)
                     $success = true;
                 break;
         }
@@ -1414,20 +1419,24 @@ final class Deployer extends Base
      */
     function updateWP($environment = 'live')
     {
+        $mainStr = sprintf(" WordPress in %s environment. ", $environment);
+        $this->log('<h2>Updating ' . $mainStr . '</h2>', 'info');
         $directory = $this->get_environ_dir($environment, 'web');
-        $errorString = sprintf("Can't update WordPress in %s environment. ", $environment);
+        $errorString = "Can't update " . $mainStr;
         if (empty($directory)) {
             $this->log($errorString . " Couldn't get web directory.");
             return false;
         }
-        $git_update = $this->terminal($environment)->git()->pull($directory, 'dev');
-        if (!$git_update) {
-            $this->log($errorString . " Git pull was unsuccessful.");
-            return false;
+        $backup = $this->backupDB($environment);
+        if ($backup) {
+            $gitPull = $this->terminal($environment)->git()->pull($directory, 'dev');
+            if ($gitPull) {
+                $wp_update = $this->terminal($environment)->wp()->update($directory);
+                if ($wp_update)
+                    $git_commit = $this->terminal($environment)->git()->commit($directory, 'dev');
+            }
         }
-        $wp_update = $this->terminal($environment)->wp()->update($directory);
-        $git_commit = $this->terminal($environment)->git()->commit($directory, 'dev');
-        if (!empty($git_update) && !empty($wp_update) && !empty($git_commit)) {
+        if (!empty($backup) && !empty($gitPull) && !empty($wp_update) && !empty($git_commit)) {
             $this->log(sprintf('Successfully updated WordPress in %s environment.', $environment), 'success');
             return true;
         }
@@ -1452,15 +1461,11 @@ final class Deployer extends Base
             if (!empty($from_cpanel))
                 $from_db_name = $this->whm->db_prefix_check($from_db_name, $from_cpanel['user']);
         }
-        $date_format = "-Y-m-d_H_i_s";
-        $backups_dir = BASE_DIR . '/../backups/';
+        $date_format = "-Y-m-d-H_i_s";
 
         $from_filename = $from_db_name . '-' . $from_environment . date($date_format) . '.sql';
 
-        //backup destination DB before import
-        //$export = $this->terminal($from_environment)->exportDB($from_directory, $from_filename, $backups_dir);
-        $export = $this->terminal($from_environment)->wp_db()->export($from_directory, $backups_dir . $from_filename);
-        //$export = $this->terminal($from_environment)->api('WPDB')
+        $export = $this->terminal($from_environment)->wp_db()->export($from_directory, BACKUPS_DIR . $from_filename);
 
         if ($export) {
             $to_directory = $this->get_environ_dir($dest_environment, 'web');
@@ -1468,16 +1473,9 @@ final class Deployer extends Base
             $from_url = $this->get_environ_url($from_environment);
             $dest_url = $this->get_environ_url($dest_environment);
 
-            $dest_db_name = $this->config->environ->$dest_environment->db->name ?? null;
-            if ($dest_environment != 'local') {
-                $dest_cpanel = $this->find_environ_cpanel($dest_environment);
-                if (!empty($dest_cpanel))
-                    $dest_db_name = $this->whm->db_prefix_check($dest_db_name, $dest_cpanel['user']);
-            }
-            $backup_filename = $dest_db_name . '-' . $dest_environment . date($date_format) . '.sql';
-            $backup = $this->terminal($dest_environment)->wp_db()->export($to_directory, $backups_dir . $backup_filename);
+            $backup = $this->backupDB($dest_environment);
             if ($backup) {
-                $import = $this->terminal($dest_environment)->wp_db()->import($to_directory, $backups_dir . $from_filename . '.gz', $from_url, $dest_url);
+                $import = $this->terminal($dest_environment)->wp_db()->import($to_directory, BACKUPS_DIR . $from_filename . '.gz', $from_url, $dest_url);
             }
         }
         if (!empty($export) && !empty($backup) && !empty($import)) {
@@ -1485,6 +1483,34 @@ final class Deployer extends Base
             return true;
         }
         $this->log('<h3>Something may have gone wrong migrating ' . $message . '</h3>');
+        return false;
+
+    }
+
+    protected function backupDB(string $environment = '')
+    {
+        $errorString = sprintf("Can't backup %s environment WordPress DB. ", $environment);
+        $directory = $this->get_environ_dir($environment, 'web');
+        if (empty($directory)) {
+            $this->log($errorString . " Couldn't get web directory.");
+            return false;
+        }
+        $db_name = $this->config->environ->$environment->db->name ?? null;
+        if (empty($db_name)) {
+            $this->log($errorString . " DB name missing from config");
+            return false;
+        }
+        if ($environment != 'local') {
+            $cpanel = $this->find_environ_cpanel($environment);
+            if (!empty($cpanel))
+                $db_name = $this->whm->db_prefix_check($db_name, $cpanel['user']);
+        }
+        $date_format = "-Y-m-d-H_i_s";
+        $backup_filename = $db_name . '-' . $environment . date($date_format) . '-backup.sql';
+        $backup = $this->terminal($environment)->wp_db()->export($directory, BACKUPS_DIR . $backup_filename);
+        if ($backup) {
+            return true;
+        }
         return false;
 
     }

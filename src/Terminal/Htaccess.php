@@ -25,10 +25,10 @@ class Htaccess extends AbstractTerminal
 
         if ($www)
             $wwwString = "RewriteCond %{HTTP_HOST} !^www\. [NC]
-                RewriteRule ^(.*)$ http://www.%{HTTP_HOST}/$1 [R=301,L]";
+    RewriteRule ^(.*)$ http://www.%{HTTP_HOST}/$1 [R=301,L]";
         elseif (!$www)
             $wwwString = "RewriteCond %{HTTP_HOST} ^www\.(.*)$ [NC]
-            RewriteRule ^(.*)$ http://%1/$1 [R=301,L]";
+    RewriteRule ^(.*)$ http://%1/$1 [R=301,L]";
         $htaccessRules = "<IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /
@@ -39,11 +39,12 @@ class Htaccess extends AbstractTerminal
     RewriteCond %{HTTPS} !on [NC]
     RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
 </IfModule>
-        ";
+
+";
         $remoteFile = self::trailing_slash($webDir) . '.htaccess';
         $existingHtaccess = $this->ssh->get($remoteFile);
         if (strpos($existingHtaccess, $htaccessRules) !== false)
-            return $this->logError("The .htaccess file already contains new rules.", 'warning');
+            return $this->logError("The <code>.htaccess</code> file already contains new rules.", 'warning');
         $newHtaccessRules = $htaccessRules . $existingHtaccess;
 
         $success = $this->ssh->put($remoteFile, $newHtaccessRules);
@@ -60,7 +61,7 @@ class Htaccess extends AbstractTerminal
             return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $webDir));
         }
         if (!$this->ssh->file_exists(self::trailing_slash($webDir) . '.htaccess')) {
-            return $this->logError(sprintf("No .htaccess file in directory <strong>%s</strong>.", $webDir));
+            return $this->logError(sprintf("No <code>.htaccess</code> file in directory <strong>%s</strong>.", $webDir));
         }
         return true;
     }
@@ -79,6 +80,6 @@ class Htaccess extends AbstractTerminal
         }
         $webDir = !empty($webDir) ? sprintf(' in directory <strong>%s</strong>', $webDir) : '';
         $www = $www ? ' for www containing URL' : ' for non-www URL';
-        return $this->_mainStr = sprintf("%s environment htaccess file%s%s", $this->environment, $webDir, $www);
+        return $this->_mainStr = sprintf("%s environment <code>.htaccess</code> file%s%s", $this->environment, $webDir, $www);
     }
 }

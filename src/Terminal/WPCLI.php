@@ -4,10 +4,10 @@ namespace Phoenix\Terminal;
 
 /**
  *
- * Class WP_CLI
+ * Class WPCLI
  * @package Phoenix\Terminal
  */
-class WP_CLI extends AbstractTerminal
+class WPCLI extends AbstractTerminal
 {
 
     /**
@@ -68,6 +68,17 @@ class WP_CLI extends AbstractTerminal
         mv wp-cli.phar ' . $this->filepath() . '; 
         echo -e "PATH=$PATH:$HOME/.local/bin:$HOME/bin\n\nexport PATH" >> ~/.bashrc;');
         $success = $this->check() ? true : false;
+
+        $CLIConfigDir = self::trailing_slash($this->client->root) . ".wp-cli";
+        $CLIConfigFilePath = $CLIConfigDir . "/config.yml";
+        if ($this->ssh->file_exists($CLIConfigFilePath))
+
+            if (!$this->ssh->is_dir($CLIConfigDir))
+                $this->ssh->mkdir($CLIConfigDir);
+        $CLIConfig = "apache_modules:
+  - mod_rewrite";
+        $this->ssh->put($CLIConfigFilePath, $CLIConfig);
+
         return $this->logFinish($output, $success);
     }
 
@@ -89,9 +100,12 @@ class WP_CLI extends AbstractTerminal
      */
     protected function mainStr()
     {
-        return sprintf("WP CLI in %s environment.", $this->environment);
+        return sprintf("WP CLI in %s environment in directory <strong>%s</strong>.", $this->environment, $this->filepath());
     }
 
+    /**
+     * @return string
+     */
     protected function filepath()
     {
         return self::trailing_slash($this->client->root) . 'bin/wp';

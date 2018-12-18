@@ -5,10 +5,10 @@ namespace Phoenix\Terminal;
 use phpseclib\Net\SFTP;
 
 /**
- * Class WP_DB
+ * Class WPDB
  * @package Phoenix\Terminal
  */
-class WP_DB extends AbstractTerminal
+class WPDB extends AbstractTerminal
 {
     const EXT = '.gz';
 
@@ -134,7 +134,7 @@ class WP_DB extends AbstractTerminal
      * @param string $local_filepath
      * @return bool
      */
-    private
+    protected
     function validate(string $wp_dir = '', string $local_filepath = '')
     {
         if (empty($wp_dir))
@@ -178,36 +178,5 @@ class WP_DB extends AbstractTerminal
                 $direction1 = $direction2 = '';
         }
         return $this->_mainStr[$action] = sprintf($string, $direction1, $this->environment, $wp_dir, $direction2, $filepath);
-    }
-
-
-    /**
-     * @param string $wp_dir
-     * @param string $filepath
-     */
-    protected
-    function logStart(string $wp_dir = '', string $filepath = '')
-    {
-        $this->log(ucfirst($this->actions[$this->getCaller()]['present']) . ' ' . $this->mainStr($wp_dir, $filepath), 'info');
-    }
-
-    /**
-     * @param string $output
-     * @param bool $success
-     * @return bool|null
-     */
-    protected function logFinish($output = '', $success = false)
-    {
-        $action = $this->getCaller();
-        $output = $this->client->format_output($output);
-        if (!empty($action)) {
-            if (!empty($success)) {
-                $this->log(sprintf('Successfully %s %s. %s', $this->actions[$action]['past'], $this->mainStr(), $output), 'success');
-                return true;
-            }
-            $this->log(sprintf('Failed to %s %s. %s', $action, $this->mainStr(), $output));
-            return false;
-        }
-        return null;
     }
 }

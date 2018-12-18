@@ -21,14 +21,18 @@ use phpseclib\Net\SFTP;
  * @method Terminal\GithubWebhookEndpointConfig githubWebhookEndpointConfig()
  * @method Terminal\WP wp()
  * @method Terminal\WP wordpress()
- * @method Terminal\WP_CLI wp_cli()
- * @method Terminal\WP_CLI wpcli()
- * @method Terminal\WP_CLI wordpress_cli()
- * @method Terminal\WP_CLI wordpresscli()
- * @method Terminal\WP_DB wp_db()
- * @method Terminal\WP_DB wpdb()
- * @method Terminal\WP_DB wordpress_db()
- * @method Terminal\WP_DB wordpressdb()
+ * @method Terminal\WPCLI wp_cli()
+ * @method Terminal\WPCLI wpcli()
+ * @method Terminal\WPCLI wordpress_cli()
+ * @method Terminal\WPCLI wordpresscli()
+ * @method Terminal\WPCLIConfig wp_cli_config()
+ * @method Terminal\WPCLIConfig wpcliconfig()
+ * @method Terminal\WPCLIConfig wordpress_cli_config()
+ * @method Terminal\WPCLIConfig wordpresscliconfig()
+ * @method Terminal\WPDB wp_db()
+ * @method Terminal\WPDB wpdb()
+ * @method Terminal\WPDB wordpress_db()
+ * @method Terminal\WPDB wordpressdb()
  *
  * @property array $prompt
  * @property \phpseclib\Net\SFTP $ssh
@@ -116,13 +120,19 @@ class TerminalClient extends BaseClient
             case 'wpcli':
             case 'wordpress_cli':
             case 'wordpresscli':
-                $api = new Terminal\WP_CLI($this);
+                $api = new Terminal\WPCLI($this);
+                break;
+            case 'wp_cli_config':
+            case 'wpcliconfig':
+            case 'wordpress_cli_config':
+            case 'wordpresscliconfig':
+                $api = new Terminal\WPCLIConfig($this);
                 break;
             case 'wp_db':
             case 'wpdb':
             case 'wordpress_db':
             case 'wordpressdb':
-                $api = new Terminal\WP_DB($this);
+                $api = new Terminal\WPDB($this);
                 break;
             case '':
                 $api = new Terminal\AbstractTerminal($this);
@@ -330,7 +340,23 @@ class TerminalClient extends BaseClient
             $output = '</pre>' . rtrim($output, '</pre>');
             $prepend = "<pre><strong>Terminal output:</strong> ";
             $output = $prepend . ltrim($output, $prepend);
-            return $output;
+            return '<br>' . $output;
+        }
+        return false;
+    }
+
+    /**
+     * @param string $command
+     * @return bool|string
+     */
+    public
+    function formatCommand(string $command = '')
+    {
+        if (!empty($command)) {
+            $command = '</pre>' . rtrim($command, '</pre>');
+            $prepend = "<pre><strong>Command output:</strong> ";
+            $command = $prepend . ltrim($command, $prepend);
+            return '<br>' . $command;
         }
         return false;
     }

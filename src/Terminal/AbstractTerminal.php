@@ -231,16 +231,17 @@ class AbstractTerminal extends BaseAbstract
      * @param bool $success
      * @return bool|null
      */
-    protected function logFinish($output = '', $success = false)
+    protected function logFinish($output = '', $success = false, $command = '')
     {
         $action = $this->getCaller();
         if (!empty($action)) {
             $output = $this->client->format_output($output);
+            $command = $this->client->formatCommand($command);
             if (!empty($success)) {
-                $this->log(sprintf('Successfully %s %s. %s', $this->actions[$this->getCaller()]['past'], $this->mainStr(), $output), 'success');
+                $this->log(sprintf('Successfully %s %s. %s%s', $this->actions[$this->getCaller()]['past'], $this->mainStr(), $command, $output), 'success');
                 return true;
             }
-            $this->log(sprintf('Failed to %s %s. %s', $this->getCaller(), $this->mainStr(), $output));
+            $this->log(sprintf('Failed to %s %s. %s%s', $this->getCaller(), $this->mainStr(), $command, $output));
             return false;
         }
         return null;

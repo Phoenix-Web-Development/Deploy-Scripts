@@ -953,6 +953,7 @@ class WHM extends Base
                     $cpanel_parameter,
                     $cpanel_parameter_type
                 );
+                d($queried_filter);
 
                 if (!empty($queried_filter)) {
                     foreach ($queried_filter['actions'] as $queried_action) {
@@ -1027,7 +1028,8 @@ class WHM extends Base
                     $this->log('Successfully ' . $this->actions[$action]['past'] . $finish_message_append, 'success');
                 return true;
             }
-            if (isset($result['result']['result']['data']['rules']['part']))
+            if (isset($result['result']['result']['data']['actions'], $result['result']['result']['data']['filtername'])
+                && $result['result']['result']['data']['filtername'] == $filter_name)
                 return $result['result']['result']['data'];
         }
         if (!$quiet)

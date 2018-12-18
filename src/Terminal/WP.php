@@ -137,10 +137,11 @@ class WP extends AbstractTerminal
                 find ' . $wp_dir . ' -type f -exec chmod 644 {} \;  
                 find ' . self::trailing_slash($wp_dir) . 'wp-content -type d -exec chmod 775 {} \;
                 find ' . self::trailing_slash($wp_dir) . 'wp-content -type f -exec chmod 664 {} \;
-                chmod 660 wp-config.php
+                chmod 660 wp-config.php             
                 mv wp-config.php ../
                 wp rewrite structure "/%postname%/";
-                wp rewrite flush;
+                wp rewrite flush --hard;
+                chmod 644 .htaccess
                 wp plugin activate --all;
                 rm wp-config-sample.php license.txt readme.html
                 ');
@@ -245,19 +246,27 @@ class WP extends AbstractTerminal
      */
     public function update($wp_dir = '')
     {
-        if (!$this->$this->validate())
+        if (!$this->validate($wp_dir))
             return false;
         if (!$this->check($wp_dir))
             return $this->logError(sprintf('WordPress not installed at <strong>%s</strong>.', $wp_dir));
-        $this->exec(
+        $version = trim($this->exec('cd ' . $wp_dir . '; wp core version;'));
+        $updateToVersion = ($version != '5.0' && $version != '5.0.1') ? ' --version=4.9.9' : '';
+        $output = $this->exec(
             'cd ' . $wp_dir . ';                        
-        wp core update --locale="en_AU";
+        wp core update --locale="en_AU" ' . $updateToVersion . ';
         wp core update-db;
         wp theme update --all; 
         wp plugin update --all; 
         wp core language update; 
         wp db optimize'
         );
+        $success = null;
+        if (stripos($output, 'error') !== false)
+            $success = false;
+        elseif (stripos($output, 'success') !== false)
+            $success = true;
+        return $this->logFinish($output, $success);
     }
 
     /**
