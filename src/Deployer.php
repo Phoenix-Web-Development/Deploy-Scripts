@@ -221,6 +221,7 @@ final class Deployer extends Base
 
     /**
      * @return bool
+     * @throws \Github\Exception\MissingArgumentException
      */
     function run()
     {
@@ -536,6 +537,7 @@ final class Deployer extends Base
 
     /**
      * @param string $actions
+     * @param string $operator
      * @return bool
      */
     function can_do($actions = '', $operator = 'AND')
@@ -705,38 +707,35 @@ final class Deployer extends Base
 
     }
 
-    /**
-     * @param string $action
-     * @return bool
-     */
-    function localStuff($action = 'create')
-    {
+    /*
+      function localStuff($action = 'create')
+      {
 
-        if ($this->can_do('create_local_version_control')) {
-            $this->environVersionControl('create', 'local');
-        }
-        $key_name = $this->config->live->domain ?? '';
-        $passphrase = $this->config->local->ssh_keys->live->passphrase ?? '';
-        $ssh_key = $this->terminal('local')->SSHKey($action, $key_name, $passphrase);
-        if (!empty($ssh_key)) {
-            $host = $this->config->live->domain ?? '';
-            $hostname = $this->config->live->cpanel->ssh->hostname ?? '';
-            $user = $this->config->live->cpanel->ssh->username ?? '';
-            $port = $this->config->live->cpanel->ssh->port ?? '';
-            $this->terminal('local')->SSHConfig($action, $host, $hostname, $key_name, $user, $port);
+          if ($this->can_do('create_local_version_control')) {
+              $this->environVersionControl('create', 'local');
+          }
+          $key_name = $this->config->live->domain ?? '';
+          $passphrase = $this->config->local->ssh_keys->live->passphrase ?? '';
+          $ssh_key = $this->terminal('local')->SSHKey($action, $key_name, $passphrase);
+          if (!empty($ssh_key)) {
+              $host = $this->config->live->domain ?? '';
+              $hostname = $this->config->live->cpanel->ssh->hostname ?? '';
+              $user = $this->config->live->cpanel->ssh->username ?? '';
+              $port = $this->config->live->cpanel->ssh->port ?? '';
+              $this->terminal('local')->SSHConfig($action, $host, $hostname, $key_name, $user, $port);
 
-            $cpanel_username = $this->config->environ->live->cpanel->account->username ?? '';
-            $this->whm->import_key($ssh_key, $key_name, $passphrase, $cpanel_username);
-        }
-        $this->terminal('local')->virtualHost($action);
+              $cpanel_username = $this->config->environ->live->cpanel->account->username ?? '';
+              $this->whm->import_key($ssh_key, $key_name, $passphrase, $cpanel_username);
+          }
+          $this->terminal('local')->virtualHost($action);
 
-        $github_user = $this->config->version_control->github->user ?? '';
-        $project_name = $this->config->project->name ?? '';
+          $github_user = $this->config->version_control->github->user ?? '';
+          $project_name = $this->config->project->name ?? '';
 
-        $this->terminal('local')->Git('create', $github_user, $project_name);
-        return true;
-    }
-
+          $this->terminal('local')->Git('create', $github_user, $project_name);
+          return true;
+      }
+  */
     /**
      * @param string $subdomain_slug
      * @param $cpanel_accounts
@@ -1167,14 +1166,6 @@ final class Deployer extends Base
                         $webhook_config = $this->terminal($environment)->githubWebhookEndpointConfig()->create($webhook_endpoint_config_dir, $web_dir, $secret);
                         $webhook = $this->github->webhook()->create($repo_name, $webhook_url, $secret);
 
-                        $checkoutDevBranch = $this->terminal($environment)->gitBranch()->checkout($web_dir, 'dev');
-                        if ($checkoutDevBranch) {
-                            if ($this->terminal($environment)->gitBranch()->check($web_dir, 'dev', 'up'))
-                                $syncDevBranch = $this->terminal($environment)->git()->pull($web_dir, 'dev');
-                            else
-                                $syncDevBranch = $this->terminal($environment)->git()->commit($web_dir, 'dev', 'create dev branch');
-                        }
-
                     }
                 } else
                     $this->log("Can't upload deploy key or clone repository. Upstream repository not found.");
@@ -1189,8 +1180,7 @@ final class Deployer extends Base
                     && !empty($gitignore)
                     && !empty($gitPurge)
                     && !empty($gitReset)
-                    && ($environment != 'staging'
-                        || (!empty($webhook) && !empty($webhook_config) && !empty($checkoutDevBranch) && !empty($syncDevBranch)))
+                    && ($environment != 'staging' || (!empty($webhook) && !empty($webhook_config)))
                 )
                     $success = true;
                 break;
@@ -1199,7 +1189,7 @@ final class Deployer extends Base
                 $downstream_repository = $this->whm->version_control('delete', $repo_location, '', '', $cPanel_account['user']);
                 $deleted_git_folder = $this->terminal($environment)->git()->delete($repo_location);
                 $ssh_key = $this->whm->delkey($key_name, $cPanel_account['user']);
-                $ssh_config = $this->terminal($environment)->ssh_config()->delete('github_' . $repo_name, 'github.com', 'github_' . $repo_name, 'git');
+                $ssh_config = $this->terminal($environment)->ssh_config()->delete('github_' . $repo_name);
                 $deploy_key = $this->github->deploy_key()->remove($repo_name, $key_title);
 
                 if ($environment == 'staging') { //webhook
@@ -1238,8 +1228,18 @@ final class Deployer extends Base
         $mainStr = sprintf(" initial %s environment files to repository.", $environment);
         $this->log("<h3>Committing" . $mainStr . "</h3>", 'info');
         $web_dir = $this->get_environ_dir($environment, 'web');
-        $success = $this->terminal($environment)->git()->commit($web_dir, 'master', 'initial Deployer commit');
-        if (!empty($success)) {
+        $commitMaster = $this->terminal($environment)->git()->commit($web_dir, 'master', 'initial Deployer commit from ' . $environment . ' environment');
+
+        if ($commitMaster && $environment == 'staging') {
+            $checkoutDevBranch = $this->terminal($environment)->gitBranch()->checkout($web_dir, 'dev');
+            if ($checkoutDevBranch) {
+                if ($this->terminal($environment)->gitBranch()->check($web_dir, 'dev', 'up'))
+                    $syncDevBranch = $this->terminal($environment)->git()->pull($web_dir, 'dev');
+                else
+                    $syncDevBranch = $this->terminal($environment)->git()->commit($web_dir, 'dev', 'create dev branch');
+            }
+        }
+        if (!empty($commitMaster) && ($environment != 'staging') || !empty($syncDevBranch)) {
             $this->log(sprintf('Successfully committed %s', $mainStr), 'success');
             return true;
         }
@@ -1389,7 +1389,8 @@ final class Deployer extends Base
                 $db_args['password'] = $this->config->environ->$environment->db->password ?? '';
                 $installed = $this->terminal($environment)->wp()->install($directory, $db_args, (array)$wp_args);
                 $htaccess = $this->terminal($environment)->htaccess()->prepend($directory);
-                if (!empty($WPCLI) && !empty($WPCLIConfig) && !empty($installed) && !empty($htaccess))
+                $permissions = $this->terminal($environment)->wp()->setPermissions($directory);
+                if (!empty($WPCLI) && !empty($WPCLIConfig) && !empty($installed) && !empty($htaccess) && !empty($permissions))
                     $success = true;
                 break;
             case 'delete':
@@ -1476,9 +1477,13 @@ final class Deployer extends Base
             $backup = $this->backupDB($dest_environment);
             if ($backup) {
                 $import = $this->terminal($dest_environment)->wp_db()->import($to_directory, BACKUPS_DIR . $from_filename . '.gz', $from_url, $dest_url);
+                if ($import) {
+                    $blogPublic = $dest_environment == 'live' ? 1 : 0;
+                    $updateSearchVisibility = $this->terminal($dest_environment)->wp()->setOption($to_directory, 'blog_public', $blogPublic);
+                }
             }
         }
-        if (!empty($export) && !empty($backup) && !empty($import)) {
+        if (!empty($export) && !empty($backup) && !empty($import) && !empty($updateSearchVisibility)) {
             $this->log('<h3>Finished migrating ' . $message . '</h3>', 'success');
             return true;
         }

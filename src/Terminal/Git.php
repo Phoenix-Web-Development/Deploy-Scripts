@@ -100,7 +100,6 @@ class Git extends AbstractTerminal
         }
         $command = 'cd ' . $worktree . '; git reset --hard origin/' . $branch;
         $output = $this->exec($command);
-        //HEAD is now at 973d34a Merge branch 'master' of github_phoenixmelb:jamesjonesphoenix/phoenixmelb
         $success = strpos($output, "HEAD is now at") !== false ? true : false;
         return $this->logFinish($output, $success, $command);
     }
@@ -122,7 +121,7 @@ class Git extends AbstractTerminal
         $this->exec($cd . "git fetch --all");
         $changes = $this->getChanges($worktree);
         if (!empty($changes))
-            return $this->logError("Uncommitted changes in Git repo. " . $changes);
+            return $this->logError("Uncommitted changes in Git repo. " . $this->client->format_output($changes));
         if ($this->client->gitBranch()->check($worktree, $branch, 'up') === false)
             return $this->logError(sprintf("No upstream branch called <strong>%s</strong>.", $branch));
         $currentBranch = $this->client->gitBranch()->getCurrent($worktree);
@@ -181,7 +180,9 @@ class Git extends AbstractTerminal
         $currentBranch = $this->client->gitBranch()->getCurrent($worktree);
         $strCheckout = '';
         if ($currentBranch != $branch) {
-            return $this->logError(sprintf("Repository is checked out to wrong branch"));
+            //should be on branch master. is on branch dev
+            return $this->logError(sprintf("Repository is checked out to wrong branch <strong>%s</strong>. Should be checked out to branch <strong>%s</strong>",
+                $currentBranch, $branch));
             /*
                         $this->client->gitBranch()->checkout($worktree);
 

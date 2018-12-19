@@ -241,7 +241,7 @@ class AbstractTerminal extends BaseAbstract
                 $this->log(sprintf('Successfully %s %s. %s%s', $this->actions[$this->getCaller()]['past'], $this->mainStr(), $command, $output), 'success');
                 return true;
             }
-            $this->log(sprintf('Failed to %s %s. %s%s', $this->getCaller(), $this->mainStr(), $command, $output));
+            $this->log(sprintf('Failed to %s %s. %s%s', $this->actions[$this->getCaller()]['action'], $this->mainStr(), $command, $output));
             return false;
         }
         return null;

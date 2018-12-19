@@ -99,9 +99,8 @@ class WP extends AbstractTerminal
             return $this->logError("DB name, username and/or password are missing from config.");
         if (!isset($wp_args['username'], $wp_args['password'], $wp_args['email'], $wp_args['url'], $wp_args['title'], $wp_args['prefix']))
             return $this->logError("WordPress username, password, email, url, title and/or prefix are missing from config.");
-        $debug = !empty($wp_args['debug']) && $wp_args['debug'] ? 'true' : 'false';
         $wp_plugins = !empty($wp_args['plugins']) ? sprintf('wp plugin install %s;', implode(' ', (array)$wp_args['plugins'])) : '';
-        $wp_plugins = "wp plugin install jetpack --version=6.5; wp plugin install jetpack --version=7.0; ";
+        //$wp_plugins = "wp plugin install jetpack --version=6.5; wp plugin install jetpack --version=7.0; ";
         //                wp plugin update --all;
         $output = $this->exec("cd " . $wp_dir . "; wp core download --skip-content;");
         $this->ssh->setTimeout(false); //downloading WP can take a while
@@ -114,11 +113,8 @@ class WP extends AbstractTerminal
             $config_set .= sprintf("wp config set %s %s --raw --type=constant;", $config_constant, $constant);
         }
 
-        $wp_blog_public = $this->environment == 'live' ? 1 : 0;
         $wp_lang = !empty($wp_args['language']) ? 'wp language core install ' . $wp_args['language'] . '; wp site switch-language ' . $wp_args['language'] . ';' : '';
-        $wp_timezone = !empty($wp_args['timezone']) ? 'wp option update timezone_string "' . $wp_args['timezone'] . '";' : '';
-
-        $output .= $this->exec("
+        $commands1 = "
                 cd " . $wp_dir . "; 
                 wp config create --dbname='" . $db_args['name'] . "' --dbuser='" . $db_args['username'] . "' --dbpass='" . $db_args['password'] . "' --dbprefix='" . rtrim($wp_args['prefix'], '_') . "_'" . " --locale=en_AU;         
                 " . $config_set . "
@@ -126,26 +122,24 @@ class WP extends AbstractTerminal
             . "' --admin_password='" . $wp_args['password'] . "' --admin_email='" . $wp_args['email'] . "' --skip-email;"
             . $wp_plugins . '
                 wp post delete 1;
-                wp option update default_comment_status closed; 
-                wp option update blogdescription "Enter tagline for ' . $wp_args['title'] . ' here";
-                wp theme install twentyseventeen --activate;
-                wp option update blog_public ' . $wp_blog_public . ';'
-            . $wp_lang . $wp_timezone
-        );
-        $output .= $this->exec('cd ' . $wp_dir . ';
-                find ' . $wp_dir . ' -type d -exec chmod 755 {} \;
-                find ' . $wp_dir . ' -type f -exec chmod 644 {} \;  
-                find ' . self::trailing_slash($wp_dir) . 'wp-content -type d -exec chmod 775 {} \;
-                find ' . self::trailing_slash($wp_dir) . 'wp-content -type f -exec chmod 664 {} \;
-                chmod 660 wp-config.php             
+                wp theme install twentyseventeen --activate;'
+            . $wp_lang;
+        $commands2 = 'cd ' . $wp_dir . ';              
                 mv wp-config.php ../
                 wp rewrite structure "/%postname%/";
                 wp rewrite flush --hard;
-                chmod 644 .htaccess
                 wp plugin activate --all;
                 rm wp-config-sample.php license.txt readme.html
-                ');
-        // /%postname%/
+                ';
+        $output .= $this->exec($commands1);
+        $output .= $this->exec($commands2);
+        $setOption = $this->setOption($wp_dir, 'default_comment_status', 'closed');
+        $setOption2 = $this->setOption($wp_dir, 'blogdescription', 'Enter tagline for ' . $wp_args['title'] . ' here');
+        $wp_blog_public = $this->environment == 'live' ? 1 : 0;
+        $setOption3 = $this->setOption($wp_dir, 'blog_public', $wp_blog_public);
+        if (!empty($wp_args['timezone']))
+            $setOption4 = $this->setOption($wp_dir, 'timezone_string', $wp_args['timezone']);
+
         $widgets = $this->exec("cd " . $wp_dir . "; wp widget list sidebar-1 --format=ids");
         if (!empty($widgets)) {
             foreach (array('search-1', 'search-2', 'search') as $search) {
@@ -153,8 +147,72 @@ class WP extends AbstractTerminal
             }
             $output .= $this->exec("cd " . $wp_dir . "; wp widget delete " . trim($widgets));
         }
+        $update = $this->update($wp_dir);
         $success = $this->check($wp_dir) ? true : false;
-        return $this->logFinish($output, $success);
+        return $this->logFinish($output, $success, $commands1 . $commands2);
+    }
+
+    /**
+     * @param string $wp_dir
+     * @return bool|null
+     */
+    public function setPermissions(string $wp_dir = '')
+    {
+        $this->mainStr($wp_dir);
+        $this->logStart();
+        if (!$this->validate($wp_dir))
+            return false;
+        if (!$this->check($wp_dir))
+            return $this->logError(sprintf('WordPress not installed at <strong>%s</strong>.', $wp_dir));
+        $wp_dir = self::trailing_slash($wp_dir);
+        $commands = 'cd ' . $wp_dir . ';
+                find ' . $wp_dir . ' -type d -exec chmod 755 {} \;
+                echo status is $?;
+                find ' . $wp_dir . ' -type f -exec chmod 644 {} \;
+                echo status is $?;  
+                find ' . $wp_dir . 'wp-content -type d -exec chmod 775 {} \;
+                echo status is $?;
+                find ' . $wp_dir . 'wp-content -type f -exec chmod 664 {} \;
+                echo status is $?;
+        ';
+        $output = $this->exec($commands);
+        if (stripos($output, 'status is 0') !== false && stripos($output, 'status is 1') === false)
+            $findCommands = true;
+        if (!empty($findCommands)) {
+            $configFilePath = $wp_dir . '../wp-config.php';
+            if ($this->ssh->file_exists($configFilePath))
+                $wpConfig = $this->ssh->chmod(0660, $configFilePath);
+            $htaccessFilePath = $wp_dir . '.htaccess';
+            if ($this->ssh->file_exists($htaccessFilePath))
+                $htaccess = $this->ssh->chmod(0644, $htaccessFilePath);
+        }
+        $success = (!empty($findCommands) && !empty($wpConfig) && !empty($htaccess)) ? true : false;
+        return $this->logFinish($output, $success, $commands);
+    }
+
+    /**
+     * @param string $wp_dir
+     * @param string $option
+     * @param string $value
+     * @return bool|null
+     */
+    public function setOption(string $wp_dir = '', $option = '', $value = '')
+    {
+        $this->mainStr($wp_dir);
+        $this->logStart();
+        if (!$this->validate($wp_dir))
+            return false;
+        if (!$this->check($wp_dir))
+            return $this->logError(sprintf('WordPress not installed at <strong>%s</strong>.', $wp_dir));
+        if (empty($option))
+            return $this->logError("Option name not passed to setOption method");
+        if (!isset($value) || $value === '')
+            return $this->logError("Option value not passed to setOption method");
+        $command = 'cd ' . $wp_dir . ';     
+                wp option update ' . $option . ' "' . $value . '"';
+        $output = $this->exec($command);
+        $success = (stripos($output, "Success:") !== false) ? true : false;
+        return $this->logFinish($output, $success, $command);
     }
 
     /**
@@ -162,6 +220,7 @@ class WP extends AbstractTerminal
      */
     protected function getConfigConstants()
     {
+        //$debug = !empty($wp_args['debug']) && $wp_args['debug'] ? 'true' : 'false';
         $debug = false;
         $config_constants = array(
             'AUTOSAVE_INTERVAL' => 300,
@@ -257,8 +316,10 @@ class WP extends AbstractTerminal
         wp core update --locale="en_AU" ' . $updateToVersion . ';
         wp core update-db;
         wp theme update --all; 
-        wp plugin update --all; 
-        wp core language update; 
+        wp plugin update --all;
+        wp core language update;
+        wp language plugin update --all;
+        wp language theme update --all;
         wp db optimize'
         );
         $success = null;

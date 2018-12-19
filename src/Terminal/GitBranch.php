@@ -47,6 +47,8 @@ class GitBranch extends AbstractTerminal
      */
     public function check(string $worktree = '', string $branch = '', string $stream = 'down')
     {
+        $this->mainStr($worktree, $branch);
+        $this->logStart();
         if (!$this->validate($worktree))
             return null;
         $cd = "cd " . $worktree . "; ";
@@ -56,16 +58,24 @@ class GitBranch extends AbstractTerminal
             $strSuccess = "refs/heads/" . $branch;
         } elseif ($stream == 'up') {
             $exists = $this->exec($cd . "git branch --remotes --contains " . $branch);
-            $strFails = array('error: malformed object name ' . $branch, "origin/master");
+            $strFails = array('error: malformed object name ' . $branch);
             $strSuccess = "origin/" . $branch;
         } else
             return $this->logError("Stream should be set to upstream or downstream only.");
+        d($exists);
+        d($strFails);
+        d($strSuccess);
+
         foreach ($strFails as $strFail) {
-            if (stripos($exists, $strFail) !== false)
+            if (stripos($exists, $strFail) !== false) {
+                d("branch " . $branch . " doesn't exist");
                 return false;
+            }
         }
-        if (strpos($exists, $strSuccess) !== false)
+        if (stripos($exists, $strSuccess) !== false) {
+            d("branch " . $branch . " exists");
             return true;
+        }
         return null;
     }
 
@@ -142,7 +152,7 @@ class GitBranch extends AbstractTerminal
      * @param string $branch
      * @return bool
      */
-    protected function validate(string $worktree = '', string $branch = '')
+    protected function validate(string $worktree = '')
     {
         if (isset($this->_validated))
             return $this->_validated;
@@ -159,22 +169,15 @@ class GitBranch extends AbstractTerminal
      */
     protected function mainStr(string $worktree = '', $branch = '')
     {
-        $action = $this->getCaller();
         if (func_num_args() == 0) {
-            if (!empty($this->_mainStr[$action]))
-                return $this->_mainStr[$action];
+            if (!empty($this->_mainStr))
+                return $this->_mainStr;
         }
         $string = sprintf("%s environment Git repository branch", $this->environment); //update/commit
-        switch ($action) {
-            default:
-                $worktree_str = " with worktree at <strong>%s</strong>";
-                break;
-        }
         if (!empty($branch))
             $string .= " <strong>" . $branch . "</strong>";
         if (!empty($worktree))
-            $string .= sprintf($worktree_str, $worktree);
-
-        return $this->_mainStr[$action] = $string;
+            $string .= sprintf(" with worktree at <strong>%s</strong>", $worktree);
+        return $this->_mainStr = $string;
     }
 }

@@ -96,7 +96,7 @@ class ConfigControl extends Base
             $this->log("No site specific config currently loaded.", 'info');
         }
 
-        $config = array_merge_recursive($base_config, $site_config);
+        $config = array_replace_recursive($base_config, $site_config);
         return $this->config = array_to_object($config);
     }
 }

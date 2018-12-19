@@ -123,6 +123,16 @@ class Base
             'past' => 'set',
             'action' => 'set'
         ),
+        'setOption' => array(
+            'present' => 'setting option for',
+            'past' => 'set option for',
+            'action' => 'set option for'
+        ),
+        'setPermissions' => array(
+            'present' => 'setting permissions for',
+            'past' => 'set permissions for',
+            'action' => 'set permissions for'
+        ),
         'transfer' => array(
             'present' => 'transferring',
             'past' => 'transferred',
