@@ -1150,7 +1150,8 @@ final class Deployer extends Base
                             $downstream_repo_name,
                             $source_repository
                         );
-
+                        if (!$downstream_repository)
+                            $downstream_repository = $this->whm->version_control('get', $repo_location);
                         if ($downstream_repository && $this->terminal($environment)->git()->waitForUnlock($repo_location)) {
                             $dotGit = $this->terminal($environment)->dotGitFile()->create($web_dir, $repo_location);
                             $gitignore = $this->terminal($environment)->gitignore()->create($web_dir);
@@ -1383,12 +1384,25 @@ final class Deployer extends Base
                 //$wp_args->debug = $this->get_environ_url($environment);
                 $db_args['name'] = $this->config->environ->$environment->db->name ?? '';
                 $db_args['username'] = $this->config->environ->$environment->db->username ?? '';
+                if (empty($db_args['name'])) {
+                    $this->log(sprintf("Can't install WordPress. %w DB name missing from config.", $environment));
+                    return false;
+                }
+                if (empty($db_args['username'])) {
+                    $this->log(sprintf("Can't install WordPress. %s DB username missing from config.", $environment));
+                    return false;
+                }
                 $cpanel = $this->find_environ_cpanel($environment);
+                if (empty($cpanel['user'])) {
+                    $this->log(sprintf("Can't install WordPress. Couldn't work out %s cPanel username.", $environment));
+                    return false;
+                }
                 $db_args['name'] = $this->whm->db_prefix_check($db_args['name'], $cpanel['user']);
                 $db_args['username'] = $this->whm->db_prefix_check($db_args['username'], $cpanel['user']);
                 $db_args['password'] = $this->config->environ->$environment->db->password ?? '';
                 $installed = $this->terminal($environment)->wp()->install($directory, $db_args, (array)$wp_args);
-                $htaccess = $this->terminal($environment)->htaccess()->prepend($directory);
+                $www = ($environment == 'live' && !empty($wp_args->www)) ? true : false;
+                $htaccess = $this->terminal($environment)->htaccess()->prepend($directory, $www);
                 $permissions = $this->terminal($environment)->wp()->setPermissions($directory);
                 if (!empty($WPCLI) && !empty($WPCLIConfig) && !empty($installed) && !empty($htaccess) && !empty($permissions))
                     $success = true;
