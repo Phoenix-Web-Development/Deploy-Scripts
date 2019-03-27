@@ -156,6 +156,27 @@ class AbstractTerminal extends BaseAbstract
         return false;
     }
 
+    public
+    function is_dir(string $dir = '')
+    {
+        if ($this->environment != 'local') {
+            return $this->ssh->is_dir($dir);
+        } else {
+            $output = $this->exec(
+                'if ! [[ -d "' . $dir . '" ]]; then
+	        echo "No directory"
+	        else
+	        echo "Found directory"
+	        fi'
+            );
+            print_r($output);
+            if (strpos($output, "Found directory") !== false)
+                return true;
+            elseif (strpos($output, "No directory") !== false)
+                return false;
+        }
+    }
+
     /**
      * @param string $dir
      * @return bool

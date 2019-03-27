@@ -152,12 +152,14 @@ class Base
             'present' => 'uploading',
             'past' => 'uploaded',
             'action' => 'upload'
-        ),
+        )
     );
 
+    /**
+     * Base constructor.
+     */
     public function __construct()
     {
-
         return true;
     }
 
@@ -211,6 +213,12 @@ class Base
         return logger()->add($message_string, $message_type);
     }
 
+    /**
+     * @param string $action
+     * @param array $actions
+     * @param string $message
+     * @return bool
+     */
     static function validate_action($action = '', $actions = array(), $message = '')
     {
         if (empty($action)) {
@@ -230,6 +238,10 @@ class Base
         return true;
     }
 
+    /**
+     * @param array $array
+     * @return string
+     */
     static function implode_item_str(array $array = array())
     {
         foreach ($array as &$item) {

@@ -19,6 +19,8 @@ use phpseclib\Net\SFTP;
  * @method Terminal\SSHKey ssh_key()
  * @method Terminal\GithubWebhookEndpointConfig github_webhook_endpoint_config()
  * @method Terminal\GithubWebhookEndpointConfig githubWebhookEndpointConfig()
+ * @method Terminal\localVirtualHost localvirtualhost()
+ * @method Terminal\localWebDir localwebdir()
  * @method Terminal\WP wp()
  * @method Terminal\WP wordpress()
  * @method Terminal\WPCLI wp_cli()
@@ -111,6 +113,13 @@ class TerminalClient extends BaseClient
             case 'github_webhook_endpoint_config':
             case 'githubwebhookendpointconfig':
                 $api = new Terminal\GithubWebhookEndpointConfig($this);
+                break;
+            case 'localvirtualhost':
+            case 'virtualhost':
+                $api = new Terminal\localVirtualHost($this);
+                break;
+            case 'localwebdir':
+                $api = new Terminal\localWebDir($this);
                 break;
             case 'wp':
             case 'wordpress':
@@ -209,7 +218,9 @@ class TerminalClient extends BaseClient
         if ($this->environment == 'local') {
             //d('local exec - ' . $command);
             exec($command, $raw_outputs);
+            //print_r($raw_outputs);
             $output = implode('<br>', $raw_outputs);
+
             /*
             foreach ($raw_outputs as $raw_output) {
                 $output .= $raw_output;
@@ -315,6 +326,7 @@ class TerminalClient extends BaseClient
      * @param string $directory
      * @return bool
      */
+    /*
     public
     function virtualHost(string $action = 'create', string $domain = '', string $directory = '')
     {
@@ -328,7 +340,7 @@ class TerminalClient extends BaseClient
             return false;
         }
     }
-
+    */
     /**
      * @param string $output
      * @return bool|string
@@ -336,13 +348,19 @@ class TerminalClient extends BaseClient
     public
     function format_output(string $output = '')
     {
-        if (!empty($output)) {
-            $output = '</pre>' . rtrim($output, '</pre>');
-            $prepend = "<pre><strong>Terminal output:</strong> ";
-            $output = $prepend . ltrim($output, $prepend);
-            return '<br>' . $output;
+        if (empty($output)) {
+            return false;
         }
-        return false;
+
+        $append = '</pre>';
+        if (substr($output, -strlen($append)) !== $append)
+            $output = $output . $append;
+
+        $prepend = "<pre><strong>Terminal output:</strong> ";
+        if (substr($output, 0, strlen($prepend)) !== $prepend)
+            $output = $prepend . $output;
+
+        return '<br>' . $output;
     }
 
     /**
@@ -360,4 +378,6 @@ class TerminalClient extends BaseClient
         }
         return false;
     }
+
+
 }

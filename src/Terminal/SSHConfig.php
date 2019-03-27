@@ -32,7 +32,7 @@ class SSHConfig extends AbstractTerminal
             $this->ssh->touch($this->filepath());
         }
         $perms = substr(decoct($this->ssh->fileperms($this->filepath())), -3, 3);
-        if ($perms != '600') {
+        if ($perms != '0600') {
             $this->log(sprintf("SSH Config file permissions <strong>%s</strong> are wrong. Setting to 0600.", $perms), 'warning');
             $this->ssh->chmod(0600, $this->filepath());
         }

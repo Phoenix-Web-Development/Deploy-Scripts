@@ -47,7 +47,11 @@ final class Deployer extends Base
      */
     private $_whm;
 
-
+    /**
+     * @var
+     */
+    public $actionRequests;
+    
     /**
      * @var
      */
@@ -65,120 +69,6 @@ final class Deployer extends Base
     /**
      * @var array
      */
-    public $permissions = array(
-        'create' => array('label' => 'Create'),
-        'create_version_control' => array('label' => 'Create main version control repository',
-            'condition' => array('create')),
-
-        'create_live_stuff' => array('label' => 'Live stuff',
-            'condition' => 'create'),
-        'create_live_site' => array('label' => 'cPanel account',
-            'condition' => array('create', 'create_live_stuff')),
-        'create_live_db' => array('label' => 'Database & DB User',
-            'condition' => array('create', 'create_live_stuff')),
-        'create_live_email_filters' => array('label' => 'Email filters',
-            'condition' => array('create', 'create_live_stuff')),
-        'create_live_version_control' => array('label' => 'Setup version control',
-            'condition' => array('create', 'create_live_stuff')),
-        'create_live_wp' => array('label' => 'Install WordPress and WP CLI',
-            'condition' => array('create', 'create_live_stuff')),
-        'create_live_initial_git_commit' => array('label' => 'Initial Git commit',
-            'condition' => array('create', 'create_live_stuff')),
-
-        'create_staging_stuff' => array('label' => 'Staging stuff',
-            'condition' => array('create')),
-        'create_staging_subdomain' => array('label' => 'Staging cPanel subdomain',
-            'condition' => array('create', 'create_staging_stuff')),
-        'create_staging_db' => array('label' => 'Database & DB User',
-            'condition' => array('create', 'create_staging_stuff')),
-        'create_staging_email_filters' => array('label' => 'Email filters',
-            'condition' => array('create', 'create_staging_stuff')),
-        'create_staging_version_control' => array('label' => 'Setup version control',
-            'condition' => array('create', 'create_staging_stuff')),
-        'create_staging_wp' => array('label' => 'Install WordPress and WP CLI',
-            'condition' => array('create', 'create_staging_stuff')),
-        'create_staging_initial_git_commit' => array('label' => 'Initial Git commit',
-            'condition' => array('create', 'create_staging_stuff')),
-
-        'create_local_stuff' => array('label' => 'Create local stuff',
-            'condition' => array('create')),
-        'create_local_version_control' => array('label' => 'Setup version control',
-            'condition' => array('create', 'create_local_stuff')),
-
-        //'create_wp_auto_update' => array('label' => 'Setup WordPress auto-update',
-        //  'condition' => array('create')),
-
-        'delete' => array('label' => 'Delete'),
-        'delete_version_control' => array('label' => 'Delete main version control repository',
-            'condition' => array('delete')),
-        'delete_live_stuff' => array('label' => 'Live stuff',
-            'condition' => array('delete')),
-        'delete_live_site' => array('label' => 'cPanel account',
-            'condition' => array('delete', 'delete_live_stuff')),
-        'delete_live_db' => array('label' => 'Database & DB User',
-            'condition' => array('delete', 'delete_live_stuff')),
-        'delete_live_email_filters' => array('label' => 'Email filters',
-            'condition' => array('delete', 'delete_live_stuff')),
-        'delete_live_version_control' => array('label' => 'Remove version control',
-            'condition' => array('delete', 'delete_live_stuff')),
-        'delete_live_wp' => array('label' => 'Remove WordPress',
-            'condition' => array('delete', 'delete_live_stuff')),
-
-        'delete_staging_stuff' => array('label' => 'Staging stuff',
-            'condition' => array('delete')),
-        'delete_staging_subdomain' => array('label' => 'Staging cPanel subdomain',
-            'condition' => array('delete', 'delete_staging_stuff')),
-        'delete_staging_db' => array('label' => 'Database & DB User',
-            'condition' => array('delete', 'delete_staging_stuff')),
-        'delete_staging_email_filters' => array('label' => 'Email filters',
-            'condition' => array('delete', 'delete_staging_stuff')),
-        'delete_staging_version_control' => array('label' => 'Remove version control',
-            'condition' => array('delete', 'delete_staging_stuff')),
-        'delete_staging_wp' => array('label' => 'WordPress',
-            'condition' => array('delete', 'delete_staging_stuff')),
-
-        'delete_local_stuff' => array('label' => 'Delete local stuff',
-            'condition' => array('delete')),
-        'delete_local_version_control' => array('label' => 'Delete version control',
-            'condition' => array('delete', 'delete_local_stuff')),
-
-
-        'update' => array('label' => 'Update'),
-        'update_live_stuff' => array('label' => 'Live stuff',
-            'condition' => array('update')),
-        'update_live_wp' => array('label' => 'Update WordPress core, plugins and themes',
-            'condition' => array('update', 'update_live_stuff')),
-        'update_staging_stuff' => array('label' => 'Staging stuff',
-            'condition' => array('update')),
-        'update_staging_wp' => array('label' => 'Update WordPress core, plugins and themes',
-            'condition' => array('update', 'update_staging_stuff')),
-        'update_local_stuff' => array('label' => 'Local stuff',
-            'condition' => array('update')),
-        'update_local_wp' => array('label' => 'Update WordPress core, plugins and themes',
-            'condition' => array('update', 'update_local_stuff')),
-
-        'transfer' => array('label' => 'Transfer'),
-        'transfer_wp_db' => array('label' => 'WordPress DB',
-            'condition' => array('transfer')),
-        'transfer_wp_db_from_live' => array('label' => 'From live',
-            'condition' => array('transfer', 'transfer_wp_db')),
-        'transfer_wp_db_live_to_staging' => array('label' => 'to staging server',
-            'condition' => array('transfer', 'transfer_wp_db_from_live', 'transfer_wp_db')),
-        'transfer_wp_db_live_to_local' => array('label' => 'to local server',
-            'condition' => array('transfer', 'transfer_wp_db_from_live', 'transfer_wp_db')),
-        'transfer_wp_db_from_staging' => array('label' => 'From staging',
-            'condition' => array('transfer', 'transfer_wp_db')),
-        'transfer_wp_db_staging_to_live' => array('label' => 'to live server',
-            'condition' => array('transfer', 'transfer_wp_db_from_staging', 'transfer_wp_db')),
-        'transfer_staging_wp_to_local' => array('label' => 'to local server',
-            'condition' => array('transfer', 'transfer_wp_db_from_staging', 'transfer_wp_db')),
-        'transfer_wp_db_from_local' => array('label' => 'From local',
-            'condition' => array('transfer', 'transfer_wp_db')),
-        'transfer_wp_db_local_to_live' => array('label' => 'to live server',
-            'condition' => array('transfer', 'transfer_wp_db_from_local', 'transfer_wp_db')),
-        'transfer_wp_db_local_to_staging' => array('label' => 'to staging server',
-            'condition' => array('transfer', 'transfer_wp_db_from_local', 'transfer_wp_db')),
-    );
 
     /**
      * @var Template
@@ -206,13 +96,10 @@ final class Deployer extends Base
         if (!defined('BASE_DIR')) define('BASE_DIR', dirname(__FILE__));
         if (!defined('CONFIG_DIR')) define('CONFIG_DIR', BASE_DIR . '/../configs/');
         if (!defined('BACKUPS_DIR')) define('BACKUPS_DIR', BASE_DIR . '/../backups/');
+        if (!defined('BASH_WRAPPER')) define('BASH_WRAPPER', BASE_DIR . '/../bash/wrapper.sh');
 
-        foreach ($this->permissions as &$action) {
-            if (!empty($action['condition']) && !is_array($action['condition']))
-                $action['condition'] = array($action['condition']);
-        }
         new Logging();
-        $this->process_request();
+        $this->actionRequests = new ActionRequests();
         $this->configControl = new ConfigControl();
         $this->template = new Template();
 
@@ -229,56 +116,57 @@ final class Deployer extends Base
         $this->template->get('header');
 
         $action = '';
-        if ($this->can_do('update'))
+
+        if ($this->actionRequests->can_do('update'))
             $action = 'update';
-        elseif ($this->can_do('create'))
+        elseif ($this->actionRequests->can_do('create'))
             $action = 'deploy';
-        elseif ($this->can_do('transfer'))
+        elseif ($this->actionRequests->can_do('transfer'))
             $action = 'transfer';
-        elseif ($this->can_do('delete'))
+        elseif ($this->actionRequests->can_do('delete'))
             $action = 'delete';
         if (!empty($action)) {
             switch ($action) {
                 case 'delete':
-                    if ($this->can_do('delete_version_control'))
+                    if ($this->actionRequests->can_do('delete_version_control'))
                         $this->versionControlMainRepo('delete');
-                    if ($this->can_do('delete_live_stuff'))
+                    if ($this->actionRequests->can_do('delete_live_stuff'))
                         $this->do_environ_stuff('delete', 'live');
-                    if ($this->can_do('delete_staging_stuff'))
+                    if ($this->actionRequests->can_do('delete_staging_stuff'))
                         $this->do_environ_stuff('delete', 'staging');
-                    if ($this->can_do('delete_local_stuff'))
+                    if ($this->actionRequests->can_do('delete_local_stuff'))
                         $this->localStuff('delete');
                     break;
                 case 'deploy':
-                    if ($this->can_do('create_version_control'))
+                    if ($this->actionRequests->can_do('create_version_control'))
                         $this->versionControlMainRepo('create');
-                    if ($this->can_do('create_live_stuff'))
+                    if ($this->actionRequests->can_do('create_live_stuff'))
                         $this->do_environ_stuff('create', 'live');
-                    if ($this->can_do('create_staging_stuff'))
+                    if ($this->actionRequests->can_do('create_staging_stuff'))
                         $this->do_environ_stuff('create', 'staging');
-                    if ($this->can_do('create_local_stuff'))
+                    if ($this->actionRequests->can_do('create_local_stuff'))
                         $this->localStuff('create');
                     break;
                 case 'update':
-                    if ($this->can_do('update_live_stuff'))
+                    if ($this->actionRequests->can_do('update_live_stuff'))
                         $this->updateWP('live');
-                    if ($this->can_do('update_staging_stuff'))
+                    if ($this->actionRequests->can_do('update_staging_stuff'))
                         $this->updateWP('staging');
-                    if ($this->can_do('update_local_stuff'))
+                    if ($this->actionRequests->can_do('update_local_stuff'))
                         $this->updateWP('local');
                     break;
                 case 'transfer':
-                    if ($this->can_do('transfer_wp_db_live_to_staging'))
+                    if ($this->actionRequests->can_do('transfer_wp_db_live_to_staging'))
                         $this->transferDB('live', 'staging');
-                    if ($this->can_do('transfer_wp_db_live_to_local'))
+                    if ($this->actionRequests->can_do('transfer_wp_db_live_to_local'))
                         $this->transferDB('live', 'local');
-                    if ($this->can_do('transfer_wp_db_staging_to_live'))
+                    if ($this->actionRequests->can_do('transfer_wp_db_staging_to_live'))
                         $this->transferDB('staging', 'live');
-                    if ($this->can_do('transfer_wp_db_staging_to_local'))
+                    if ($this->actionRequests->can_do('transfer_wp_db_staging_to_local'))
                         $this->transferDB('staging', 'local');
-                    if ($this->can_do('transfer_wp_db_local_to_live'))
+                    if ($this->actionRequests->can_do('transfer_wp_db_local_to_live'))
                         $this->transferDB('local', 'live');
-                    if ($this->can_do('transfer_wp_db_local_to_staging'))
+                    if ($this->actionRequests->can_do('transfer_wp_db_local_to_staging'))
                         $this->transferDB('local', 'staging');
                     break;
             }
@@ -511,55 +399,6 @@ final class Deployer extends Base
     }
 
     /**
-     * @return array|bool
-     */
-    function process_request()
-    {
-        if (empty($_POST))
-            return false;
-        $actions = $this->permissions;
-        foreach ($actions as $key => &$action) {
-            if (!empty($_POST[$key])) {
-                $action['can_do'] = true;
-                if (!empty($action['condition'])) {
-                    $action['can_do'] = true;
-                    foreach ($action['condition'] as $condition) {
-                        if (empty($_POST[$condition])) {
-                            $action['can_do'] = false;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        return $this->permissions = $actions;
-    }
-
-    /**
-     * @param string $actions
-     * @param string $operator
-     * @return bool
-     */
-    function can_do($actions = '', $operator = 'AND')
-    {
-        if (empty($actions) || empty($this->permissions))
-            return false;
-        if (!is_array($actions))
-            $actions = array($actions);
-        foreach ($actions as $action) {
-            if ($operator = 'AND') {
-                if (empty($this->permissions[$action]['can_do']))
-                    return false;
-            } else if ($operator = 'OR') {
-                if (!empty($this->permissions[$action]['can_do']))
-                    return true;
-            }
-
-        }
-        return true;
-    }
-
-    /**
      * @param string $action
      * @param string $environment
      * @return bool
@@ -576,13 +415,13 @@ final class Deployer extends Base
         $this->log(sprintf('<h2>%s nominated %s stuff.</h2>', ucfirst($this->actions[$action]['present']), $environment), 'info');
 
         $actions = array(
-            'live_site' => $this->can_do($action . '_live_site'),
-            'subdomain' => $this->can_do($action . '_staging_subdomain'),
-            'db' => $this->can_do($action . '_' . $environment . '_db'),
-            'email_filters' => $this->can_do($action . '_' . $environment . '_email_filters'),
-            'version_control' => $this->can_do($action . '_' . $environment . '_version_control'),
-            'wp' => $this->can_do($action . '_' . $environment . '_wp'),
-            'initial_commit' => $this->can_do($action . '_' . $environment . '_initial_git_commit')
+            'live_site' => $this->actionRequests->can_do($action . '_live_site'),
+            'subdomain' => $this->actionRequests->can_do($action . '_staging_subdomain'),
+            'db' => $this->actionRequests->can_do($action . '_' . $environment . '_db'),
+            'email_filters' => $this->actionRequests->can_do($action . '_' . $environment . '_email_filters'),
+            'version_control' => $this->actionRequests->can_do($action . '_' . $environment . '_version_control'),
+            'wp' => $this->actionRequests->can_do($action . '_' . $environment . '_wp'),
+            'initial_commit' => $this->actionRequests->can_do($action . '_' . $environment . '_initial_git_commit')
         );
 
         //actual site environment and db - logic mess
@@ -707,35 +546,71 @@ final class Deployer extends Base
 
     }
 
-    /*
-      function localStuff($action = 'create')
-      {
 
-          if ($this->can_do('create_local_version_control')) {
-              $this->environVersionControl('create', 'local');
-          }
-          $key_name = $this->config->live->domain ?? '';
-          $passphrase = $this->config->local->ssh_keys->live->passphrase ?? '';
-          $ssh_key = $this->terminal('local')->SSHKey($action, $key_name, $passphrase);
-          if (!empty($ssh_key)) {
-              $host = $this->config->live->domain ?? '';
-              $hostname = $this->config->live->cpanel->ssh->hostname ?? '';
-              $user = $this->config->live->cpanel->ssh->username ?? '';
-              $port = $this->config->live->cpanel->ssh->port ?? '';
-              $this->terminal('local')->SSHConfig($action, $host, $hostname, $key_name, $user, $port);
+    function localStuff($action = 'create')
+    {
+        $rootWebDir = $this->config->environ->local->root_web_dir ?? '';
+        $projectName = $this->config->project->name ?? '';
+        $projectDir = !empty($projectName) && !empty($rootWebDir) ? $rootWebDir . $projectName : '';
+        $webDir = !empty($projectDir) ? $projectDir . '/Project/public' : '';
 
-              $cpanel_username = $this->config->environ->live->cpanel->account->username ?? '';
-              $this->whm->import_key($ssh_key, $key_name, $passphrase, $cpanel_username);
-          }
-          $this->terminal('local')->virtualHost($action);
+        if ($this->actionRequests->can_do($action . "_local_virtual_host")) {
+            $admin_email = $this->config->environ->local->email ?? '';
+            $domain = $this->config->environ->local->domain ?? '';
+            $sitesAvailable = $this->config->environ->local->sites_available ?? '';
 
-          $github_user = $this->config->version_control->github->user ?? '';
-          $project_name = $this->config->project->name ?? '';
+            $virtualHostArgs = [
+                'domain' => $domain,
+                'sites_available_path' => $sitesAvailable . $domain . '.conf',
+                'web_dir' => $webDir,
+                'admin_email' => $admin_email
+            ];
+            $this->terminal('local')->localVirtualHost()->$action($virtualHostArgs);
+        }
 
-          $this->terminal('local')->Git('create', $github_user, $project_name);
-          return true;
-      }
-  */
+        if ($this->actionRequests->can_do($action . "_local_web_directory")) {
+            $owner = $this->config->environ->local->owner ?? '';
+            $group = $this->config->environ->local->group ?? '';
+            $webDirArgs = [
+                'project_dir' => $projectDir,
+                'web_dir' => $webDir,
+                'owner' => $owner,
+                'group' => $group
+            ];
+            $this->terminal('local')->localWebDir()->$action($webDirArgs);
+        }
+
+        //$this->terminal('staging')->ssh->delete($directory);
+        /*
+        if ($this->actionRequests->can_do('create_local_version_control')) {
+            $this->environVersionControl('create', 'local');
+        }
+
+
+        $key_name = $this->config->live->domain ?? '';
+        $passphrase = $this->config->local->ssh_keys->live->passphrase ?? '';
+        $ssh_key = $this->terminal('local')->SSHKey($action, $key_name, $passphrase);
+        if (!empty($ssh_key)) {
+            $host = $this->config->live->domain ?? '';
+            $hostname = $this->config->live->cpanel->ssh->hostname ?? '';
+            $user = $this->config->live->cpanel->ssh->username ?? '';
+            $port = $this->config->live->cpanel->ssh->port ?? '';
+            $this->terminal('local')->SSHConfig($action, $host, $hostname, $key_name, $user, $port);
+
+            $cpanel_username = $this->config->environ->live->cpanel->account->username ?? '';
+            $this->whm->import_key($ssh_key, $key_name, $passphrase, $cpanel_username);
+        }
+        $this->terminal('local')->virtualHost($action);
+
+        $github_user = $this->config->version_control->github->user ?? '';
+        $project_name = $this->config->project->name ?? '';
+
+        $this->terminal('local')->Git('create', $github_user, $project_name);
+        return true;
+        */
+    }
+
+
     /**
      * @param string $subdomain_slug
      * @param $cpanel_accounts
@@ -892,7 +767,6 @@ final class Deployer extends Base
 
     /**
      * @return bool
-     *
      */
     private function delete_live_cpanel_account()
     {
@@ -965,7 +839,6 @@ final class Deployer extends Base
         }
         return $cPanel_account;
     }
-
 
     /**
      * @return bool
@@ -1506,6 +1379,10 @@ final class Deployer extends Base
 
     }
 
+    /**
+     * @param string $environment
+     * @return bool
+     */
     protected function backupDB(string $environment = '')
     {
         $errorString = sprintf("Can't backup %s environment WordPress DB. ", $environment);

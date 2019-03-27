@@ -76,24 +76,27 @@ class Template
      */
     public function checkboxes($type = 'create')
     {
-        $actions = ph_d()->permissions;
-        foreach ($actions as $key => $action) {
-            if (strpos($key, $type) !== false) {
-                $filtered_actions[$key] = $action;
-                continue;
-            }
-            if (!empty($action['condition']))
-                if (is_array($action['condition']))
-                    foreach ($action['condition'] as $condition) {
-                        if (strpos($condition, $type) !== false) {
-                            $filtered_actions[$key] = $action;
-                            break;
+        $actions = ph_d()->actionRequests->permissions;
+        $filtered_actions = [];
+        if (!empty($actions)) {
+            foreach ($actions as $key => $action) {
+                if (strpos($key, $type) !== false) {
+                    $filtered_actions[$key] = $action;
+                    continue;
+                }
+                if (!empty($action['condition']))
+                    if (is_array($action['condition']))
+                        foreach ($action['condition'] as $condition) {
+                            if (strpos($condition, $type) !== false) {
+                                $filtered_actions[$key] = $action;
+                                break;
+                            }
                         }
-                    }
-                else
-                    if (strpos($action['condition'], $type) !== false) {
-                        $filtered_actions[$key] = $action;
-                    }
+                    else
+                        if (strpos($action['condition'], $type) !== false) {
+                            $filtered_actions[$key] = $action;
+                        }
+            }
         }
         $sorted_actions = sort_recursive_actions($filtered_actions);
         build_recursive_checkboxes($sorted_actions);
