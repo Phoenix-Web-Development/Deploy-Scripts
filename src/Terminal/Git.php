@@ -8,6 +8,32 @@ namespace Phoenix\Terminal;
  */
 class Git extends AbstractTerminal
 {
+
+    /**
+     * @param array $args
+     * @return bool|null
+     */
+    public function clone(array $args = [])
+    {
+        $this->mainStr($args);
+        $this->logStart();
+        if (!$this->validate($args))
+            return false;
+
+        $successMessage = "Git clone from " . $args['url'] . " successful";
+
+        $separateGitDir = !empty($args['repo_path']) ? '--separate-git-dir ' . $args['repo_path'] . ' ' : '';
+        $command = 'if [ git clone ' . $separateGitDir . $args["url"] . ' ' . $args["worktree_path"] . ' -eq 0 ]; then
+            echo "' . $successMessage . '"
+        else
+            echo "Git clone failed"
+        fi;';
+        $output = $this->exec($command);
+        $success = stripos($output, $successMessage) !== false ? true : false;
+
+        return $this->logFinish($success, $output, $command);
+    }
+
     /**
      * Moves Git repository to a new directory, leaving worktree in initial directory.
      *
@@ -17,13 +43,15 @@ class Git extends AbstractTerminal
      */
     public function move(string $worktree = '', string $separate_repo_path = '')
     {
-        $this->mainStr($worktree, $separate_repo_path);
+        $args = ['worktree_path' => $workTree, 'repo_path' => $separate_repo_path];
+
+        $this->mainStr($args);
         $this->logStart();
         if (!$this->validate($worktree, $separate_repo_path))
             return false;
-        if (!$this->ssh->is_dir($separate_repo_path)) {
+        if (!$this->is_dir($separate_repo_path)) {
             $this->ssh->mkdir($separate_repo_path, -1, true);
-            if (!$this->ssh->is_dir($separate_repo_path))
+            if (!$this->is_dir($separate_repo_path))
                 return $this->logError(sprintf("Destination directory <strong>%s</strong> doesn't exist and couldn't create it.", $separate_repo_path));
         }
         if (!$this->dir_is_empty($separate_repo_path)) {
@@ -36,14 +64,14 @@ class Git extends AbstractTerminal
             }
             return $this->logError(sprintf("Directory already exists at <strong>%s</strong> and contains files.", $separate_repo_path));
         }
-        $command = 'cd ' . $worktree . '; git init --separate-git-dir ' . $separate_repo_path . '; git reset --hard origin/master';
-        $output = $this->exec($command);
+        $command = 'git init --separate-git-dir ' . $separate_repo_path . '; git reset --hard origin/master';
+        $output = $this->exec($command, $worktree);
         $success = stripos($output, 'Reinitialized existing Git repository') !== false ? true : false;
-        return $this->logFinish($output, $success, $command);
+        return $this->logFinish($success, $output, $command);
     }
 
     /**
-     * Deletes Git Repo and .git file at worktree.
+     * Deletes Git Repo but not .git file at worktree.
      *
      * @param string $worktree
      * @param string $repo_path
@@ -51,17 +79,19 @@ class Git extends AbstractTerminal
      */
     public function delete(string $repo_path = '')
     {
-        $this->mainStr($repo_path);
+        $args = ['repo_path' => $repo_path];
+
+        $this->mainStr($args);
         $this->logStart();
-        if (!$this->validate($repo_path))
+        if (!$this->validate($args))
             return false;
-        $gitDir = self::trailing_slash($repo_path) . '.git';
+        $gitDir = self::trailing_slash($args['repo_path']) . '.git';
         if (!$this->isGitRepo($gitDir))
             return $this->logError("Nominated git directory is not a git repository.");
-        $delete_repo = $this->ssh->delete($gitDir, true);
-        $prune = $this->client->api()->pruneDirTree($repo_path);
+        $delete_repo = $this->deleteFile($gitDir, true);
+        $prune = $this->client->api()->pruneDirTree($args['repo_path']);
         $success = ($delete_repo && $prune) ? true : false;
-        return $this->logFinish('', $success);
+        return $this->logFinish($success);
     }
 
     /**
@@ -70,155 +100,22 @@ class Git extends AbstractTerminal
      */
     public function purge(string $worktree = '')
     {
-        $this->mainStr($worktree);
+        $args = ['worktree_path' => $worktree];
+        $this->mainStr($args);
         $this->logStart();
-        if (!$this->validate($worktree))
+        if (!$this->validate($args))
             return false;
-        $command = 'cd ' . $worktree . '; git rm --force -r .; git clean --force -xd';
-        $output = $this->exec($command);
+        $command = 'git rm --force -r .; git clean --force -xd';
+        $output = $this->exec($command, $args['worktree_path']);
         $success = (true) ? true : false;
-        return $this->logFinish($output, $success, $command);
-    }
-
-    /**
-     * @param string $worktree
-     * @param string $branch
-     * @return bool|null
-     */
-    public function reset(string $worktree = '', string $branch = 'master')
-    {
-        $this->mainStr($worktree, $branch);
-        $this->logStart();
-        if (!$this->validate($worktree))
-            return false;
-        $currentBranch = $this->client->gitBranch()->getCurrent($worktree);
-        if ($currentBranch != $branch) {
-            if (!$this->client->gitBranch()->check($worktree, $branch, 'down') || $this->client->gitBranch()->check($worktree, $branch, 'up'))
-                return $this->logError(sprintf("Upstream and/or downstream branch <strong>%s</strong> doesn't exist.", $branch));
-            if (!$this->client->gitBranch()->checkout($worktree, $branch))
-                return $this->logError(sprintf("Couldn't checkout branch <strong>%s</strong>.", $branch));
-        }
-        $command = 'cd ' . $worktree . '; git reset --hard origin/' . $branch;
-        $output = $this->exec($command);
-        $success = strpos($output, "HEAD is now at") !== false ? true : false;
-        return $this->logFinish($output, $success, $command);
-    }
-
-    /**
-     * Performs git pull
-     *
-     * @param string $worktree
-     * @param string $branch
-     * @return bool
-     */
-    public function pull(string $worktree = '', string $branch = 'master')
-    {
-        $this->mainStr($worktree, $branch);
-        $this->logStart();
-        if (!$this->validate($worktree))
-            return false;
-        $cd = "cd " . $worktree . "; ";
-        $this->exec($cd . "git fetch --all");
-        $changes = $this->getChanges($worktree);
-        if (!empty($changes))
-            return $this->logError("Uncommitted changes in Git repo. " . $this->client->format_output($changes));
-        if ($this->client->gitBranch()->check($worktree, $branch, 'up') === false)
-            return $this->logError(sprintf("No upstream branch called <strong>%s</strong>.", $branch));
-        $currentBranch = $this->client->gitBranch()->getCurrent($worktree);
-        if ($currentBranch != $branch)
-            $currentBranch = $this->client->gitBranch()->checkout($worktree, $branch);
-        if ($currentBranch != $branch)
-            return $this->logError(sprintf("Couldn't checkout branch <strong>%s</strong>.", $branch));
-        $command = $cd . "git pull --verbose;";
-        $output = $this->exec($command);
-        $errorStrs = array('error: ', 'would be overwritten');
-        foreach ($errorStrs as $errorStr) {
-            if (stripos($output, $errorStr) !== false) {
-                $success = false;
-                break;
-            }
-        }
-        if (!isset($success)) {
-            $successStrs = array('Already up to date', 'Fast-forward');
-            foreach ($successStrs as $successStr) {
-                if (strpos($output, $successStr) !== false) {
-                    $success = true;
-                    break;
-                }
-            }
-        }
-        return $this->logFinish($output, $success, $command);
-    }
-
-    /**
-     * Commits and pushes to upstream.
-     * Checks out nominated branch if a different branch is checked out
-     * Creates new branch if nominated branch doesn't exist.
-     *
-     * @param string $worktree
-     * @param string $branch
-     * @param string $git_message
-     * @return bool
-     */
-    public function commit(string $worktree = '',
-                           string $branch = 'master',
-                           string $git_message = 'update WordPress core, plugins and/or themes'
-    )
-    {
-        $this->mainStr($worktree, $branch);
-        $this->logStart();
-        if (!$this->validate($worktree))
-            return false;
-        $upstreamBranch = $this->client->gitBranch()->check($worktree, $branch, 'up');
-        if ($this->getChanges($worktree) === false && $upstreamBranch === true) {
-            $this->log("No need to " . $this->mainStr() . ". No changes in repository to commit.", 'info');
-            return true;
-        }
-        $cd = "cd " . $worktree . "; ";
-        $this->exec($cd . "git fetch --all");
-
-        $currentBranch = $this->client->gitBranch()->getCurrent($worktree);
-        $strCheckout = '';
-        if ($currentBranch != $branch) {
-            //should be on branch master. is on branch dev
-            return $this->logError(sprintf("Repository is checked out to wrong branch <strong>%s</strong>. Should be checked out to branch <strong>%s</strong>",
-                $currentBranch, $branch));
-            /*
-                        $this->client->gitBranch()->checkout($worktree);
-
-                        $strNewLocalBranch = '';
-                        if ($this->client->gitBranch()->check($worktree, $branch) === false) {
-                            $strNewLocalBranch = ' -b ';
-                            $newBranch = true;
-                        }
-
-                        $strCheckout = "git checkout " . $strNewLocalBranch . $branch . "; ";
-            */
-        }
-        /*
-        $strNewRemoteBranch = '';
-        if (!empty($newBranch) && $this->client->gitBranch()->check($worktree, $branch, 'up') === true)
-            return $this->logError(sprintf("Upstream branch <strong>%s</strong> already exists. Should probably pull from this first.", $branch));
-        if (!empty($newBranch) || $this->client->gitBranch()->check($worktree, $branch, 'up') === false || $this->client->gitBranch()->hasUpstream($worktree, $branch) === false)
-            $strNewRemoteBranch = ' --set-upstream origin ' . $branch;
-        */
-        $strNewRemoteBranch = ($upstreamBranch === false) ? '--set-upstream origin ' . $branch . ' ' : '';
-        $commands = $cd . $strCheckout . "
-                        git add . --all;
-                        git commit -m '" . $git_message . "';
-                        git push " . $strNewRemoteBranch . "--porcelain;";
-        $output = $this->exec($commands);
-        $status = $this->exec($cd . "git status");
-        if (substr(trim($output), -4) === 'Done' && $this->getChanges($worktree) === false && strpos($status, "Your branch is ahead of") === false)
-            $success = true;
-        else $success = false;
-        return $this->logFinish($output, $success, $commands);
+        return $this->logFinish($success, $output, $command);
     }
 
     public function check(string $worktree = '')
     {
-        $this->mainStr($worktree);
-        if (!$this->validate($worktree))
+        $args = ['worktree_path' => $worktree];
+        $this->mainStr($args);
+        if (!$this->validate($args))
             return false;
         return true;
     }
@@ -232,26 +129,13 @@ class Git extends AbstractTerminal
         $filePath = self::trailing_slash($repo_path) . ".git/index.lock";
         for ($i = 0; $i <= 15; $i++) {
             sleep(1);
-            if (!$this->ssh->file_exists($filePath))
+
+            if (!$this->file_exists($filePath))
                 return true;
         }
-        $this->log(sprintf("Waiting for %s environment Git repository to unlock failed. Waited <strong>%s</strong> seconds for file <strong>%s</strong> to delete.", $this->environment, $i, $filePath));
+        $unlockString = "Waiting for %s environment Git repository to unlock failed. Waited <strong>%s</strong> seconds for file <strong>%s</strong> to delete.";
+        $this->log(sprintf($unlockString, $this->environment, $i, $filePath));
         return false;
-    }
-
-    /**
-     * @param string $worktree
-     * @return bool
-     */
-    protected function getChanges(string $worktree = '')
-    {
-        $this->mainStr($worktree);
-        if (!$this->validate($worktree))
-            return null;
-        $output = $this->exec("cd " . $worktree . "; git status --porcelain");
-        if (strlen($output) == 0)
-            return false;
-        return $output;
     }
 
     /**
@@ -269,7 +153,7 @@ class Git extends AbstractTerminal
      */
     protected function isGitWorktree(string $dir = '')
     {
-        return $this->isGitThing($dir, 'worktree');
+        return $this->isGitThing($dir, 'worktree_path');
     }
 
     /**
@@ -285,62 +169,88 @@ class Git extends AbstractTerminal
             case 'repo':
                 $parseFor = '--is-inside-git-dir';
                 break;
-            case 'worktree':
+            case 'worktree_path':
                 $parseFor = '--is-inside-work-tree';
                 break;
             default:
                 return false;
         }
-        $output = $this->exec('cd ' . $dir . '; git rev-parse ' . $parseFor);
+        $output = $this->exec('git rev-parse ' . $parseFor, $dir);
         if (stripos($output, 'true') !== false)
             return true;
         return false;
     }
 
     /**
-     * @param string $dir
-     * @return bool
+     * @param array $args
+     * @return bool|null
      */
-    protected function validate(string $dir = '')
+    protected function validate(array $args = [])
     {
+
         if (isset($this->_validated))
             return $this->_validated;
-        if (empty($dir))
-            return $this->_validated = $this->logError("Worktree missing from method input.");
-        if (!$this->ssh->is_dir($dir))
-            return $this->_validated = $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $dir));
-        //$action = $this->getCaller();
-        if (!$this->isGitWorktree($dir))
+        if (empty($args))
+            return $this->_validated = $this->logError("No method input received.");
+
+        switch ($this->getCaller()) {
+            case 'clone':
+                $argsToValidate = ['worktree_path', 'url'];
+                break;
+            case 'move':
+                $argsToValidate = ['worktree_path', 'repo_path'];
+                break;
+            case 'delete':
+                $argsToValidate = ['repo_path'];
+                break;
+            default:
+                $argsToValidate = ['worktree_path'];
+                break;
+        }
+
+        foreach ($argsToValidate as $argToValidate) {
+            if (empty($args[$argToValidate]))
+                return $this->_validated = $this->logError(ucfirst($argToValidate) . " missing from method input.");
+        }
+        if (!empty($args['worktree_path'])) {
+            if (!$this->is_dir($args['worktree_path']))
+                return $this->_validated = $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $args['worktree_path']));
+        }
+        if (!empty($args['repo_path'])) {
+            if (!$this->is_dir($args['repo_path']))
+                return $this->_validated = $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $args['repo_path']));
+        }
+        if (!$this->isGitWorktree($args['worktree_path']))
             return $this->_validated = $this->logError("Nominated git worktree directory is not a git worktree.");
 
         return $this->_validated = true;
     }
 
-    /**
-     * @param string $dir
-     * @param string $branch
-     * @return string
-     */
-    protected function mainStr(string $dir = '', $branch = '')
+    protected function mainStr(array $args = [])
     {
         $action = $this->getCaller();
         if (func_num_args() == 0) {
             if (!empty($this->_mainStr[$action]))
                 return $this->_mainStr[$action];
         }
-        $string = sprintf("%s environment Git repository", $this->environment); //update/commit
-        switch ($action) {
-            case 'move':
-                $dir_path_str = " to <strong>" . $dir . "</strong>";
-                break;
-            default:
-                $dir_path_str = " at <strong>%s</strong>";
-                break;
+        $urlStr = !empty($args['url']) ? " at url <strong>" . $args['url'] . "</strong>" : '';
+        $worktreePathStr = '';
+        if (!empty($args['worktree_path'])) {
+            switch ($action) {
+
+                case 'clone':
+                    $worktreePathStr = " to <strong>" . $args['worktree_path'] . "</strong>";
+                    break;
+                case 'move':
+                    if (!empty($args['repo_path']))
+                        $worktreePathStr = " to <strong>" . $args['repo_path'] . "</strong> from worktree <strong>" . $args['worktree_path'] . "</strong>";
+                    break;
+                default:
+                    $worktreePathStr = " at <strong>" . $args['worktree_path'] . "</strong>";
+                    break;
+            }
         }
-        if (!empty($dir))
-            $string .= sprintf($dir_path_str, $dir);
-        if (!empty($branch))
-            $string .= " on branch <strong>" . $branch . "</strong>";
-        return $this->_mainStr[$action] = $string;
+        $branchStr = !empty($args['branch']) ? " on branch <strong>" . $args['branch'] . "</strong>" : '';
+        return $this->_mainStr = sprintf("%s environment Git repository%s%s%s", $this->environment, $urlStr, $worktreePathStr, $branchStr);
     }
 }

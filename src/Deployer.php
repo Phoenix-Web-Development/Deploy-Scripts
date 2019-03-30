@@ -286,7 +286,7 @@ final class Deployer extends Base
      * @param string $environment
      * @return bool|TerminalClient
      */
-    protected function terminal(string $environment = 'live')
+    public function terminal(string $environment = 'live')
     {
         if (!empty($this->_terminal->$environment))
             return $this->_terminal->$environment;
@@ -313,7 +313,7 @@ final class Deployer extends Base
     function get_phpseclib($protocol = 'ssh', string $environment = 'live')
     {
         $message = sprintf("%s environment %s connection.", $environment, $protocol);
-        if ($environment != 'local') {
+        //if ($environment != 'local') {
 
             $ssh_args = $this->get_environ_ssh_args($environment);
             if (!empty($ssh_args)) {
@@ -348,7 +348,7 @@ final class Deployer extends Base
                 $this->log("Successfully authenticated " . $message, 'success');
                 return $ssh;
             }
-        }
+        //}
         $this->log("Couldn't authenticate " . $message);
         return false;
     }
@@ -389,6 +389,9 @@ final class Deployer extends Base
                 }
                 $domain = $subdomain['domain'];
                 $ssh_args = $this->config->environ->staging->cpanel->accounts->$domain->ssh ?? array();
+                break;
+            case 'local':
+                $ssh_args = $this->config->environ->local->ssh ?? array();
                 break;
         }
         if (empty($ssh_args) && !isset($ssh_args->hostname, $ssh_args->port)) {
@@ -551,7 +554,7 @@ final class Deployer extends Base
     {
         $rootWebDir = $this->config->environ->local->root_web_dir ?? '';
         $projectName = $this->config->project->name ?? '';
-        $projectDir = !empty($projectName) && !empty($rootWebDir) ? $rootWebDir . $projectName : '';
+        $projectDir = (!empty($projectName) && !empty($rootWebDir)) ? $rootWebDir . $projectName : '';
         $webDir = !empty($projectDir) ? $projectDir . '/Project/public' : '';
 
         if ($this->actionRequests->can_do($action . "_local_virtual_host")) {
@@ -566,6 +569,10 @@ final class Deployer extends Base
                 'admin_email' => $admin_email
             ];
             $this->terminal('local')->localVirtualHost()->$action($virtualHostArgs);
+        }
+
+        if ($this->actionRequests->can_do($action . "_local_version_control")) {
+            $version_control = $this->environVersionControl($action, 'local');
         }
 
         if ($this->actionRequests->can_do($action . "_local_web_directory")) {
@@ -1030,7 +1037,7 @@ final class Deployer extends Base
                             $gitignore = $this->terminal($environment)->gitignore()->create($web_dir);
                             $gitPurge = $this->terminal($environment)->git()->purge($repo_location);
                             if ($downstream_repository)
-                                $gitReset = $this->terminal($environment)->git()->reset($web_dir, 'master');
+                                $gitReset = $this->terminal($environment)->gitBranch()->reset(['worktree' => $web_dir, 'branch' => 'master']);
                         }
 
                     }
@@ -1102,15 +1109,15 @@ final class Deployer extends Base
         $mainStr = sprintf(" initial %s environment files to repository.", $environment);
         $this->log("<h3>Committing" . $mainStr . "</h3>", 'info');
         $web_dir = $this->get_environ_dir($environment, 'web');
-        $commitMaster = $this->terminal($environment)->git()->commit($web_dir, 'master', 'initial Deployer commit from ' . $environment . ' environment');
+        $commitMaster = $this->terminal($environment)->gitBranch()->commit($web_dir, 'master', 'initial Deployer commit from ' . $environment . ' environment');
 
         if ($commitMaster && $environment == 'staging') {
             $checkoutDevBranch = $this->terminal($environment)->gitBranch()->checkout($web_dir, 'dev');
             if ($checkoutDevBranch) {
                 if ($this->terminal($environment)->gitBranch()->check($web_dir, 'dev', 'up'))
-                    $syncDevBranch = $this->terminal($environment)->git()->pull($web_dir, 'dev');
+                    $syncDevBranch = $this->terminal($environment)->gitBranch()->pull(['worktree' => $web_dir, 'branch' => 'dev']);
                 else
-                    $syncDevBranch = $this->terminal($environment)->git()->commit($web_dir, 'dev', 'create dev branch');
+                    $syncDevBranch = $this->terminal($environment)->gitBranch()->commit($web_dir, 'dev', 'create dev branch');
             }
         }
         if (!empty($commitMaster) && ($environment != 'staging') || !empty($syncDevBranch)) {
@@ -1317,11 +1324,11 @@ final class Deployer extends Base
         }
         $backup = $this->backupDB($environment);
         if ($backup) {
-            $gitPull = $this->terminal($environment)->git()->pull($directory, 'dev');
+            $gitPull = $this->terminal($environment)->git()->pull(['worktree' => $directory, 'branch' => 'dev']);
             if ($gitPull) {
                 $wp_update = $this->terminal($environment)->wp()->update($directory);
                 if ($wp_update)
-                    $git_commit = $this->terminal($environment)->git()->commit($directory, 'dev');
+                    $git_commit = $this->terminal($environment)->gitBranch()->commit($directory, 'dev');
             }
         }
         if (!empty($backup) && !empty($gitPull) && !empty($wp_update) && !empty($git_commit)) {

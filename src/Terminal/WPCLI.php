@@ -39,8 +39,8 @@ class WPCLI extends AbstractTerminal
             $this->log("Can't delete " . $this->mainStr() . ' WordPress CLI not installed.', 'info');
             return true;
         }
-        $success = $this->ssh->delete($this->filepath()) ? true : false;
-        return $this->logFinish('', $success);
+        $success = $this->deleteFile($this->filepath()) ? true : false;
+        return $this->logFinish($success);
     }
 
     /**
@@ -71,15 +71,15 @@ class WPCLI extends AbstractTerminal
 
         $CLIConfigDir = self::trailing_slash($this->client->root) . ".wp-cli";
         $CLIConfigFilePath = $CLIConfigDir . "/config.yml";
-        if ($this->ssh->file_exists($CLIConfigFilePath))
+        if ($this->file_exists($CLIConfigFilePath))
 
-            if (!$this->ssh->is_dir($CLIConfigDir))
+            if (!$this->is_dir($CLIConfigDir))
                 $this->ssh->mkdir($CLIConfigDir);
         $CLIConfig = "apache_modules:
   - mod_rewrite";
-        $this->ssh->put($CLIConfigFilePath, $CLIConfig);
+        $this->put($CLIConfigFilePath, $CLIConfig);
 
-        return $this->logFinish($output, $success);
+        return $this->logFinish($success, $output);
     }
 
     /**

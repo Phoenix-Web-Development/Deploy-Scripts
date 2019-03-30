@@ -32,10 +32,15 @@ class localWebDir extends AbstractTerminal
             . "'" . $args['group'] . "' 2>&1";
         print_r($command);
 
+        //$success = mkdir ($args['web_dir'],0777 , TRUE );
+        //$this->ssh->mkdir($args['web_dir']);
+        //$this->ssh->mkdir($args['project_dir']);
+
         $output = $this->exec($command);
         $success = strpos($output, 'Successfully created web directory at ' . $args['web_dir']) !== false ? true : false;
 
-        return $this->logFinish($output, $success, '');
+
+        return $this->logFinish($success, '', '');
     }
 
     /**
@@ -60,7 +65,7 @@ class localWebDir extends AbstractTerminal
         $output = $this->exec("rm -R " . $args['web_dir']);
         print_r($output);
         $success = $this->is_dir($args['web_dir']) ? false : true;
-        return $this->logFinish($output, $success);
+        return $this->logFinish($success, $output);
     }
 
     /**
@@ -86,7 +91,7 @@ class localWebDir extends AbstractTerminal
 
         foreach ($argKeys as $argKey) {
             if (empty($args[$argKey]))
-                return $this->logError($argKey . " argument missing from input");
+                return $this->logError(" Argument <strong>" . $argKey . "</strong> missing from input.");
         }
 
         return true;

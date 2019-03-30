@@ -15,7 +15,12 @@ class BaseAbstract extends Base
     /**
      * @var
      */
-    protected $_mainStr;
+    protected $_mainStr = '';
+
+    /**
+     * @var string
+     */
+    private $logElement = '';
 
     /**
      * BaseAbstract constructor.
@@ -48,6 +53,18 @@ class BaseAbstract extends Base
     }
 
     /**
+     * @param string $string
+     * @return string
+     */
+    protected function elementWrap(string $string = '')
+    {
+        $logElement = $this->logElement;
+        if (empty($logElement))
+            return $string;
+        return '<' . $logElement . '>' . $string . '</' . $logElement . '>';
+    }
+
+    /**
      * @return string
      */
     protected function mainStr()
@@ -60,7 +77,9 @@ class BaseAbstract extends Base
      */
     protected function logStart()
     {
-        $this->log(ucfirst($this->actions[$this->getCaller()]['present']) . ' ' . $this->mainStr() . '.', 'info');
+        $string = ucfirst($this->actions[$this->getCaller()]['present']) . ' ' . $this->mainStr() . '.';
+        $string = $this->elementWrap($string);
+        $this->log($string, 'info');
     }
 
     /**
@@ -70,7 +89,33 @@ class BaseAbstract extends Base
      */
     protected function logError($error = '', $type = 'error')
     {
-        $this->log(sprintf("Can't %s %s. %s", $this->actions[$this->getCaller()]['action'], $this->mainStr(), $error), $type);
+        $string = sprintf("Can't %s %s. %s", $this->actions[$this->getCaller()]['action'], $this->mainStr(), $error);
+        $string = $this->elementWrap($string);
+        $this->log($string, $type);
         return false;
+    }
+
+    /**
+     * @param bool $success
+     * @return bool|null
+     */
+    protected function logFinish($success = false)
+    {
+        $action = $this->getCaller();
+        if (!empty($action)) {
+            if (!empty($success)) {
+                $string = sprintf('Successfully %s %s.', $this->actions[$this->getCaller()]['past'], $this->mainStr());
+                $messageType = 'success';
+                $return = true;
+            } else {
+                $string = sprintf('Failed to %s %s.', $this->getCaller(), $this->mainStr());
+                $messageType = 'error';
+                $return = false;
+            }
+            $string = $this->elementWrap($string);
+            $this->log($string, $messageType);
+            return $return;
+        }
+        return null;
     }
 }

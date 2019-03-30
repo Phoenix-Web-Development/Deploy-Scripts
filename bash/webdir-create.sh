@@ -4,29 +4,13 @@ webDir=$2
 owner=$3
 group=$4
 
-
 ### check if directory exists or not
-#if ! [ -d "$projectDir" ]; then
-	### create the directory
-#	mkdir -p $projectDir
-#	if ! [ -d "$projectDir" ]; then
-#	    echo -e $"Couldn't create project directory."
-#	    exit;
-#	fi
-#fi
-
-
-### check if directory exists or not
-echo -e $"$webDir"
-if ! [[ -d "$webDir" ]]; then
-	### create the directory
-	mkdir -p $webDir
-	if ! [[ -d "$webDir" ]]; then
-	    echo -e $"Couldn't create web directory."
-	    exit;
-	fi
+if [[ -d "$webDir" ]]; then
+    echo -e $"Web directory already exists. Don't want to change permissions on already existing directory, potential security issue"
+	exit;
 fi
-
+### create the directory
+mkdir -p "$webDir"
 
 ### give permission to root dir
 chmod 755 $webDir

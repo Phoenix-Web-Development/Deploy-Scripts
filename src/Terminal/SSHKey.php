@@ -21,8 +21,8 @@ class SSHKey extends AbstractTerminal
         if (!$this->validate($key_name))
             return false;
         $filepath = $this->filepath($key_name);
-        $private_exists = $this->ssh->file_exists($filepath);
-        $pub_exists = $this->ssh->file_exists($filepath . '.pub');
+        $private_exists = $this->file_exists($filepath);
+        $pub_exists = $this->file_exists($filepath . '.pub');
         if ($private_exists || $pub_exists) {
             if ($private_exists && $pub_exists) {
                 $this->log("Can't create " . $this->mainStr() . " Public and private key already exists.", 'info');
@@ -33,8 +33,8 @@ class SSHKey extends AbstractTerminal
         $output = $this->exec('ssh-keygen -q -t rsa -N "' . $passphrase . '" -f ' . $filepath .
             '; cat ' . $filepath . '.pub');
 
-        $success = ($this->ssh->file_exists($filepath) && $this->ssh->file_exists($filepath . '.pub') && strpos($output, 'ssh-rsa ') !== false) ? true : false;
-        $this->logFinish($output, $success);
+        $success = ($this->file_exists($filepath) && $this->file_exists($filepath . '.pub') && strpos($output, 'ssh-rsa ') !== false) ? true : false;
+        $this->logFinish($success, $output);
         if ($success)
             return $output;
         return false;
@@ -51,10 +51,10 @@ class SSHKey extends AbstractTerminal
         if (!$this->validate($key_name))
             return false;
         $filepath = $this->filepath($key_name);
-        if (!$this->ssh->file_exists($filepath) && !$this->ssh->file_exists($filepath . '.pub'))
+        if (!$this->file_exists($filepath) && !$this->file_exists($filepath . '.pub'))
             return $this->logError("Public and private key file doesn't exist.");
-        $success = ($this->ssh->delete($filepath) && $this->ssh->delete($filepath . ' . pub')) ? true : false;
-        return $this->logFinish('', $success);
+        $success = ($this->deleteFile($filepath) && $this->deleteFile($filepath . ' . pub')) ? true : false;
+        return $this->logFinish($success);
     }
 
     /**

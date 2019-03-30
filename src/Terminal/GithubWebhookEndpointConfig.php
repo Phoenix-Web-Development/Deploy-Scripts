@@ -21,14 +21,14 @@ class GithubWebhookEndpointConfig extends AbstractTerminal
         $this->logStart();
         if (!$this->validate($filepath, $worktree_dir, $secret))
             return false;
-        if ($this->ssh->file_exists($filepath) && strlen($this->ssh->get($filepath)) > 0)
+        if ($this->file_exists($filepath) && $this->size($filepath) > 0)
             return $this->logError("Config file already exists.", 'warning');
         $data = array(
             'worktree' => $worktree_dir,
             'secret' => $secret
         );
-        $success = $this->ssh->put($filepath, json_encode($data)) ? true : false;
-        return $this->logFinish('', $success);
+        $success = $this->put($filepath, json_encode($data)) ? true : false;
+        return $this->logFinish($success);
     }
 
     /**
@@ -41,10 +41,10 @@ class GithubWebhookEndpointConfig extends AbstractTerminal
         $this->logStart();
         if (!$this->validate($filepath))
             return false;
-        if (!$this->ssh->file_exists($filepath))
+        if (!$this->file_exists($filepath))
             return $this->logError("Config file doesn't exist.", 'warning');
-        $success = $this->ssh->delete($filepath) ? true : false;
-        return $this->logFinish('', $success);
+        $success = $this->deleteFile($filepath) ? true : false;
+        return $this->logFinish($success);
     }
 
     /**
@@ -57,12 +57,12 @@ class GithubWebhookEndpointConfig extends AbstractTerminal
     {
         if (empty($filepath))
             return $this->logError("Filepath for config file missing from method input.");
-        if (!$this->ssh->is_dir(dirname($filepath)))
+        if (!$this->is_dir(dirname($filepath)))
             return $this->logError(sprintf("Config filepath directory <strong>%s</strong> doesn't exist.", dirname($filepath)));
         if ($this->getCaller() == 'create') {
             if (empty($worktree_dir))
                 return $this->logError("Git worktree directory missing from method input.");
-            if (!$this->ssh->is_dir($worktree_dir))
+            if (!$this->is_dir($worktree_dir))
                 return $this->logError(sprintf("Worktree directory <strong>%s</strong> doesn't exist.", $worktree_dir));
             if (empty($secret))
                 return $this->logError("Webhook secret missing from method input.");

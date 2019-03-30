@@ -3,6 +3,7 @@
 namespace Phoenix\Terminal;
 
 
+use function Clue\StreamFilter\append;
 use Phoenix\TerminalClient;
 use Phoenix\BaseAbstract;
 use phpseclib\Net\SFTP;
@@ -69,11 +70,12 @@ class AbstractTerminal extends BaseAbstract
 
     /**
      * @param string $command
+     * @param string $startDir
      * @return bool|string
      */
-    protected function exec(string $command = '')
+    protected function exec(string $command = '', string $startDir = '')
     {
-        return $this->client->exec($command);
+        return $this->client->exec($command, $startDir);
     }
 
 
@@ -97,12 +99,12 @@ class AbstractTerminal extends BaseAbstract
             return false;
         }
         $this->log("Moving " . $mainStr, 'info');
-        if (!$this->ssh->is_dir($origin_dir)) {
+        if (!$this->is_dir($origin_dir)) {
             $this->log(sprintf("%s Origin directory <strong>%s</strong> doesn't exist.",
                 $error_string, $origin_dir));
             return false;
         }
-        if (!$this->ssh->is_dir($dest_dir) && !$this->ssh->mkdir($dest_dir)) {
+        if (!$this->is_dir($dest_dir) && !$this->ssh->mkdir($dest_dir)) {
             $this->log(sprintf("%s Failed to create directory at <strong>%s</strong> in %s environment.", $error_string, $dest_dir, $this->environment));
             return false;
         }
@@ -144,7 +146,7 @@ class AbstractTerminal extends BaseAbstract
             $this->log(sprintf("%s No directory supplied to function.", $error_string));
             return false;
         }
-        if (!$this->ssh->is_dir($dir)) {
+        if (!$this->is_dir($dir)) {
             $this->log(sprintf("%s Directory <strong>%s</strong> doesn't exist in %s environment. You should check if dir exists first.", $error_string, $dir, $this->environment));
             return null;
         }
@@ -156,25 +158,150 @@ class AbstractTerminal extends BaseAbstract
         return false;
     }
 
+    /**
+     * @param string $path
+     * @return bool
+     */
+    public
+    function file_exists(string $path = '')
+    {
+        if ($this->environment != 'local') {
+            return $this->ssh->file_exists($path);
+        }
+        return file_exists($path);
+    }
+
     public
     function is_dir(string $dir = '')
     {
         if ($this->environment != 'local') {
             return $this->ssh->is_dir($dir);
-        } else {
-            $output = $this->exec(
-                'if ! [[ -d "' . $dir . '" ]]; then
-	        echo "No directory"
-	        else
-	        echo "Found directory"
-	        fi'
-            );
-            print_r($output);
-            if (strpos($output, "Found directory") !== false)
-                return true;
-            elseif (strpos($output, "No directory") !== false)
-                return false;
         }
+        return is_dir($dir);
+        /*
+        $output = $this->exec(
+            'if ! [[ -d "' . $dir . '" ]]; then
+        echo "No directory"
+        else
+        echo "Found directory"
+        fi'
+        );
+        print_r($output);
+        if (strpos($output, "Found directory") !== false)
+            return true;
+        elseif (strpos($output, "No directory") !== false)
+            return false;
+        */
+    }
+
+    /**
+     * Return remote or local size of file in bytes
+     *
+     * @param string $filepath
+     * @return false|int|mixed
+     */
+    public
+    function size(string $filepath = '')
+    {
+        if ($this->environment != 'local') {
+            return $this->ssh->size($filepath);
+        }
+        return filesize($filepath);
+    }
+
+    /**
+     * get remote or local file return contents as string
+     *
+     * @param string $filepath
+     * @return false|mixed|string
+     */
+    public
+    function get(string $filepath = '')
+    {
+        if ($this->environment != 'local') {
+            return $this->ssh->get($filepath);
+        }
+        return file_get_contents($filepath);
+    }
+
+    /**
+     * upload file or write file locally
+     *
+     * @param string $filepath
+     * @param $data
+     * @param string $mode
+     * @return bool|int
+     */
+    public
+    function put(string $filepath = '', $data, $mode = 'string')
+    {
+        if ($this->environment != 'local') {
+            switch ($mode) {
+                case 'file':
+                    $mode = SFTP::SOURCE_LOCAL_FILE;
+                    break;
+                case 'string':
+                    $mode = SFTP::SOURCE_STRING;
+                    break;
+            }
+            return $this->ssh->put($filepath, $data, $mode);
+        }
+        if ($mode == 'file')
+            $data = file_get_contents($data);
+
+        return file_put_contents($filepath, $data);
+    }
+
+    /**
+     *
+     * delete remote or local file or directory
+     *
+     * @param string $filepath
+     * @param bool $recursive
+     * @return bool|false|string
+     */
+    public
+    function deleteFile(string $filepath = '', $recursive = true)
+    {
+        if (empty($filepath))
+            return false;
+
+        //sanity check, nowhere near thorough
+        $sanityList =
+            ['/', '~/', '/bin', '/bin', '/boot', '/cdrom', '/dev', '/etc', '/home', '/lib', '/lost+found', '/media',
+                '/opt', '/proc', '/root', '/run', '/sbin', '/snap', '/srv', '/swapfile', '/sys', '/tmp', '/usr', '/var'
+            ];
+        $sanityListTrailingSlash = [];
+        foreach ($sanityList as $sanityItem) {
+            $sanityItemTrailingSlash = self::trailing_slash($sanityItem);
+            if ($sanityItem != $sanityItemTrailingSlash)
+                $sanityListTrailingSlash[] = $sanityItemTrailingSlash;
+        }
+        if (in_array($filepath, array_merge($sanityList, $sanityListTrailingSlash)))
+            return false;
+
+        if ($this->environment != 'local') {
+            return $this->ssh->delete($filepath, $recursive);
+        }
+
+        if (!file_exists($filepath))
+            return false;
+
+        if (!is_dir($filepath))
+            return unlink($filepath);
+
+        $objects = scandir($filepath);
+        foreach ($objects as $object) {
+            if (!in_array($object, [".", ".."])) {
+                if (is_dir($filepath . "/" . $object))
+                    $success = $this->deleteFile($filepath . "/" . $object);
+                else
+                    $success = unlink($filepath . "/" . $object);
+                if (!$success)
+                    return false;
+            }
+        }
+        return rmdir($filepath);
     }
 
     /**
@@ -191,7 +318,7 @@ class AbstractTerminal extends BaseAbstract
             $this->log(sprintf("%s No directory supplied to function.", $error_string));
             return false;
         }
-        if (!$this->ssh->is_dir($dir)) {
+        if (!$this->is_dir($dir)) {
             $this->log(sprintf("%s <strong>%s</strong> is not a directory.", $error_string, $dir));
             return false;
         }
@@ -206,7 +333,7 @@ class AbstractTerminal extends BaseAbstract
         $message = '';
         while ($continue) {
             if ($this->dir_is_empty($upstream_dir)) {
-                $deleted_upstream = $this->ssh->delete($upstream_dir, true);
+                $deleted_upstream = $this->deleteFile($upstream_dir, true);
                 if ($deleted_upstream) {
                     $message .= sprintf("Deleted empty directory <strong>%s</strong>. ", $upstream_dir);
                     $upstream_dir = dirname($upstream_dir);
@@ -248,22 +375,27 @@ class AbstractTerminal extends BaseAbstract
     }
 
     /**
-     * @param string $output
      * @param bool $success
+     * @param string $output
+     * @param string $command
      * @return bool|null
      */
-    protected function logFinish($output = '', $success = false, $command = '')
+    protected function logFinish($success = false, string $output = '', string $command = '')
     {
         $action = $this->getCaller();
         if (!empty($action)) {
-            $output = $this->client->format_output($output);
-            $command = $this->client->formatCommand($command);
             if (!empty($success)) {
-                $this->log(sprintf('Successfully %s %s. %s%s', $this->actions[$this->getCaller()]['past'], $this->mainStr(), $command, $output), 'success');
-                return true;
+                $string = sprintf('Successfully %s %s. %s%s', $this->actions[$this->getCaller()]['past'], $this->mainStr(), $command, $output);
+                $messageType = 'success';
+                $return = true;
+            } else {
+                $string = sprintf('Failed to %s %s. %s%s', $this->actions[$this->getCaller()]['action'], $this->mainStr(), $command, $output);
+                $messageType = 'error';
+                $return = false;
             }
-            $this->log(sprintf('Failed to %s %s. %s%s', $this->actions[$this->getCaller()]['action'], $this->mainStr(), $command, $output));
-            return false;
+            $string = $this->elementWrap($string);
+            $this->log($string, $messageType);
+            return $return;
         }
         return null;
     }

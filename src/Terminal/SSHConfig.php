@@ -25,8 +25,8 @@ class SSHConfig extends AbstractTerminal
     {
         $this->mainStr($host, $hostname, $key_name, $user, $port);
         $this->logStart();
-        if ($this->ssh->file_exists($this->filepath()))
-            $config_before = $this->ssh->get($this->filepath());
+        if ($this->file_exists($this->filepath()))
+            $config_before = $this->get($this->filepath());
         else {
             $config_before = '';
             $this->ssh->touch($this->filepath());
@@ -40,11 +40,11 @@ class SSHConfig extends AbstractTerminal
             return $this->logError(sprintf("Config entry for <strong>%s</strong> already exists.", $host), 'warning');
         $output = $this->exec('echo -e "Host ' . $host . '\n  Hostname ' . $hostname . '\n  User ' . $user
             . '\n  IdentityFile ~/.ssh/' . $key_name . '\n  Port ' . $port . '" >> ' . $this->filepath() . ';');
-        $config_after = $this->ssh->get($this->filepath());
+        $config_after = $this->get($this->filepath());
         if ($config_before == $config_after)
-            return $this->logFinish("Config file is unchanged after attempting to add to it. " . $output, false);
+            return $this->logFinish(false, "Config file is unchanged after attempting to add to it. " . $output);
         $success = $this->check($host) ? true : false;
-        return $this->logFinish($output, $success);
+        return $this->logFinish($success, $output);
     }
 
     /**
@@ -55,22 +55,22 @@ class SSHConfig extends AbstractTerminal
     {
         $this->mainStr($host);
         $this->logStart();
-        if (!$this->ssh->file_exists($this->filepath()))
+        if (!$this->file_exists($this->filepath()))
             return $this->logError(sprintf("Config file doesn't exist at <strong>%s</strong>.", $this->filepath()));
         if (!$this->check($host))
             return $this->logError(sprintf("Config entry for <strong>%s</strong> doesn't exist.", $host), 'warning');
 
-        $config_before = $this->ssh->get($this->filepath());
+        $config_before = $this->get($this->filepath());
 
         $output = $this->exec('sed "s/^Host/\n&/" ' . $this->filepath() . ' | sed "/^Host "' . $host
             . '"$/,/^$/d;/^$/d" > ' . $this->filepath() . '-dummy; mv ' . $this->filepath() . '-dummy ' . $this->filepath() . ';');
-        $config_after = $this->ssh->get($this->filepath());
+        $config_after = $this->get($this->filepath());
         if (strpos($output, "unterminated `s' command") !== false)
             return $this->logError($output);
         if ($config_before == $config_after)
-            return $this->logFinish("Config file is unchanged after attempting to delete from it. " . $output, false);
+            return $this->logFinish(false, "Config file is unchanged after attempting to delete from it. " . $output);
         $success = !$this->check($host) ? true : false;
-        return $this->logFinish($output, $success);
+        return $this->logFinish($success, $output);
     }
 
     /**
@@ -79,7 +79,7 @@ class SSHConfig extends AbstractTerminal
      */
     public function check(string $host = '')
     {
-        if (!$this->ssh->file_exists($this->filepath()))
+        if (!$this->file_exists($this->filepath()))
             return false;
         $config_entry_exists = $this->exec('grep "Host ' . $host . '" ' . $this->filepath());
         return $config_entry_exists = (strlen($config_entry_exists) > 0 && strpos($config_entry_exists, 'Host ' . $host) !== false) ? true : false;

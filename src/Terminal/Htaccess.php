@@ -42,13 +42,13 @@ class Htaccess extends AbstractTerminal
 
 ";
         $remoteFile = self::trailing_slash($webDir) . '.htaccess';
-        $existingHtaccess = $this->ssh->get($remoteFile);
+        $existingHtaccess = $this->get($remoteFile);
         if (strpos($existingHtaccess, $htaccessRules) !== false)
             return $this->logError("The <code>.htaccess</code> file already contains new rules.", 'warning');
         $newHtaccessRules = $htaccessRules . $existingHtaccess;
 
-        $success = $this->ssh->put($remoteFile, $newHtaccessRules);
-        return $this->logFinish('', $success);
+        $success = $this->put($remoteFile, $newHtaccessRules);
+        return $this->logFinish($success);
     }
 
     /**
@@ -57,10 +57,10 @@ class Htaccess extends AbstractTerminal
      */
     protected function validate(string $webDir = '')
     {
-        if (!$this->ssh->is_dir($webDir)) {
+        if (!$this->is_dir($webDir)) {
             return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $webDir));
         }
-        if (!$this->ssh->file_exists(self::trailing_slash($webDir) . '.htaccess')) {
+        if (!$this->file_exists(self::trailing_slash($webDir) . '.htaccess')) {
             return $this->logError(sprintf("No <code>.htaccess</code> file in directory <strong>%s</strong>.", $webDir));
         }
         return true;

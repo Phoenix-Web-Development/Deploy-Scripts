@@ -2,6 +2,8 @@
 
 namespace Phoenix\Github;
 
+use \Github\Exception\MissingArgumentException;
+
 /**
  * Class DeployKey
  * @package Phoenix\Github
@@ -12,7 +14,7 @@ class DeployKey extends AbstractGithub
      * @param string $repo_name
      * @param string $key_title
      * @param string $public_key
-     * @throws \Github\Exception\MissingArgumentException
+     * @throws MissingArgumentException
      */
     public function create(string $repo_name = '', string $key_title = '', string $public_key = '')
     {
@@ -24,7 +26,7 @@ class DeployKey extends AbstractGithub
      * @param string $key_title
      * @param string $public_key
      * @return bool|null
-     * @throws \Github\Exception\MissingArgumentException
+     * @throws MissingArgumentException
      */
     public function upload(string $repo_name = '', string $key_title = '', string $public_key = '')
     {

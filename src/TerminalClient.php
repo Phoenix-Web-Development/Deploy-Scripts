@@ -206,13 +206,16 @@ class TerminalClient extends BaseClient
 
     /**
      * @param string $command
-     * @param bool $format
+     * @param string $startDir
      * @return bool|string
      */
-    public function exec(string $command = '')
+    public function exec(string $command = '', string $startDir = '')
     {
         $error_string = sprintf('<code>exec()</code> failed to execute command in %s environment terminal. Commands: %s',
             $this->environment, $this->format_output($command));
+
+        if (!empty($startDir))
+            $command = 'cd ' . $startDir . '; ' . $command;
 
         //d($this);
         if ($this->environment == 'local') {

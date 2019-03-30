@@ -28,7 +28,7 @@ class WPDB extends AbstractTerminal
         }
         $dest_paths = $this->generateDBFilePaths(self::trailing_slash($wp_dir) . basename($local_dest_filepath));
 
-        if ($this->ssh->file_exists($dest_paths['path']['uncompressed']) || $this->ssh->file_exists($dest_paths['path']['compressed']))
+        if ($this->file_exists($dest_paths['path']['uncompressed']) || $this->file_exists($dest_paths['path']['compressed']))
             return $this->logError("Backup file already exists in WordPress directory.");
         //$this->ssh->setTimeout(240); //exporting DB can take a while
         $exec_commands = "cd " . $wp_dir . "; 
@@ -38,12 +38,14 @@ class WPDB extends AbstractTerminal
         //$this->ssh->setTimeout(false); //exporting DB can take a while
         $success = false;
         if (stripos($output, 'success') === false || stripos($output, 'error') !== false)
-            return $this->logFinish($output, $success);
-        if ($this->ssh->get($dest_paths['path']['compressed'], self::trailing_char($local_dest_filepath, self::EXT))
-            && $this->ssh->delete($dest_paths['path']['compressed'], false)
-            && $this->ssh->delete($dest_paths['path']['uncompressed'], false))
+            return $this->logFinish($success, $output);
+        if (
+            $this->ssh->get($dest_paths['path']['compressed'], self::trailing_char($local_dest_filepath, self::EXT))
+            && $this->deleteFile($dest_paths['path']['compressed'], false)
+            && $this->deleteFile($dest_paths['path']['uncompressed'], false)
+        )
             $success = true;
-        return $this->logFinish($output, $success);
+        return $this->logFinish($success, $output);
     }
 
     /**
@@ -66,8 +68,8 @@ class WPDB extends AbstractTerminal
             return false;
         $dest_paths = $this->generateDBFilePaths(self::trailing_slash($wp_dir) . basename($local_orig_filepath));
 
-        if (!$this->ssh->put($dest_paths['path']['compressed'], $local_orig_filepath, SFTP::SOURCE_LOCAL_FILE)) {
-            if (!$this->ssh->put($dest_paths['path']['uncompressed'], $local_orig_filepath, SFTP::SOURCE_LOCAL_FILE))
+        if (!$this->put($dest_paths['path']['compressed'], $local_orig_filepath, 'file')) {
+            if (!$this->put($dest_paths['path']['uncompressed'], $local_orig_filepath, 'file'))
                 return $this->logError("Uploading DB file via SFTP failed.");
             $uncompressed_upload = true;
         }
@@ -87,10 +89,10 @@ class WPDB extends AbstractTerminal
         $output = $this->exec($exec_commands);
         $success = (stripos($output, 'success') !== false && stripos($output, 'error') === false) ? true : false;
         if ($success)
-            if (!$this->ssh->delete($dest_paths['path']['compressed'], false) || !$this->ssh->delete($dest_paths['path']['uncompressed'], false)) {
+            if (!$this->deleteFile($dest_paths['path']['compressed'], false) || !$this->ssh->delete($dest_paths['path']['uncompressed'], false)) {
                 $success = false;
             }
-        return $this->logFinish($output, $success);
+        return $this->logFinish($success, $output);
     }
 
 
@@ -141,7 +143,7 @@ class WPDB extends AbstractTerminal
             return $this->logError("WordPress directory wasn't supplied to function.");
         if (empty($local_filepath))
             return $this->logError("Local backup filepath wasn't supplied to function.");
-        if (!$this->ssh->is_dir($wp_dir))
+        if (!$this->is_dir($wp_dir))
             return $this->logError(sprintf(" WordPress directory <strong>%s</strong> doesn't exist.", $wp_dir));
         if (!$this->client->WP_CLI()->install_if_missing())
             return $this->logError("WP CLI missing and install failed.");

@@ -19,10 +19,10 @@ class Gitignore extends AbstractTerminal
         if (!$this->validate($worktree))
             return false;
         $filepath = self::trailing_slash($worktree) . '.gitignore';
-        if ($this->ssh->file_exists($filepath) && strlen($this->ssh->get($filepath)) > 0)
+        if ($this->file_exists($filepath) && $this->size($filepath) > 0)
             return $this->logError(sprintf("Gitignore file at <strong>%s</strong> already exists so no need to create.", $worktree), 'warning');
-        $success = $this->ssh->put($filepath, BASE_DIR . '/../configs/gitignore-template', \phpseclib\Net\SFTP::SOURCE_LOCAL_FILE) ? true : false;
-        return $this->logFinish('', $success);
+        $success = $this->put($filepath, BASE_DIR . '/../configs/gitignore-template', 'file') ? true : false;
+        return $this->logFinish($success);
     }
 
     /**
@@ -35,10 +35,10 @@ class Gitignore extends AbstractTerminal
         if (!$this->validate($worktree))
             return false;
         $filepath = self::trailing_slash($worktree) . '.gitignore';
-        if (!$this->ssh->file_exists($filepath))
+        if (!$this->file_exists($filepath))
             return $this->logError(sprintf("Gitignore file at <strong>%s</strong> doesn't exist so no need to delete.", $worktree), 'warning');
-        $success = $this->ssh->delete($filepath) ? true : false;
-        return $this->logFinish('', $success);
+        $success = $this->deleteFile($filepath) ? true : false;
+        return $this->logFinish($success);
     }
 
     /**
@@ -47,7 +47,7 @@ class Gitignore extends AbstractTerminal
      */
     protected function validate(string $worktree = '')
     {
-        if (!$this->ssh->is_dir($worktree)) {
+        if (!$this->is_dir($worktree)) {
             return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $worktree));
         }
         if (!$this->client->git()->check($worktree))

@@ -63,7 +63,7 @@ class localVirtualHost extends AbstractTerminal
         $output = $this->exec($command);
         $success = strpos($output, 'Successfully created virtual host for ' . $args['domain']) !== false ? true : false;
         //sudo: no tty present and no askpass program specified
-        return $this->logFinish($output, $success, '');
+        return $this->logFinish($success, $output, '');
     }
 
     /**
@@ -97,7 +97,7 @@ class localVirtualHost extends AbstractTerminal
         $output = $this->exec($command);
         $success = strpos($output, 'Successfully removed Virtual Host for ' . $args['domain']) !== false ? true : false;
         //sudo: no tty present and no askpass program specified
-        return $this->logFinish($output, $success);
+        return $this->logFinish($success, $output);
     }
 
     /**

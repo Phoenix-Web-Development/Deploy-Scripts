@@ -15,7 +15,7 @@ class WPCLIConfig extends AbstractTerminal
      */
     public function check()
     {
-        if ($this->ssh->file_exists($this->filepath()))
+        if ($this->file_exists($this->filepath()))
             return true;
         return false;
     }
@@ -30,8 +30,8 @@ class WPCLIConfig extends AbstractTerminal
             $this->log("No need to delete " . $this->mainStr() . ' File doesn\'t exist.', 'info');
             return true;
         }
-        $success = $this->ssh->delete($this->filepath()) ? true : false;
-        return $this->logFinish('', $success);
+        $success = $this->deleteFile($this->filepath()) ? true : false;
+        return $this->logFinish($success);
 
     }
 
@@ -54,12 +54,12 @@ class WPCLIConfig extends AbstractTerminal
             return true;
         }
 
-        if (!$this->ssh->is_dir(dirname($this->filepath())))
+        if (!$this->is_dir(dirname($this->filepath())))
             $this->ssh->mkdir(dirname($this->filepath()));
         $CLIConfig = "apache_modules:
   - mod_rewrite";
-        $success = $this->ssh->put($this->filepath(), $CLIConfig);
-        return $this->logFinish('', $success);
+        $success = $this->put($this->filepath(), $CLIConfig);
+        return $this->logFinish($success);
     }
 
     /**

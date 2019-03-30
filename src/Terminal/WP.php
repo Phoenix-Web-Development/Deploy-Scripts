@@ -54,7 +54,7 @@ class WP extends AbstractTerminal
     {
         if (!$this->validate($wp_dir))
             return false;
-        $output = $this->exec("cd " . $wp_dir . "; wp core is-installed;");
+        $output = $this->exec(" wp core is-installed;", $wp_dir);
         $potential_errors = array(
             "This does not seem to be a WordPress install",
             "'wp-config.php' not found",
@@ -102,7 +102,7 @@ class WP extends AbstractTerminal
         $wp_plugins = !empty($wp_args['plugins']) ? sprintf('wp plugin install %s;', implode(' ', (array)$wp_args['plugins'])) : '';
         //$wp_plugins = "wp plugin install jetpack --version=6.5; wp plugin install jetpack --version=7.0; ";
         //                wp plugin update --all;
-        $output = $this->exec("cd " . $wp_dir . "; wp core download --skip-content;");
+        $output = $this->exec("wp core download --skip-content;", $wp_dir);
         $this->ssh->setTimeout(false); //downloading WP can take a while
         if (stripos($output, 'success') === false && strpos($output, 'WordPress files seem to already be present here') === false)
             return $this->logError("WordPress download failed.");
@@ -114,8 +114,7 @@ class WP extends AbstractTerminal
         }
 
         $wp_lang = !empty($wp_args['language']) ? 'wp language core install ' . $wp_args['language'] . '; wp site switch-language ' . $wp_args['language'] . ';' : '';
-        $commands1 = "
-                cd " . $wp_dir . "; 
+        $commands1 = "                
                 wp config create --dbname='" . $db_args['name'] . "' --dbuser='" . $db_args['username'] . "' --dbpass='" . $db_args['password'] . "' --dbprefix='" . rtrim($wp_args['prefix'], '_') . "_'" . " --locale=en_AU;         
                 " . $config_set . "
                 wp core install --url='" . $wp_args['url'] . "' --title='" . $wp_args['title'] . "' --admin_user='" . $wp_args['username']
@@ -124,15 +123,15 @@ class WP extends AbstractTerminal
                 wp post delete 1;
                 wp theme install twentyseventeen --activate;'
             . $wp_lang;
-        $commands2 = 'cd ' . $wp_dir . ';              
+        $commands2 = '              
                 mv wp-config.php ../
                 wp rewrite structure "/%postname%/";
                 wp rewrite flush --hard;
                 wp plugin activate --all;
                 rm wp-config-sample.php license.txt readme.html
                 ';
-        $output .= $this->exec($commands1);
-        $output .= $this->exec($commands2);
+        $output .= $this->exec($commands1, $wp_dir);
+        $output .= $this->exec($commands2, $wp_dir);
         $setOption = $this->setOption($wp_dir, 'default_comment_status', 'closed');
         $setOption2 = $this->setOption($wp_dir, 'blogdescription', 'Enter tagline for ' . $wp_args['title'] . ' here');
         $wp_blog_public = $this->environment == 'live' ? 1 : 0;
@@ -140,16 +139,16 @@ class WP extends AbstractTerminal
         if (!empty($wp_args['timezone']))
             $setOption4 = $this->setOption($wp_dir, 'timezone_string', $wp_args['timezone']);
 
-        $widgets = $this->exec("cd " . $wp_dir . "; wp widget list sidebar-1 --format=ids");
+        $widgets = $this->exec("wp widget list sidebar-1 --format=ids", $wp_dir);
         if (!empty($widgets)) {
             foreach (array('search-1', 'search-2', 'search') as $search) {
                 $widgets = str_replace($widgets, $search, '');
             }
-            $output .= $this->exec("cd " . $wp_dir . "; wp widget delete " . trim($widgets));
+            $output .= $this->exec("wp widget delete " . trim($widgets), $wp_dir);
         }
         $update = $this->update($wp_dir);
         $success = $this->check($wp_dir) ? true : false;
-        return $this->logFinish($output, $success, $commands1 . $commands2);
+        return $this->logFinish($success, $output, $commands1 . $commands2);
     }
 
     /**
@@ -165,7 +164,7 @@ class WP extends AbstractTerminal
         if (!$this->check($wp_dir))
             return $this->logError(sprintf('WordPress not installed at <strong>%s</strong>.', $wp_dir));
         $wp_dir = self::trailing_slash($wp_dir);
-        $commands = 'cd ' . $wp_dir . ';
+        $commands = '
                 find ' . $wp_dir . ' -type d -exec chmod 755 {} \;
                 echo status is $?;
                 find ' . $wp_dir . ' -type f -exec chmod 644 {} \;
@@ -175,19 +174,19 @@ class WP extends AbstractTerminal
                 find ' . $wp_dir . 'wp-content -type f -exec chmod 664 {} \;
                 echo status is $?;
         ';
-        $output = $this->exec($commands);
+        $output = $this->exec($commands, $wp_dir);
         if (stripos($output, 'status is 0') !== false && stripos($output, 'status is 1') === false)
             $findCommands = true;
         if (!empty($findCommands)) {
             $configFilePath = $wp_dir . '../wp-config.php';
-            if ($this->ssh->file_exists($configFilePath))
+            if ($this->file_exists($configFilePath))
                 $wpConfig = $this->ssh->chmod(0660, $configFilePath);
             $htaccessFilePath = $wp_dir . '.htaccess';
-            if ($this->ssh->file_exists($htaccessFilePath))
+            if ($this->file_exists($htaccessFilePath))
                 $htaccess = $this->ssh->chmod(0644, $htaccessFilePath);
         }
         $success = (!empty($findCommands) && !empty($wpConfig) && !empty($htaccess)) ? true : false;
-        return $this->logFinish($output, $success, $commands);
+        return $this->logFinish($success, $output, $commands);
     }
 
     /**
@@ -208,11 +207,10 @@ class WP extends AbstractTerminal
             return $this->logError("Option name not passed to setOption method");
         if (!isset($value) || $value === '')
             return $this->logError("Option value not passed to setOption method");
-        $command = 'cd ' . $wp_dir . ';     
-                wp option update ' . $option . ' "' . $value . '"';
-        $output = $this->exec($command);
+        $command = 'wp option update ' . $option . ' "' . $value . '"';
+        $output = $this->exec($command, $wp_dir);
         $success = (stripos($output, "Success:") !== false) ? true : false;
-        return $this->logFinish($output, $success, $command);
+        return $this->logFinish($success, $output, $command);
     }
 
     /**
@@ -258,10 +256,7 @@ class WP extends AbstractTerminal
         if (!$this->validate($wp_dir))
             return false;
         if ($this->check($wp_dir)) {
-            $db_clean = ' wp db clean --yes;';
-            $output = $this->exec("cd " . $wp_dir . ";"
-                . $db_clean
-            );
+            $output = $this->exec('wp db clean --yes;', $wp_dir);
             $cleanedDB = (stripos($output, 'Success') !== false && stripos($output, 'Tables dropped') !== false) ? true : false;
             if ($cleanedDB)
                 $output = "Successfully cleaned DB of all WordPress tables. ";
@@ -273,13 +268,13 @@ class WP extends AbstractTerminal
         $wp_files = self::WP_FILES;
         foreach ($wp_files as $wp_file) {
             $wp_file_path = self::trailing_slash($wp_dir) . $wp_file;
-            if ($this->ssh->file_exists($wp_file_path))
+            if ($this->file_exists($wp_file_path))
                 $wp_file_paths[] = $wp_file_path;
         }
         $succeededDeleting = true;
         if (!empty($wp_file_paths)) {
             foreach ($wp_file_paths as $wp_file_path) {
-                if (!$this->ssh->delete($wp_file_path)) {
+                if (!$this->deleteFile($wp_file_path)) {
                     $succeededDeleting = false;
                     $output .= "Failed to delete one or more WordPress files. ";
                     break;
@@ -296,7 +291,7 @@ class WP extends AbstractTerminal
             return true;
         }
         $success = (!$this->check($wp_dir) && (!empty($cleanedDB) || !empty($noNeedCleanDB)) && $succeededDeleting) ? true : false;
-        return $this->logFinish($output, $success);
+        return $this->logFinish($success, $output);
     }
 
     /**
@@ -309,25 +304,24 @@ class WP extends AbstractTerminal
             return false;
         if (!$this->check($wp_dir))
             return $this->logError(sprintf('WordPress not installed at <strong>%s</strong>.', $wp_dir));
-        $version = trim($this->exec('cd ' . $wp_dir . '; wp core version;'));
+        $version = trim($this->exec('wp core version;', $wp_dir));
         $updateToVersion = ($version != '5.0' && $version != '5.0.1') ? ' --version=4.9.9' : '';
-        $output = $this->exec(
-            'cd ' . $wp_dir . ';                        
-        wp core update --locale="en_AU" ' . $updateToVersion . ';
-        wp core update-db;
-        wp theme update --all; 
-        wp plugin update --all;
-        wp core language update;
-        wp language plugin update --all;
-        wp language theme update --all;
-        wp db optimize'
+        $output = $this->exec('                     
+            wp core update --locale="en_AU" ' . $updateToVersion . ';
+            wp core update-db;
+            wp theme update --all; 
+            wp plugin update --all;
+            wp core language update;
+            wp language plugin update --all;
+            wp language theme update --all;
+            wp db optimize', $wp_dir
         );
         $success = null;
         if (stripos($output, 'error') !== false)
             $success = false;
         elseif (stripos($output, 'success') !== false)
             $success = true;
-        return $this->logFinish($output, $success);
+        return $this->logFinish($success, $output);
     }
 
     /**
@@ -342,7 +336,7 @@ class WP extends AbstractTerminal
         if (in_array($wp_dir, array('~/', self::trailing_slash($this->client->root))))
             return $this->logError(sprintf("Shouldn't be %s WordPress in root directory <strong>%s</strong>.",
                 $this->actions[$this->getCaller()]['present'], $wp_dir));
-        if (!$this->ssh->is_dir($wp_dir))
+        if (!$this->is_dir($wp_dir))
             return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $wp_dir));
         if (!$this->client->WPCLI()->install_if_missing())
             return $this->logError("WP CLI missing and install failed.");
