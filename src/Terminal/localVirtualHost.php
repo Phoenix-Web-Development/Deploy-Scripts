@@ -41,6 +41,7 @@ class localVirtualHost extends AbstractTerminal
         $needles = [];
         $replaces = [];
         //Fill out virtual host template
+
         foreach ($args as $key => $arg) {
             if (in_array($key, ["admin_email", "domain", "web_dir"])) {
                 $needles[] = '%' . $key . '%';
@@ -56,7 +57,7 @@ class localVirtualHost extends AbstractTerminal
             . " virtualhost-create "
             . "'" . $args['domain'] . "' "
             . "'" . $args['sites_available_path'] . "' "
-            . "'" . $hostEntry . "' 2>&1";
+            . "'" . $hostEntry . "'";
         //print_r($command . '<br><br>');
 
         //$output = $this->exec('sudo ' . BASH_WRAPPER . ' virtualhost-create 2>&1' );
@@ -89,7 +90,7 @@ class localVirtualHost extends AbstractTerminal
         $command = 'sudo ' . BASH_WRAPPER
             . " virtualhost-delete "
             . "'" . $args['domain'] . "' "
-            . "'" . $args['sites_available_path'] . "' 2>&1";
+            . "'" . $args['sites_available_path'] . "'";
 
         print_r($command . '<br><br>');
 
@@ -117,7 +118,6 @@ class localVirtualHost extends AbstractTerminal
         $argKeys = [
             'domain',
             'admin_email',
-            'web_dir',
             'sites_available_path'
         ];
 

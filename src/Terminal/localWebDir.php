@@ -29,7 +29,7 @@ class localWebDir extends AbstractTerminal
             . "'" . $args['project_dir'] . "' "
             . "'" . $args['web_dir'] . "' "
             . "'" . $args['owner'] . "' "
-            . "'" . $args['group'] . "' 2>&1";
+            . "'" . $args['group'] . "'";
         print_r($command);
 
         //$success = mkdir ($args['web_dir'],0777 , TRUE );

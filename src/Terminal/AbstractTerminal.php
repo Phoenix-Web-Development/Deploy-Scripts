@@ -126,11 +126,11 @@ class AbstractTerminal extends BaseAbstract
         if (strpos($output, "0 status") !== false) {
             $deleted_origin_contents = $this->exec("shopt -s dotglob; rm -r " . $origin_dir . "*; echo $? status");
             if (strpos($deleted_origin_contents, "0 status") !== false) {
-                $this->log("Successfully moved " . $mainStr . $this->client->format_output($output . $deleted_origin_contents), 'success');
+                $this->log("Successfully moved " . $mainStr . $this->formatOutput($output . $deleted_origin_contents), 'success');
                 return true;
             }
         }
-        $this->log("Failed to move " . $mainStr . $this->client->format_output($output . $deleted_origin_contents));
+        $this->log("Failed to move " . $mainStr . $this->formatOutput($output . $deleted_origin_contents));
         return false;
     }
 
@@ -174,6 +174,8 @@ class AbstractTerminal extends BaseAbstract
     public
     function is_dir(string $dir = '')
     {
+        if (empty($dir))
+            return false;
         if ($this->environment != 'local') {
             return $this->ssh->is_dir($dir);
         }
@@ -383,6 +385,9 @@ class AbstractTerminal extends BaseAbstract
     protected function logFinish($success = false, string $output = '', string $command = '')
     {
         $action = $this->getCaller();
+        $output = $this->formatOutput($output);
+        $command = $this->formatOutput($command, 'command');
+
         if (!empty($action)) {
             if (!empty($success)) {
                 $string = sprintf('Successfully %s %s. %s%s', $this->actions[$this->getCaller()]['past'], $this->mainStr(), $command, $output);
@@ -398,5 +403,31 @@ class AbstractTerminal extends BaseAbstract
             return $return;
         }
         return null;
+    }
+
+    /**
+     * @param string $output
+     * @param string $type
+     * @return bool|string
+     */
+    public
+    function formatOutput(string $output = '', $type = 'output')
+    {
+        if (empty($output)) {
+            return false;
+        }
+
+        $append = '</pre>';
+        if (substr($output, -strlen($append)) !== $append)
+            $output = $output . $append;
+        $title = 'Command';
+        if ($type == 'output')
+            $title = 'Terminal output';
+
+        $prepend = "<pre><strong>" . $title . ":</strong> ";
+        if (substr($output, 0, strlen($prepend)) !== $prepend)
+            $output = $prepend . $output;
+
+        return '<br>' . $output;
     }
 }

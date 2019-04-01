@@ -51,7 +51,7 @@ final class Deployer extends Base
      * @var
      */
     public $actionRequests;
-    
+
     /**
      * @var
      */
@@ -315,39 +315,39 @@ final class Deployer extends Base
         $message = sprintf("%s environment %s connection.", $environment, $protocol);
         //if ($environment != 'local') {
 
-            $ssh_args = $this->get_environ_ssh_args($environment);
-            if (!empty($ssh_args)) {
-                switch ($protocol) {
-                    case 'ssh':
-                        $ssh = new SSH2($ssh_args->hostname, $ssh_args->port);
-                        break;
-                    case 'sftp':
-                        $ssh = new SFTP($ssh_args->hostname, $ssh_args->port);
-                        break;
-                }
+        $ssh_args = $this->get_environ_ssh_args($environment);
+        if (!empty($ssh_args)) {
+            switch ($protocol) {
+                case 'ssh':
+                    $ssh = new SSH2($ssh_args->hostname, $ssh_args->port);
+                    break;
+                case 'sftp':
+                    $ssh = new SFTP($ssh_args->hostname, $ssh_args->port);
+                    break;
             }
-            //$passphrase = $this->config->environ->local->ssh_keys->live->passphrase ?? '';
-            //$key_name = $this->config->environ->local->ssh_keys->live->key_name ?? '';
-            if (!empty($passphrase) && !empty($key_name)) {
-                $private_key_location = $this->config->environ->local->directory . $key_name;
+        }
+        //$passphrase = $this->config->environ->local->ssh_keys->live->passphrase ?? '';
+        //$key_name = $this->config->environ->local->ssh_keys->live->key_name ?? '';
+        if (!empty($passphrase) && !empty($key_name)) {
+            $private_key_location = $this->config->environ->local->directory . $key_name;
 
-                if (!file_exists($private_key_location)) {
-                    $this->terminal('local')->localSSHKey('create', $key_name, $passphrase);
-                    //$this->terminal('local')->SSHConfig('create', $key_name, $passphrase);
-                }
-                if (file_exists($private_key_location . '.pub')) {
-                    $public_key = file_get_contents($private_key_location . '.pub');
-                    $this->whm->import_key($public_key, $key_name);
-                    $this->whm->authkey($key_name);
-                    $key = new RSA();
-                    $key->setPassword($passphrase);
-                    $key->loadKey(file_get_contents($private_key_location));
-                }
+            if (!file_exists($private_key_location)) {
+                $this->terminal('local')->localSSHKey('create', $key_name, $passphrase);
+                //$this->terminal('local')->SSHConfig('create', $key_name, $passphrase);
             }
-            if (!empty($ssh) && $ssh->login($ssh_args->username, $ssh_args->password)) {
-                $this->log("Successfully authenticated " . $message, 'success');
-                return $ssh;
+            if (file_exists($private_key_location . '.pub')) {
+                $public_key = file_get_contents($private_key_location . '.pub');
+                $this->whm->import_key($public_key, $key_name);
+                $this->whm->authkey($key_name);
+                $key = new RSA();
+                $key->setPassword($passphrase);
+                $key->loadKey(file_get_contents($private_key_location));
             }
+        }
+        if (!empty($ssh) && $ssh->login($ssh_args->username, $ssh_args->password)) {
+            $this->log("Successfully authenticated " . $message, 'success');
+            return $ssh;
+        }
         //}
         $this->log("Couldn't authenticate " . $message);
         return false;
@@ -552,10 +552,8 @@ final class Deployer extends Base
 
     function localStuff($action = 'create')
     {
-        $rootWebDir = $this->config->environ->local->root_web_dir ?? '';
-        $projectName = $this->config->project->name ?? '';
-        $projectDir = (!empty($projectName) && !empty($rootWebDir)) ? $rootWebDir . $projectName : '';
-        $webDir = !empty($projectDir) ? $projectDir . '/Project/public' : '';
+        $projectDir = $this->get_environ_dir('local', 'project');
+        $webDir = $this->get_environ_dir('local', 'web');
 
         if ($this->actionRequests->can_do($action . "_local_virtual_host")) {
             $admin_email = $this->config->environ->local->email ?? '';
@@ -572,7 +570,13 @@ final class Deployer extends Base
         }
 
         if ($this->actionRequests->can_do($action . "_local_version_control")) {
-            $version_control = $this->environVersionControl($action, 'local');
+            $version_control = new EnvironVersionControl(
+                $this->terminal('local'),
+                $this->github,
+                $this->whm,
+                'local'
+            );
+            $version_control->create();
         }
 
         if ($this->actionRequests->can_do($action . "_local_web_directory")) {
@@ -1168,28 +1172,33 @@ final class Deployer extends Base
     function get_environ_dir(string $environment = 'live', $type = 'web')
     {
         $error_string = sprintf("Couldn't determine %s environment %s directory.", $environment, $type);
-        $root = $this->terminal($environment)->root;
-        if (empty($root)) {
-            $this->log($error_string . " Couldn't get SSH root directory.");
-            return false;
+        $root = '';
+        if ($environment != 'local') {
+            $root = $this->terminal($environment)->root;
+            if (empty($root)) {
+                $this->log($error_string . " Couldn't get SSH root directory.");
+                return false;
+            }
         }
-        switch ($type) {
-            case 'web':
-                switch ($environment) {
-                    case 'live':
+
+
+        switch ($environment) {
+            case 'live':
+                switch ($type) {
+                    case 'web':
                         $dir = '/public_html';
                         break;
-                    case 'staging':
-                        $dir = $this->config->environ->$environment->cpanel->subdomain->directory ?? '';
+                    case 'git':
+                        $dir = '/git/website';
                         break;
                 }
                 break;
-            case 'git':
-                switch ($environment) {
-                    case 'live':
-                        $dir = '/git/website';
+            case 'staging':
+                switch ($type) {
+                    case 'web':
+                        $dir = $this->config->environ->$environment->cpanel->subdomain->directory ?? '';
                         break;
-                    case 'staging':
+                    case 'git':
                         $repo_name = $this->config->version_control->repo_name ?? '';
                         if (empty($repo_name)) {
                             $this->log($error_string . ' Version control repo name missing from config.');
@@ -1197,17 +1206,25 @@ final class Deployer extends Base
                         }
                         $dir = '/git/' . $repo_name . '/website';
                         break;
-                }
-                break;
-            case 'github_webhook_endpoint_config':
-                switch ($environment) {
-                    case 'live':
-                        return false;
-                        break;
-                    case 'staging':
+                    case 'github_webhook_endpoint_config':
                         $dir = '/.github_webhook_configs';
                         break;
                 }
+                break;
+            case 'local':
+                $rootWebDir = $this->config->environ->local->root_web_dir ?? '';
+                if (empty($rootWebDir)) {
+                    $this->log($error_string . ' Root web dir missing from config.');
+                    return false;
+                }
+                $projectName = $this->config->project->name ?? '';
+                if (empty($projectName)) {
+                    $this->log($error_string . ' Project name missing from config.');
+                    return false;
+                }
+                $dir = $rootWebDir . $projectName;
+                if ($type != 'project')
+                    $dir .= '/Project/public';
                 break;
         }
         if (empty($dir)) {

@@ -15,12 +15,12 @@ class BaseAbstract extends Base
     /**
      * @var
      */
-    protected $_mainStr = '';
+    protected $_mainStr;
 
     /**
      * @var string
      */
-    private $logElement = '';
+    protected $logElement = '';
 
     /**
      * BaseAbstract constructor.

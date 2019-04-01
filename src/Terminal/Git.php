@@ -22,12 +22,17 @@ class Git extends AbstractTerminal
 
         $successMessage = "Git clone from " . $args['url'] . " successful";
 
-        $separateGitDir = !empty($args['repo_path']) ? '--separate-git-dir ' . $args['repo_path'] . ' ' : '';
-        $command = 'if [ git clone ' . $separateGitDir . $args["url"] . ' ' . $args["worktree_path"] . ' -eq 0 ]; then
+        $separateGitDir = !empty($args['repo_path']) && ($args['repo_path'] != $args['worktree_path']) ? '--separate-git-dir ' . $args['repo_path'] . ' ' : '';
+        $command = 'if git clone ' . $separateGitDir . $args["url"] . ' ' . $args["worktree_path"] . '
+        then
             echo "' . $successMessage . '"
         else
             echo "Git clone failed"
         fi;';
+        //ssh-agent bash -c 'ssh-add sshkey
+
+        //$command = 'git clone ' . $separateGitDir . $args["url"] . ' ' . $args["worktree_path"];
+        //$command = "ssh-agent bash -c 'ssh-add /home/james/.ssh/github; ". $command . "'";
         $output = $this->exec($command);
         $success = stripos($output, $successMessage) !== false ? true : false;
 
@@ -43,7 +48,7 @@ class Git extends AbstractTerminal
      */
     public function move(string $worktree = '', string $separate_repo_path = '')
     {
-        $args = ['worktree_path' => $workTree, 'repo_path' => $separate_repo_path];
+        $args = ['worktree_path' => $worktree, 'repo_path' => $separate_repo_path];
 
         $this->mainStr($args);
         $this->logStart();
@@ -163,8 +168,9 @@ class Git extends AbstractTerminal
      */
     protected function isGitThing(string $dir = '', $thing = 'repo')
     {
-        if (empty($dir))
+        if (!$this->is_dir($dir))
             return false;
+
         switch ($thing) {
             case 'repo':
                 $parseFor = '--is-inside-git-dir';
@@ -176,10 +182,12 @@ class Git extends AbstractTerminal
                 return false;
         }
         $output = $this->exec('git rev-parse ' . $parseFor, $dir);
+
         if (stripos($output, 'true') !== false)
             return true;
         return false;
     }
+    //git rev-parse --is-inside-work-tree /home/james/data/Dropbox/htdocs/powertomove/Project/public
 
     /**
      * @param array $args
@@ -193,7 +201,8 @@ class Git extends AbstractTerminal
         if (empty($args))
             return $this->_validated = $this->logError("No method input received.");
 
-        switch ($this->getCaller()) {
+        $action = $this->getCaller();
+        switch ($action) {
             case 'clone':
                 $argsToValidate = ['worktree_path', 'url'];
                 break;
@@ -212,21 +221,30 @@ class Git extends AbstractTerminal
             if (empty($args[$argToValidate]))
                 return $this->_validated = $this->logError(ucfirst($argToValidate) . " missing from method input.");
         }
+        if ($action != 'clone') {
+            if (!empty($args['worktree_path'])) {
+                if (!$this->is_dir($args['worktree_path']))
+                    return $this->_validated = $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $args['worktree_path']));
+            }
+            if (!empty($args['repo_path'])) {
+                if (!$this->is_dir($args['repo_path']))
+                    return $this->_validated = $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $args['repo_path']));
+            }
+        }
         if (!empty($args['worktree_path'])) {
-            if (!$this->is_dir($args['worktree_path']))
-                return $this->_validated = $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $args['worktree_path']));
+            if ($this->isGitWorktree($args['worktree_path'])) {
+                if ($action == 'clone')
+                    return $this->_validated = $this->logError("Already a git worktree in <strong>" . $args['worktree_path'] . "</strong> directory.");
+            } else {
+                if ($action != 'clone')
+                    return $this->_validated = $this->logError("Nominated git worktree directory is not a git worktree.");
+            }
+            return $this->_validated = true;
         }
-        if (!empty($args['repo_path'])) {
-            if (!$this->is_dir($args['repo_path']))
-                return $this->_validated = $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $args['repo_path']));
-        }
-        if (!$this->isGitWorktree($args['worktree_path']))
-            return $this->_validated = $this->logError("Nominated git worktree directory is not a git worktree.");
-
-        return $this->_validated = true;
     }
 
-    protected function mainStr(array $args = [])
+    protected
+    function mainStr(array $args = [])
     {
         $action = $this->getCaller();
         if (func_num_args() == 0) {

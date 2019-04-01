@@ -187,7 +187,7 @@ class GitBranch extends AbstractTerminal
         $this->exec("git fetch --all", $args['worktree']);
         $changes = $this->getChanges($args['worktree']);
         if (!empty($changes))
-            return $this->logError("Uncommitted changes in Git repo. " . $this->client->format_output($changes));
+            return $this->logError("Uncommitted changes in Git repo. " . $this->formatOutput($changes));
         if ($this->check($args['worktree'], $args['branch'], 'up') === false)
             return $this->logError(sprintf("No upstream branch called <strong>%s</strong>.", $args['branch']));
         $currentBranch = $this->getCurrent($args['worktree']);

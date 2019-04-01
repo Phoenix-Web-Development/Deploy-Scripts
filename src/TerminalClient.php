@@ -211,16 +211,17 @@ class TerminalClient extends BaseClient
      */
     public function exec(string $command = '', string $startDir = '')
     {
-        $error_string = sprintf('<code>exec()</code> failed to execute command in %s environment terminal. Commands: %s',
-            $this->environment, $this->format_output($command));
+        $error_string = sprintf('<code>exec()</code> failed to execute command in %s environment terminal. <pre><strong>Commands</strong>:%s</pre>',
+            $this->environment, $command);
 
-        if (!empty($startDir))
+        if (!empty($startDir)) {
             $command = 'cd ' . $startDir . '; ' . $command;
+        }
 
         //d($this);
         if ($this->environment == 'local') {
-            //d('local exec - ' . $command);
-            exec($command, $raw_outputs);
+            d('local exec - ' . $command);
+            exec($command . " 2>&1", $raw_outputs);
             //print_r($raw_outputs);
             $output = implode('<br>', $raw_outputs);
 
@@ -344,43 +345,8 @@ class TerminalClient extends BaseClient
         }
     }
     */
-    /**
-     * @param string $output
-     * @return bool|string
-     */
-    public
-    function format_output(string $output = '')
-    {
-        if (empty($output)) {
-            return false;
-        }
 
-        $append = '</pre>';
-        if (substr($output, -strlen($append)) !== $append)
-            $output = $output . $append;
 
-        $prepend = "<pre><strong>Terminal output:</strong> ";
-        if (substr($output, 0, strlen($prepend)) !== $prepend)
-            $output = $prepend . $output;
-
-        return '<br>' . $output;
-    }
-
-    /**
-     * @param string $command
-     * @return bool|string
-     */
-    public
-    function formatCommand(string $command = '')
-    {
-        if (!empty($command)) {
-            $command = '</pre>' . rtrim($command, '</pre>');
-            $prepend = "<pre><strong>Command output:</strong> ";
-            $command = $prepend . ltrim($command, $prepend);
-            return '<br>' . $command;
-        }
-        return false;
-    }
 
 
 }
