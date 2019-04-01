@@ -3,10 +3,10 @@
 namespace Phoenix\Terminal;
 
 /**
- * Class localVirtualHost
+ * Class LocalVirtualHost
  * @package Phoenix\Terminal
  */
-class localVirtualHost extends AbstractTerminal
+class LocalVirtualHost extends AbstractTerminal
 {
 
 

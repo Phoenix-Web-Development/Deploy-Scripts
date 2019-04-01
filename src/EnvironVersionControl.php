@@ -43,7 +43,7 @@ class EnvironVersionControl extends AbstractDeployer
         $upstream_repository = $this->github->repo()->get($args['repo']['name']);
         if (!$upstream_repository)
             return $this->logError("Upstream repository not found.");
-
+        $clonedRepository = $this->terminal->git()->check($args['repo']['dir']);
         if ($this->environ != 'local') {
             $sshKey = $this->whm->genkey($args['key']['name'], $args['key_passphrase'], 2048, $args['cPanel_account']['user']);
             if (!empty($sshKey)) {
@@ -56,28 +56,32 @@ class EnvironVersionControl extends AbstractDeployer
                 'url' => str_replace('git@github.com', $args['key']['name'], $upstream_repository['ssh_url']),
                 'remote_name' => "origin"
             ]);
-            $clonedRepository = $this->whm->version_control('clone',
-                $args['repo']['dir'],
-                $args['repo']['downstream_name'],
-                $sourceRepository
-            );
-            if (!$clonedRepository)
-                $clonedRepository = $this->whm->version_control('get', $args['repo']['dir']);
+
+            if (!$clonedRepository) {
+                $clonedRepository = $this->whm->version_control('clone',
+                    $args['repo']['dir'],
+                    $args['repo']['downstream_name'],
+                    $sourceRepository
+                );
+                if (!$clonedRepository)
+                    $clonedRepository = $this->whm->version_control('get', $args['repo']['dir']);
+            }
         } else {
-            d($this->terminal->whoami());
-            $clonedRepository = $this->terminal->Git()->clone([
-                //'url' => str_replace('git@github.com', 'github', $upstream_repository['ssh_url']),
-                'url' => $upstream_repository['ssh_url'],
-                'worktree_path' => $args['repo']['dir']
-            ]);
+            if (!$clonedRepository) {
+                $clonedRepository = $this->terminal->Git()->clone([
+                    //'url' => str_replace('git@github.com', 'github', $upstream_repository['ssh_url']),
+                    'url' => $upstream_repository['ssh_url'],
+                    'worktree_path' => $args['repo']['dir']
+                ]);
+            }
         }
 
 
         if (!empty($clonedRepository) && $this->terminal->git()->waitForUnlock($args['repo']['dir'])) {
             if ($args['repo']['worktree'] != $args['repo']['dir'])
                 $createdDotGit = $this->terminal->dotGitFile()->create($args['repo']['worktree'], $args['repo']['dir']);
-            $createdGitignore = $this->terminal->gitignore()->create($args['repo']['worktree']);
             $purgedGit = $this->terminal->git()->purge($args['repo']['dir']);
+            $createdGitignore = $this->terminal->gitignore()->create($args['repo']['worktree']);
             if ($clonedRepository)
                 $resetGit = $this->terminal->gitBranch()->reset(['worktree' => $args['repo']['worktree'], 'branch' => 'master']);
         }
@@ -196,9 +200,6 @@ class EnvironVersionControl extends AbstractDeployer
             if (!empty($this->_mainStr[$action]))
                 return $this->_mainStr[$action];
         }
-        d($action);
-        d($this->_mainStr);
-        d($this->environ);
         return $this->_mainStr[$action] = sprintf('%s version control components', $this->environ);
     }
 }

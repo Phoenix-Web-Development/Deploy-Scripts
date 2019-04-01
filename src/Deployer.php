@@ -552,8 +552,34 @@ final class Deployer extends Base
 
     function localStuff($action = 'create')
     {
-        $projectDir = $this->get_environ_dir('local', 'project');
         $webDir = $this->get_environ_dir('local', 'web');
+        $projectDir = $this->get_environ_dir('local', 'project');
+
+        if ($this->actionRequests->can_do($action . "_local_web_directory_permissions")) {
+            $webOwner = $this->config->environ->local->web_owner ?? '';
+            $webGroup = $this->config->environ->local->web_group ?? '';
+            $projectOwner = $this->config->environ->local->project_owner ?? '';
+            $projectGroup = $this->config->environ->local->project_group ?? '';
+            $webDirArgs = [
+                'web_dir' => $webDir,
+                'web_owner' => $webOwner,
+                'web_group' => $webGroup,
+                'project_dir' => $projectDir,
+                'project_owner' => $projectOwner,
+                'project_group' => $projectGroup
+            ];
+            $this->terminal('local')->localWebDirSetup()->$action($webDirArgs);
+        }
+
+        if ($this->actionRequests->can_do($action . "_local_version_control")) {
+            $version_control = new EnvironVersionControl(
+                $this->terminal('local'),
+                $this->github,
+                $this->whm,
+                'local'
+            );
+            $version_control->create();
+        }
 
         if ($this->actionRequests->can_do($action . "_local_virtual_host")) {
             $admin_email = $this->config->environ->local->email ?? '';
@@ -569,56 +595,7 @@ final class Deployer extends Base
             $this->terminal('local')->localVirtualHost()->$action($virtualHostArgs);
         }
 
-        if ($this->actionRequests->can_do($action . "_local_version_control")) {
-            $version_control = new EnvironVersionControl(
-                $this->terminal('local'),
-                $this->github,
-                $this->whm,
-                'local'
-            );
-            $version_control->create();
-        }
 
-        if ($this->actionRequests->can_do($action . "_local_web_directory")) {
-            $owner = $this->config->environ->local->owner ?? '';
-            $group = $this->config->environ->local->group ?? '';
-            $webDirArgs = [
-                'project_dir' => $projectDir,
-                'web_dir' => $webDir,
-                'owner' => $owner,
-                'group' => $group
-            ];
-            $this->terminal('local')->localWebDir()->$action($webDirArgs);
-        }
-
-        //$this->terminal('staging')->ssh->delete($directory);
-        /*
-        if ($this->actionRequests->can_do('create_local_version_control')) {
-            $this->environVersionControl('create', 'local');
-        }
-
-
-        $key_name = $this->config->live->domain ?? '';
-        $passphrase = $this->config->local->ssh_keys->live->passphrase ?? '';
-        $ssh_key = $this->terminal('local')->SSHKey($action, $key_name, $passphrase);
-        if (!empty($ssh_key)) {
-            $host = $this->config->live->domain ?? '';
-            $hostname = $this->config->live->cpanel->ssh->hostname ?? '';
-            $user = $this->config->live->cpanel->ssh->username ?? '';
-            $port = $this->config->live->cpanel->ssh->port ?? '';
-            $this->terminal('local')->SSHConfig($action, $host, $hostname, $key_name, $user, $port);
-
-            $cpanel_username = $this->config->environ->live->cpanel->account->username ?? '';
-            $this->whm->import_key($ssh_key, $key_name, $passphrase, $cpanel_username);
-        }
-        $this->terminal('local')->virtualHost($action);
-
-        $github_user = $this->config->version_control->github->user ?? '';
-        $project_name = $this->config->project->name ?? '';
-
-        $this->terminal('local')->Git('create', $github_user, $project_name);
-        return true;
-        */
     }
 
 

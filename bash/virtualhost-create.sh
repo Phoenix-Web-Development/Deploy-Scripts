@@ -18,14 +18,12 @@ if [[ -e "$vHostFilePath" ]]; then
 	exit;
 fi
 
-
 ### create virtual host rules file
 if ! echo "$hostEntry" > $vHostFilePath
 then
 	echo -e $"There is an ERROR creating $domain file"
 	exit;
 fi
-
 
 ### Add domain in /etc/hosts
 if ! echo "127.0.0.1	$domain" >> /etc/hosts
@@ -34,10 +32,8 @@ then
 	exit;
 fi
 
-
 ### enable website
 a2ensite $domain
-
 
 ### restart Apache
 /etc/init.d/apache2 reload

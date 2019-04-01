@@ -3,10 +3,10 @@
 namespace Phoenix\Terminal;
 
 /**
- * Class localWebDir
+ * Class LocalWebDirSetup
  * @package Phoenix\Terminal
  */
-class localWebDir extends AbstractTerminal
+class LocalWebDirSetup extends AbstractTerminal
 {
 
 
@@ -25,33 +25,31 @@ class localWebDir extends AbstractTerminal
             return false;
 
         $command = 'sudo ' . BASH_WRAPPER
-            . " webdir-create "
-            . "'" . $args['project_dir'] . "' "
+            . " webdir-setup "
             . "'" . $args['web_dir'] . "' "
-            . "'" . $args['owner'] . "' "
-            . "'" . $args['group'] . "'";
-        print_r($command);
-
-        //$success = mkdir ($args['web_dir'],0777 , TRUE );
-        //$this->ssh->mkdir($args['web_dir']);
-        //$this->ssh->mkdir($args['project_dir']);
+            . "'" . $args['web_owner'] . "' "
+            . "'" . $args['web_group'] . "' "
+            . "'" . $args['project_dir'] . "' "
+            . "'" . $args['project_owner'] . "' "
+            . "'" . $args['project_group'] . "' ";
 
         $output = $this->exec($command);
-        $success = strpos($output, 'Successfully created web directory at ' . $args['web_dir']) !== false ? true : false;
+        $needle = 'Successfully setup web directory at ' . $args['web_dir'] . '.';
+        if (!empty($args['project_dir']))
+            $needle .= ' Successfully setup project directory at ' . $args['project_dir'] . '.';
+        $success = strpos($output, $needle) !== false ? true : false;
 
 
-        return $this->logFinish($success, '', '');
+        return $this->logFinish($success, $output, $command);
     }
 
     /**
-     * @param string $wp_dir
-     * @param array $db_args
-     * @param array $wp_args
-     * @return bool
+     * @param array $args
+     * @return bool|null
      */
-    public function install(string $wp_dir = '', array $db_args = array(), array $wp_args = array())
+    public function install(array $args = [])
     {
-        return $this->create($wp_dir, $db_args, $wp_args);
+        return $this->create($args);
     }
 
 
@@ -61,20 +59,21 @@ class localWebDir extends AbstractTerminal
         $this->logStart();
         if (!$this->validate($args))
             return false;
+        $command = "rm -R " . $args['web_dir'];
 
-        $output = $this->exec("rm -R " . $args['web_dir']);
+        $output = $this->exec($command);
         print_r($output);
         $success = $this->is_dir($args['web_dir']) ? false : true;
-        return $this->logFinish($success, $output);
+        return $this->logFinish($success, $output, $command);
     }
 
     /**
-     * @param string $wp_dir
-     * @return bool
+     * @param array $args
+     * @return bool|null
      */
-    public function uninstall($wp_dir = '')
+    public function uninstall($args = [])
     {
-        return $this->delete($wp_dir);
+        return $this->delete($args);
     }
 
     protected function validate(array $args = [])
@@ -83,23 +82,30 @@ class localWebDir extends AbstractTerminal
             return $this->logError("No args inputted to method.");
 
         $argKeys = [
-            'project_dir',
             'web_dir',
-            'owner',
-            'group'
+            'web_owner',
+            'web_group'
         ];
+
+        if (!empty($args['project_dir'])) {
+            $argKeys = array_merge($argKeys, ['project_owner', 'project_group']);
+        }
 
         foreach ($argKeys as $argKey) {
             if (empty($args[$argKey]))
                 return $this->logError(" Argument <strong>" . $argKey . "</strong> missing from input.");
         }
-
+        if (!empty($args['project_dir'])) {
+            if (strpos($args['web_dir'], $args['project_dir']) !== 0) {
+                return $this->logError("Web directory is not sub-directory of project directory.");
+            }
+        }
         return true;
     }
 
     /**
-     * @param string $wp_dir
-     * @return bool|string
+     * @param array $args
+     * @return string
      */
     protected
     function mainStr(array $args = [])

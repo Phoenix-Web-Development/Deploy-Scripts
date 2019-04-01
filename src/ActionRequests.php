@@ -46,12 +46,13 @@ class ActionRequests
 
         'create_local_stuff' => array('label' => 'Create local stuff',
             'condition' => array('create')),
-        'create_local_virtual_host' => array('label' => 'Create virtual host',
-            'condition' => array('create', 'create_local_stuff')),
-        'create_local_web_directory' => array('label' => 'Create web directory',
+        'create_local_web_directory_permissions' => array('label' => 'Setup web directory permissions',
             'condition' => array('create', 'create_local_stuff')),
         'create_local_version_control' => array('label' => 'Setup version control',
             'condition' => array('create', 'create_local_stuff')),
+        'create_local_virtual_host' => array('label' => 'Create virtual host',
+            'condition' => array('create', 'create_local_stuff')),
+
 
         //'create_wp_auto_update' => array('label' => 'Setup WordPress auto-update',
         //  'condition' => array('create')),

@@ -19,8 +19,8 @@ use phpseclib\Net\SFTP;
  * @method Terminal\SSHKey ssh_key()
  * @method Terminal\GithubWebhookEndpointConfig github_webhook_endpoint_config()
  * @method Terminal\GithubWebhookEndpointConfig githubWebhookEndpointConfig()
- * @method Terminal\localVirtualHost localvirtualhost()
- * @method Terminal\localWebDir localwebdir()
+ * @method Terminal\LocalVirtualHost localVirtualHost()
+ * @method Terminal\LocalWebDirSetup localWebDirSetup()
  * @method Terminal\WP wp()
  * @method Terminal\WP wordpress()
  * @method Terminal\WPCLI wp_cli()
@@ -116,10 +116,10 @@ class TerminalClient extends BaseClient
                 break;
             case 'localvirtualhost':
             case 'virtualhost':
-                $api = new Terminal\localVirtualHost($this);
+                $api = new Terminal\LocalVirtualHost($this);
                 break;
-            case 'localwebdir':
-                $api = new Terminal\localWebDir($this);
+            case 'localwebdirsetup':
+                $api = new Terminal\LocalWebDirSetup($this);
                 break;
             case 'wp':
             case 'wordpress':

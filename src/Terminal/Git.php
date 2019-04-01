@@ -116,6 +116,10 @@ class Git extends AbstractTerminal
         return $this->logFinish($success, $output, $command);
     }
 
+    /**
+     * @param string $worktree
+     * @return bool
+     */
     public function check(string $worktree = '')
     {
         $args = ['worktree_path' => $worktree];
@@ -269,6 +273,6 @@ class Git extends AbstractTerminal
             }
         }
         $branchStr = !empty($args['branch']) ? " on branch <strong>" . $args['branch'] . "</strong>" : '';
-        return $this->_mainStr = sprintf("%s environment Git repository%s%s%s", $this->environment, $urlStr, $worktreePathStr, $branchStr);
+        return $this->_mainStr[$action] = sprintf("%s environment Git repository%s%s%s", $this->environment, $urlStr, $worktreePathStr, $branchStr);
     }
 }
