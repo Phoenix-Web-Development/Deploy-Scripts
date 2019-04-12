@@ -2,8 +2,6 @@
 
 namespace Phoenix\Terminal;
 
-use \phpseclib\Net\SFTP;
-
 /**
  * Class Htaccess
  * @package Phoenix\Terminal

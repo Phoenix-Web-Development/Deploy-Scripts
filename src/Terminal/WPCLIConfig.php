@@ -84,6 +84,6 @@ class WPCLIConfig extends AbstractTerminal
      */
     protected function filepath()
     {
-        return self::trailing_slash($this->client->root) . '.wp-cli/config.yml';
+        return self::trailing_slash($this->root) . '.wp-cli/config.yml';
     }
 }

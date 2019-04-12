@@ -2,8 +2,6 @@
 
 namespace Phoenix\Terminal;
 
-
-use function Clue\StreamFilter\append;
 use Phoenix\TerminalClient;
 use Phoenix\BaseAbstract;
 use phpseclib\Net\SFTP;
@@ -12,6 +10,9 @@ use phpseclib\Net\SFTP;
  * @property TerminalClient $client
  * @property string $environment
  * @property SFTP $ssh
+ * @property string $root
+ *
+ * @property array $prompt
  *
  * Class AbstractTerminal
  * @package Phoenix\Terminal
@@ -23,6 +24,10 @@ class AbstractTerminal extends BaseAbstract
      */
     protected $_client;
 
+    /**
+     * @var
+     */
+    protected $_prompt;
 
     /**
      * AbstractTerminal constructor.
@@ -49,6 +54,20 @@ class AbstractTerminal extends BaseAbstract
     }
 
     /**
+     * wrapper function to shorten calls
+     *
+     * @return bool|string
+     */
+    protected function root()
+    {
+        if (!empty($this->client->root))
+            return $this->client->root;
+        return false;
+    }
+
+    /**
+     * wrapper function to shorten calls
+     *
      * @return bool|SFTP
      */
     protected function ssh()
@@ -59,6 +78,8 @@ class AbstractTerminal extends BaseAbstract
     }
 
     /**
+     * wrapper function to shorten calls
+     *
      * @return bool|string
      */
     protected function environment()
@@ -69,6 +90,8 @@ class AbstractTerminal extends BaseAbstract
     }
 
     /**
+     * wrapper function to shorten calls
+     *
      * @param string $command
      * @param string $startDir
      * @return bool|string
@@ -171,6 +194,10 @@ class AbstractTerminal extends BaseAbstract
         return file_exists($path);
     }
 
+    /**
+     * @param string $dir
+     * @return bool
+     */
     public
     function is_dir(string $dir = '')
     {
@@ -180,20 +207,6 @@ class AbstractTerminal extends BaseAbstract
             return $this->ssh->is_dir($dir);
         }
         return is_dir($dir);
-        /*
-        $output = $this->exec(
-            'if ! [[ -d "' . $dir . '" ]]; then
-        echo "No directory"
-        else
-        echo "Found directory"
-        fi'
-        );
-        print_r($output);
-        if (strpos($output, "Found directory") !== false)
-            return true;
-        elseif (strpos($output, "No directory") !== false)
-            return false;
-        */
     }
 
     /**
@@ -230,12 +243,12 @@ class AbstractTerminal extends BaseAbstract
      * upload file or write file locally
      *
      * @param string $filepath
-     * @param $data
+     * @param string $data
      * @param string $mode
      * @return bool|int
      */
     public
-    function put(string $filepath = '', $data, $mode = 'string')
+    function put(string $filepath = '', string $data = '', $mode = 'string')
     {
         if ($this->environment != 'local') {
             switch ($mode) {
@@ -289,6 +302,22 @@ class AbstractTerminal extends BaseAbstract
         if (!file_exists($filepath))
             return false;
 
+        if (!is_writable($filepath))
+            return false;
+
+        $perms = fileperms($filepath);
+        $containerPerms = fileperms(dirname($filepath));
+        $unixUser = posix_geteuid();
+        $unixGroup = posix_getegid();
+        if (((empty($perms & 0x0080) || (fileowner($filepath) != $unixUser))
+                && (empty($perms & 0x0010) || (filegroup($filepath) != $unixGroup))
+                && (empty($perms & 0x0002))) || (
+            ((empty($containerPerms & 0x0080) || (fileowner(dirname($filepath)) != $unixUser))
+                && (empty($containerPerms & 0x0010) || (filegroup(dirname($filepath)) != $unixGroup))
+                && (empty($containerPerms & 0x0002)))
+            )
+        ) return false;
+
         if (!is_dir($filepath))
             return unlink($filepath);
 
@@ -324,7 +353,7 @@ class AbstractTerminal extends BaseAbstract
             $this->log(sprintf("%s <strong>%s</strong> is not a directory.", $error_string, $dir));
             return false;
         }
-        $root = self::trailing_slash($this->client->root);
+        $root = self::trailing_slash($this->root);
         if (self::trailing_slash($dir) == $root || self::trailing_slash(dirname($dir)) == $root) {
             $this->log(sprintf("%s Shouldn't be pruning root directory.", $error_string, $dir));
             return false;
@@ -430,4 +459,75 @@ class AbstractTerminal extends BaseAbstract
 
         return '<br>' . $output;
     }
+
+    /**
+     * @param string $script
+     * @param array $args
+     * @return string
+     */
+    public
+    function formatSudoCommand(string $script = '', array $args = [])
+    {
+        $command = "sudo " . BASH_WRAPPER . " " . $script . " '" . implode("' '", $args) . "'";
+        return $command;
+    }
+
+    /**
+     * @param array $commands
+     * @return bool|string
+     */
+    protected function readWrite(array $commands = array())
+    {
+
+        if (!$this->ssh->isAuthenticated() && !empty(debug_backtrace()[1]['function'])) {
+            $this->log(sprintf("%s environment SSH read_write() failed as you aren't authenticated. <code>readWrite()</code> called by <code>%s()</code> function.",
+                ucfirst($this->environment), debug_backtrace()[1]['function']), 'error');
+            return false;
+        }
+
+        $prompt = $this->prompt();
+        $outputs = array();
+        $this->ssh->read($prompt);
+        foreach ($commands as $command) {
+            if (!empty($command)) {
+                $this->ssh->write($command); // note the "\n"
+                $output = $this->ssh->read($prompt);
+                //echo '<strong>' . $command . ':</strong>' . $output . '<br><br>';
+                $output = str_replace($prompt, '', $output);
+                $output = str_replace(trim(str_replace('\n', '', $command)), '', $output);
+                $output = '<code>' . $command . '</code>' . trim($output);
+                $outputs[] = $output;
+            }
+        }
+        return implode('<br>', $outputs);
+    }
+
+    /**
+     * @return bool|string
+     */
+    protected function prompt()
+    {
+        if (!empty($this->_prompt))
+            return $this->_prompt;
+        $prompt = $this->exec('echo "$PS1"');
+        $prompt = str_replace('\u', $this->whoami(), $prompt);
+        $prompt = str_replace('\h', trim($this->exec('hostname -a')), $prompt);
+        $prompt = str_replace('\w', '~', $prompt);
+        $prompt = trim($prompt);
+        if (empty($prompt)) {
+            $this->log(sprintf("Couldn't work out the %s environment terminal prompt for <code>read()</code> commands.", $this->environment));
+            return false;
+        }
+        $this->log(sprintf("Prompt string for %s environment terminal <code>read()</code> commands set to '<strong>%s</strong>'.", $this->environment, $prompt), 'info');
+        return $this->_prompt = $prompt;
+    }
+
+    /**
+     * @return bool|string
+     */
+    function whoami()
+    {
+        return trim($this->exec('whoami')) ?? false;
+    }
+
 }

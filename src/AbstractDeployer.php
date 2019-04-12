@@ -20,7 +20,6 @@ class AbstractDeployer extends BaseAbstract
 
     /**
      * AbstractDeployer constructor.
-     * @param TerminalClient $client
      */
     public function __construct()
     {

@@ -68,7 +68,7 @@ class EnvironVersionControl extends AbstractDeployer
             }
         } else {
             if (!$clonedRepository) {
-                $clonedRepository = $this->terminal->Git()->clone([
+                $clonedRepository = $this->terminal->git()->clone([
                     //'url' => str_replace('git@github.com', 'github', $upstream_repository['ssh_url']),
                     'url' => $upstream_repository['ssh_url'],
                     'worktree_path' => $args['repo']['dir']
@@ -164,7 +164,7 @@ class EnvironVersionControl extends AbstractDeployer
     protected function getArgs()
     {
         $environ = $this->environ;
-        $root = $this->terminal->root;
+        $root = $this->terminal->api()->root;
         if (empty($root))
             return $this->logError(sprintf("Couldn't get %s environment root directory.", $environ));
 

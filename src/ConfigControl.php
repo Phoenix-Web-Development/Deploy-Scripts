@@ -93,7 +93,7 @@ class ConfigControl extends Base
             $site_config = include $configSelected['path'];
             $this->log("<strong>" . ucfirst($configSelected['name']) . "</strong> site specific config loaded.", 'info');
         } else {
-            $this->log("No site specific config currently loaded.", 'info');
+            $this->log("<h3>No site specific config currently loaded.</h3>", 'info');
         }
 
         $config = array_replace_recursive($base_config, $site_config);

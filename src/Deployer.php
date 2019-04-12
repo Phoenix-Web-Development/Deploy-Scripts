@@ -174,9 +174,11 @@ final class Deployer extends Base
             template()->get('reload');
         } else {
             template()->get('form');
-            $this->log(sprintf('Apache user is <strong>%s</strong>.', $this->terminal('local')->whoami()), 'info');
-            //if (!empty($this->terminal('staging')->whoami()))
-            //$this->log(sprintf('Staging Apache user is <strong>%s</strong>.', $this->terminal('staging')->whoami()), 'info');
+            $unixUser = posix_getpwuid(posix_geteuid())['name'] ?? 'unknown';
+            $unixUser = sprintf('Local server unix user is <strong>%s</strong>.', $unixUser);
+            $root = $this->terminal('local')->root ?? 'unknown';
+            $root = sprintf(' Local root directory is <strong>%s</strong>.', $root);
+            $this->log($unixUser . $root, 'info');
             $diskspace = $this->getWHMDiskSpace();
 
             $plan = $this->config->environ->live->cpanel->create_account_args->plan ?? '';
@@ -185,7 +187,7 @@ final class Deployer extends Base
                 $disk_message = 'You have';
             else
                 $disk_message = 'Not enough';
-            $this->log(sprintf('Total disk space - <strong>%s</strong>MB. Disk used - <strong>%s</strong>MB. Allocated disk space - <strong>%s</strong>MB. %s enough unallocated disk space for a new <strong>%s</strong>MB cPanel account.',
+            $this->log(sprintf('Total disk space - <strong>%s</strong>MB. Disk used - <strong>%s</strong>MB. Allocated disk space - <strong>%s</strong>MB. %s unallocated disk space for a new <strong>%s</strong>MB cPanel account.',
                 $diskspace['total'], $diskspace['used'], $diskspace['allocated'], $disk_message, $package_size), 'info');
             $this->log('<h3>cPanel Staging Subdomains</h3>' . build_recursive_list((array)ph_d()->get_staging_subdomains()), 'light');
         }
@@ -332,7 +334,7 @@ final class Deployer extends Base
             $private_key_location = $this->config->environ->local->directory . $key_name;
 
             if (!file_exists($private_key_location)) {
-                $this->terminal('local')->localSSHKey('create', $key_name, $passphrase);
+                //$this->terminal('local')->localSSHKey('create', $key_name, $passphrase);
                 //$this->terminal('local')->SSHConfig('create', $key_name, $passphrase);
             }
             if (file_exists($private_key_location . '.pub')) {
@@ -554,8 +556,9 @@ final class Deployer extends Base
     {
         $webDir = $this->get_environ_dir('local', 'web');
         $projectDir = $this->get_environ_dir('local', 'project');
+        $logDir = $this->get_environ_dir('local', 'log');
 
-        if ($this->actionRequests->can_do($action . "_local_web_directory_permissions")) {
+        if ($this->actionRequests->can_do($action . "_local_web_directory_setup")) {
             $webOwner = $this->config->environ->local->web_owner ?? '';
             $webGroup = $this->config->environ->local->web_group ?? '';
             $projectOwner = $this->config->environ->local->project_owner ?? '';
@@ -566,7 +569,8 @@ final class Deployer extends Base
                 'web_group' => $webGroup,
                 'project_dir' => $projectDir,
                 'project_owner' => $projectOwner,
-                'project_group' => $projectGroup
+                'project_group' => $projectGroup,
+                'log_dir' => $logDir
             ];
             $this->terminal('local')->localWebDirSetup()->$action($webDirArgs);
         }
@@ -578,7 +582,7 @@ final class Deployer extends Base
                 $this->whm,
                 'local'
             );
-            $version_control->create();
+            $version_control->$action();
         }
 
         if ($this->actionRequests->can_do($action . "_local_virtual_host")) {
@@ -590,12 +594,34 @@ final class Deployer extends Base
                 'domain' => $domain,
                 'sites_available_path' => $sitesAvailable . $domain . '.conf',
                 'web_dir' => $webDir,
-                'admin_email' => $admin_email
+                'admin_email' => $admin_email,
+                'log_dir' => $logDir
             ];
             $this->terminal('local')->localVirtualHost()->$action($virtualHostArgs);
         }
 
+        if ($this->actionRequests->can_do($action . "_local_database_components")) {
+            $pdoWrap = null;
+            try {
+                $pdoWrap = new PDOWrap([
+                    'host' => '127.0.0.1',
+                    'user' => $this->config->environ->local->db->root->username ?? '',
+                    'password' => $this->config->environ->local->db->root->password ?? '',
+                    'port' => $this->config->environ->local->db->port ?? 3306
+                ]);
+            } catch (\PDOException $e) {
+                //throw new \PDOException($e->getMessage(), (int)$e->getCode());
+                $pdoWrap = $e;
+                $errorStr = 'Connecting to local DB failed. ' . $e->getMessage() . ' ' . (int)$e->getCode();
+            }
 
+            $client = new DBComponentsClient('local', $pdoWrap);
+
+            $databaseComponents = new DatabaseComponents('local', null, $client);
+            $databaseComponents->$action();
+
+
+        }
     }
 
 
@@ -1200,8 +1226,17 @@ final class Deployer extends Base
                     return false;
                 }
                 $dir = $rootWebDir . $projectName;
-                if ($type != 'project')
-                    $dir .= '/Project/public';
+
+                switch ($type) {
+                    case 'web':
+                        $dir .= '/Project/public';
+                        break;
+                    case 'log':
+                        $dir .= '/Project/';
+                        break;
+                    case 'project':
+                        break;
+                }
                 break;
         }
         if (empty($dir)) {

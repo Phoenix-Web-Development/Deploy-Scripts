@@ -9,13 +9,10 @@ namespace Phoenix\Terminal;
 class LocalWebDirSetup extends AbstractTerminal
 {
 
-
-    public function check($wp_dir = '')
-    {
-
-    }
-
-
+    /**
+     * @param array $args
+     * @return bool|null
+     */
     public function create(array $args = [])
     {
         $this->mainStr($args);
@@ -24,21 +21,21 @@ class LocalWebDirSetup extends AbstractTerminal
         if (!$this->validate($args))
             return false;
 
-        $command = 'sudo ' . BASH_WRAPPER
-            . " webdir-setup "
-            . "'" . $args['web_dir'] . "' "
-            . "'" . $args['web_owner'] . "' "
-            . "'" . $args['web_group'] . "' "
-            . "'" . $args['project_dir'] . "' "
-            . "'" . $args['project_owner'] . "' "
-            . "'" . $args['project_group'] . "' ";
+        $command = $this->formatSudoCommand('webdir-setup', [
+            $args['web_dir'],
+            $args['web_owner'],
+            $args['web_group'],
+            $args['project_dir'],
+            $args['project_owner'],
+            $args['project_group'],
+            $args['log_dir']
+        ]);
 
         $output = $this->exec($command);
         $needle = 'Successfully setup web directory at ' . $args['web_dir'] . '.';
         if (!empty($args['project_dir']))
             $needle .= ' Successfully setup project directory at ' . $args['project_dir'] . '.';
         $success = strpos($output, $needle) !== false ? true : false;
-
 
         return $this->logFinish($success, $output, $command);
     }
@@ -52,19 +49,21 @@ class LocalWebDirSetup extends AbstractTerminal
         return $this->create($args);
     }
 
-
+    /**
+     * @param array $args
+     * @return bool|null
+     */
     public function delete(array $args = [])
     {
         $this->mainStr($args);
         $this->logStart();
         if (!$this->validate($args))
             return false;
-        $command = "rm -R " . $args['web_dir'];
-
-        $output = $this->exec($command);
-        print_r($output);
-        $success = $this->is_dir($args['web_dir']) ? false : true;
-        return $this->logFinish($success, $output, $command);
+        $successWebDir = $this->deleteFile($args['web_dir'], true);
+        $successLogDir = empty($args['log_dir']) || $this->deleteFile($args['log_dir'], true) ? true : false;
+        $successProjectDir = empty($args['project_dir']) || $this->deleteFile($args['project_dir'], true) ? true : false;
+        $success = $successWebDir && $successLogDir && $successProjectDir ? true : false;
+        return $this->logFinish($success);
     }
 
     /**
@@ -76,6 +75,10 @@ class LocalWebDirSetup extends AbstractTerminal
         return $this->delete($args);
     }
 
+    /**
+     * @param array $args
+     * @return bool
+     */
     protected function validate(array $args = [])
     {
         if (empty($args))
@@ -86,7 +89,8 @@ class LocalWebDirSetup extends AbstractTerminal
             'web_owner',
             'web_group'
         ];
-
+        if (!empty($args['log_dir']))
+            $argKeys[] = 'project_dir';
         if (!empty($args['project_dir'])) {
             $argKeys = array_merge($argKeys, ['project_owner', 'project_group']);
         }
@@ -116,7 +120,13 @@ class LocalWebDirSetup extends AbstractTerminal
         }
 
         $webDir = !empty($args['web_dir']) ? sprintf(' at <strong>%s</strong>', $args['web_dir']) : '';
-        $permissions = !empty($args['owner']) && !empty($args['group']) ? sprintf(' with owner <strong>%s</strong> and group <strong>%s</strong>', $args['owner'], $args['group']) : '';
-        return $this->_mainStr = sprintf("%s web directory%s%s", $this->environment, $webDir, $permissions);
+        $logDir = !empty($args['log_dir']) ? sprintf(' and log directory at <strong>%s</strong>', $args['log_dir']) : '';
+        $webPermissions = !empty($args['web_owner']) && !empty($args['web_group']) ? sprintf(' with owner <strong>%s</strong> and group <strong>%s</strong>', $args['web_owner'], $args['web_group']) : '';
+
+        $projectDir = !empty($args['project_dir']) ? sprintf('and project directory at <strong>%s</strong>', $args['project_dir']) : '';
+        $projectPermissions = !empty($args['project_owner']) && !empty($args['project_group']) ? sprintf(' with owner <strong>%s</strong> and group <strong>%s</strong>', $args['project_owner'], $args['project_group']) : '';
+
+        return $this->_mainStr = sprintf("%s web directory%s%s%s%s%s", $this->environment, $webDir, $logDir, $webPermissions, $projectDir, $projectPermissions);
     }
+
 }

@@ -9,7 +9,10 @@ namespace Phoenix\Terminal;
 class LocalVirtualHost extends AbstractTerminal
 {
 
-
+    /**
+     * @param string $wp_dir
+     * @return bool
+     */
     public function check($wp_dir = '')
     {
         if (!$this->validate($wp_dir))
@@ -28,7 +31,10 @@ class LocalVirtualHost extends AbstractTerminal
         return true;
     }
 
-
+    /**
+     * @param array $args
+     * @return bool|null
+     */
     public function create(array $args = [])
     {
         $this->mainStr($args);
@@ -43,24 +49,19 @@ class LocalVirtualHost extends AbstractTerminal
         //Fill out virtual host template
 
         foreach ($args as $key => $arg) {
-            if (in_array($key, ["admin_email", "domain", "web_dir"])) {
+            if (in_array($key, ["admin_email", "domain", "web_dir", "log_dir"])) {
                 $needles[] = '%' . $key . '%';
                 $replaces[] = $arg;
             }
         }
         $hostEntry = str_replace($needles, $replaces, $hostEntry);
 
-        //$apacheUser = $this->client->whoami();
+        $command = $this->formatSudoCommand('virtualhost-create', [
+            $args['domain'],
+            $args['sites_available_path'],
+            $hostEntry
+        ]);
 
-        $command = 'sudo ' . BASH_WRAPPER
-            //. ' blegh '
-            . " virtualhost-create "
-            . "'" . $args['domain'] . "' "
-            . "'" . $args['sites_available_path'] . "' "
-            . "'" . $hostEntry . "'";
-        //print_r($command . '<br><br>');
-
-        //$output = $this->exec('sudo ' . BASH_WRAPPER . ' virtualhost-create 2>&1' );
         $output = $this->exec($command);
         $success = strpos($output, 'Successfully created virtual host for ' . $args['domain']) !== false ? true : false;
         //sudo: no tty present and no askpass program specified
@@ -78,7 +79,10 @@ class LocalVirtualHost extends AbstractTerminal
         return $this->create($wp_dir, $db_args, $wp_args);
     }
 
-
+    /**
+     * @param array $args
+     * @return bool|null
+     */
     public function delete(array $args = [])
     {
 
@@ -87,14 +91,11 @@ class LocalVirtualHost extends AbstractTerminal
         if (!$this->validate($args))
             return false;
 
-        $command = 'sudo ' . BASH_WRAPPER
-            . " virtualhost-delete "
-            . "'" . $args['domain'] . "' "
-            . "'" . $args['sites_available_path'] . "'";
+        $command = $this->formatSudoCommand('virtualhost-delete', [
+            $args['domain'],
+            $args['sites_available_path']
+        ]);
 
-        print_r($command . '<br><br>');
-
-        //$output = $this->exec('sudo ' . BASH_WRAPPER . ' virtualhost-delete 2>&1' );
         $output = $this->exec($command);
         $success = strpos($output, 'Successfully removed Virtual Host for ' . $args['domain']) !== false ? true : false;
         //sudo: no tty present and no askpass program specified
@@ -110,6 +111,10 @@ class LocalVirtualHost extends AbstractTerminal
         return $this->delete($wp_dir);
     }
 
+    /**
+     * @param array $args
+     * @return bool
+     */
     protected function validate(array $args = [])
     {
         if (empty($args))
@@ -123,15 +128,15 @@ class LocalVirtualHost extends AbstractTerminal
 
         foreach ($argKeys as $argKey) {
             if (empty($args[$argKey]))
-                return $this->logError($argKey . " argument missing from input");
+                return $this->logError("Argument <strong>" . $argKey . "</strong> missing from input");
         }
 
         return true;
     }
 
     /**
-     * @param string $wp_dir
-     * @return bool|string
+     * @param array $args
+     * @return string
      */
     protected
     function mainStr(array $args = [])

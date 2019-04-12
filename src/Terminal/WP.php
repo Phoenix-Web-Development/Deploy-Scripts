@@ -333,7 +333,7 @@ class WP extends AbstractTerminal
         if (empty($wp_dir))
             return $this->logError("File directory missing from function input.");
         $wp_dir = self::trailing_slash($wp_dir);
-        if (in_array($wp_dir, array('~/', self::trailing_slash($this->client->root))))
+        if (in_array($wp_dir, array('~/', self::trailing_slash($this->root))))
             return $this->logError(sprintf("Shouldn't be %s WordPress in root directory <strong>%s</strong>.",
                 $this->actions[$this->getCaller()]['present'], $wp_dir));
         if (!$this->is_dir($wp_dir))

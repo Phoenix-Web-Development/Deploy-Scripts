@@ -69,7 +69,7 @@ class WPCLI extends AbstractTerminal
         echo -e "PATH=$PATH:$HOME/.local/bin:$HOME/bin\n\nexport PATH" >> ~/.bashrc;');
         $success = $this->check() ? true : false;
 
-        $CLIConfigDir = self::trailing_slash($this->client->root) . ".wp-cli";
+        $CLIConfigDir = self::trailing_slash($this->root) . ".wp-cli";
         $CLIConfigFilePath = $CLIConfigDir . "/config.yml";
         if ($this->file_exists($CLIConfigFilePath))
 
@@ -108,6 +108,6 @@ class WPCLI extends AbstractTerminal
      */
     protected function filepath()
     {
-        return self::trailing_slash($this->client->root) . 'bin/wp';
+        return self::trailing_slash($this->root) . 'bin/wp';
     }
 }

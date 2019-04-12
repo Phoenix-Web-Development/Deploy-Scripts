@@ -17,14 +17,19 @@ class BaseClient extends Base
     /**
      * @param $name
      * @param $args
-     * @return bool|Terminal\Gitignore|Terminal\WP|Terminal\WP_CLI|Terminal\WP_DB
+     * @return bool
      */
     public function __call($name, $args)
     {
-        if (method_exists($this, 'api'))
+        //if (method_exists($this, $name)) {
+        //  return $this->$name($args);
+        //}
+
+        if (method_exists($this, 'api')) {
             $api = $this->api($name);
-        if (!empty($api))
-            return $api;
+            if (!empty($api))
+                return $api;
+        }
         $this->log(sprintf("Undefined method <strong>%s</strong> called in client.", $name));
         return false;
     }

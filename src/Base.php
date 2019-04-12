@@ -103,6 +103,11 @@ class Base
             'past' => 'prepended',
             'action' => 'prepend'
         ),
+        'prune' => array(
+            'present' => 'pruning',
+            'past' => 'pruned',
+            'action' => 'prune'
+        ),
         'purge' => array(
             'present' => 'purging',
             'past' => 'purged',
@@ -185,7 +190,8 @@ class Base
     {
         if (method_exists($this, $name)) {
             return $this->$name();
-        } elseif (property_exists($this, $name)) {
+        }
+        if (property_exists($this, $name)) {
             // Getter/Setter not defined so return property if it exists
             return $this->$name;
         }
