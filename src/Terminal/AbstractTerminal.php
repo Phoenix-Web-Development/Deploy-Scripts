@@ -103,66 +103,11 @@ class AbstractTerminal extends BaseAbstract
 
 
     /**
-     * @param $origin_dir
-     * @param $dest_dir
-     * @return bool
-     */
-    public
-    function move_files($origin_dir = '', $dest_dir = '')
-    {
-        $mainStr = sprintf(" files from <strong>%s</strong> directory to <strong>%s</strong> directory in %s environment.",
-            $origin_dir, $dest_dir, $this->environment);
-        $error_string = sprintf("Can't move " . $mainStr . ".", $this->environment);
-        if (empty($origin_dir)) {
-            $this->log(sprintf("%s Origin directory not supplied to function.", $error_string));
-            return false;
-        }
-        if (empty($dest_dir)) {
-            $this->log(sprintf("%s Destination directory not supplied to function.", $error_string));
-            return false;
-        }
-        $this->log("Moving " . $mainStr, 'info');
-        if (!$this->is_dir($origin_dir)) {
-            $this->log(sprintf("%s Origin directory <strong>%s</strong> doesn't exist.",
-                $error_string, $origin_dir));
-            return false;
-        }
-        if (!$this->is_dir($dest_dir) && !$this->ssh->mkdir($dest_dir)) {
-            $this->log(sprintf("%s Failed to create directory at <strong>%s</strong> in %s environment.", $error_string, $dest_dir, $this->environment));
-            return false;
-        }
-        //$origin_dir = self::trailing_slash($origin_dir) . '*';
-        //$dest_dir = self::trailing_slash($dest_dir);
-        /*
-        $output = $this->exec(
-            'shopt -s dotglob;
-
-            mv --force ' . $origin_dir . ' ' . $dest_dir . ' ; 
-            echo status is $?'
-        );
-        */
-        $origin_dir = self::trailing_slash($origin_dir);
-        $dest_dir = self::trailing_slash($dest_dir);
-        $output = $this->exec('(cd ' . $origin_dir . ' && tar c .) | (cd ' . $dest_dir . ' && tar xf -); echo $? status');
-
-        $deleted_origin_contents = '';
-        if (strpos($output, "0 status") !== false) {
-            $deleted_origin_contents = $this->exec("shopt -s dotglob; rm -r " . $origin_dir . "*; echo $? status");
-            if (strpos($deleted_origin_contents, "0 status") !== false) {
-                $this->log("Successfully moved " . $mainStr . $this->formatOutput($output . $deleted_origin_contents), 'success');
-                return true;
-            }
-        }
-        $this->log("Failed to move " . $mainStr . $this->formatOutput($output . $deleted_origin_contents));
-        return false;
-    }
-
-    /**
      * @param string $dir
      * @return bool|null
      */
     public
-    function dir_is_empty(string $dir = '')
+    function isDirEmpty(string $dir = '')
     {
         $error_string = "Can't check if directory empty.";
         if (empty($dir)) {
@@ -275,11 +220,11 @@ class AbstractTerminal extends BaseAbstract
      * @param bool $recursive
      * @return bool|false|string
      */
-    public
+    protected
     function deleteFile(string $filepath = '', $recursive = true)
     {
         if (empty($filepath))
-            return false;
+            return $this->logError('No filepath inputted to <code>deleteFile</code> method');
 
         //sanity check, nowhere near thorough
         $sanityList =
@@ -293,30 +238,32 @@ class AbstractTerminal extends BaseAbstract
                 $sanityListTrailingSlash[] = $sanityItemTrailingSlash;
         }
         if (in_array($filepath, array_merge($sanityList, $sanityListTrailingSlash)))
-            return false;
+            return $this->logError(sprintf("Won't delete <strong>%s</strong> as it's in the sanity list.", $filepath));
 
         if ($this->environment != 'local') {
             return $this->ssh->delete($filepath, $recursive);
         }
 
         if (!file_exists($filepath))
-            return false;
+            return $this->logError(sprintf("Can't delete <strong>%s</strong> as it doesn't exist.", $filepath));
 
         if (!is_writable($filepath))
-            return false;
+            return $this->logError(sprintf("Can't delete <strong>%s</strong> as it isn't writable.", $filepath));
 
         $perms = fileperms($filepath);
-        $containerPerms = fileperms(dirname($filepath));
+
         $unixUser = posix_geteuid();
         $unixGroup = posix_getegid();
         if (((empty($perms & 0x0080) || (fileowner($filepath) != $unixUser))
-                && (empty($perms & 0x0010) || (filegroup($filepath) != $unixGroup))
-                && (empty($perms & 0x0002))) || (
-            ((empty($containerPerms & 0x0080) || (fileowner(dirname($filepath)) != $unixUser))
-                && (empty($containerPerms & 0x0010) || (filegroup(dirname($filepath)) != $unixGroup))
-                && (empty($containerPerms & 0x0002)))
-            )
-        ) return false;
+            && (empty($perms & 0x0010) || (filegroup($filepath) != $unixGroup))
+            && (empty($perms & 0x0002)))
+        ) return $this->logError(sprintf("Can't delete <strong>%s</strong>. Insufficient permissions to delete it.", $filepath));
+
+        $containerPerms = fileperms(dirname($filepath));
+        if (((empty($containerPerms & 0x0080) || (fileowner(dirname($filepath)) != $unixUser))
+            && (empty($containerPerms & 0x0010) || (filegroup(dirname($filepath)) != $unixGroup))
+            && (empty($containerPerms & 0x0002)))
+        ) return $this->logError(sprintf("Can't delete <strong>%s</strong>. Insufficient permissions in containing directory to delete it.", $filepath));
 
         if (!is_dir($filepath))
             return unlink($filepath);
@@ -324,66 +271,18 @@ class AbstractTerminal extends BaseAbstract
         $objects = scandir($filepath);
         foreach ($objects as $object) {
             if (!in_array($object, [".", ".."])) {
-                if (is_dir($filepath . "/" . $object))
-                    $success = $this->deleteFile($filepath . "/" . $object);
+                $item = $filepath . "/" . $object;
+                if (is_dir($item))
+                    $success = $this->deleteFile($item);
                 else
-                    $success = unlink($filepath . "/" . $object);
+                    $success = unlink($item);
                 if (!$success)
-                    return false;
+                    return $this->logError(sprintf("Failed to delete <strong>%s</strong>.", $item));
             }
         }
         return rmdir($filepath);
     }
 
-    /**
-     * @param string $dir
-     * @return bool
-     */
-    public
-    function pruneDirTree(string $dir = '')
-    {
-        $error_string = "Can't prune directories";
-        $dirStr = !empty($dir) ? " starting with <strong>" . $dir . "</strong>" : '';
-        $this->log(sprintf("Pruning empty directories%s.", $dirStr), 'info');
-        if (empty($dir)) {
-            $this->log(sprintf("%s No directory supplied to function.", $error_string));
-            return false;
-        }
-        if (!$this->is_dir($dir)) {
-            $this->log(sprintf("%s <strong>%s</strong> is not a directory.", $error_string, $dir));
-            return false;
-        }
-        $root = self::trailing_slash($this->root);
-        if (self::trailing_slash($dir) == $root || self::trailing_slash(dirname($dir)) == $root) {
-            $this->log(sprintf("%s Shouldn't be pruning root directory.", $error_string, $dir));
-            return false;
-        }
-        $continue = true;
-        $success = true;
-        $upstream_dir = $dir;
-        $message = '';
-        while ($continue) {
-            if ($this->dir_is_empty($upstream_dir)) {
-                $deleted_upstream = $this->deleteFile($upstream_dir, true);
-                if ($deleted_upstream) {
-                    $message .= sprintf("Deleted empty directory <strong>%s</strong>. ", $upstream_dir);
-                    $upstream_dir = dirname($upstream_dir);
-                } else {
-                    $message .= sprintf("Failed to delete <strong>%s</strong> even though it is empty.", $upstream_dir);
-                    $continue = false;
-                }
-            } else {
-                $message .= sprintf("Didn't delete <strong>%s</strong> as it contains files and/or directories.", $upstream_dir);
-                $continue = false;
-            }
-        }
-        if ($success) {
-            $this->log(sprintf("Successfully pruned <strong>%s</strong> directory tree. ", $dir) . $message, 'success');
-            return true;
-        }
-        $this->log(sprintf("Failed to prune <strong>%s</strong> directory tree.", $dir) . $message);
-        return false;
-    }
 
     /**
      * @param string $dir
@@ -445,7 +344,9 @@ class AbstractTerminal extends BaseAbstract
         if (empty($output)) {
             return false;
         }
-
+        $maxStrLen = 300;
+        if (strlen($output) > $maxStrLen * 2)
+            $output = substr($output, 0, $maxStrLen) . '...<strong><i>snipped for brevity</i></strong>...' . substr($output, -1 * $maxStrLen, $maxStrLen);
         $append = '</pre>';
         if (substr($output, -strlen($append)) !== $append)
             $output = $output . $append;

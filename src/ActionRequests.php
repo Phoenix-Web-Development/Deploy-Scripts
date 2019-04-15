@@ -46,15 +46,14 @@ class ActionRequests
 
         'create_local_stuff' => array('label' => 'Local stuff',
             'condition' => array('create')),
-        'create_local_web_directory_setup' => array('label' => 'Setup web directory permissions',
-            'condition' => array('create', 'create_local_stuff')),
         'create_local_version_control' => array('label' => 'Setup version control',
+            'condition' => array('create', 'create_local_stuff')),
+        'create_local_web_directory_setup' => array('label' => 'Setup web directory permissions',
             'condition' => array('create', 'create_local_stuff')),
         'create_local_virtual_host' => array('label' => 'Virtual Host',
             'condition' => array('create', 'create_local_stuff')),
         'create_local_database_components' => array('label' => 'Database & DB User',
             'condition' => array('create', 'create_local_stuff')),
-
 
         //'create_wp_auto_update' => array('label' => 'Setup WordPress auto-update',
         //  'condition' => array('create')),
@@ -90,11 +89,11 @@ class ActionRequests
 
         'delete_local_stuff' => array('label' => 'Delete local stuff',
             'condition' => array('delete')),
+        'delete_local_version_control' => array('label' => 'Delete version control',
+            'condition' => array('delete', 'delete_local_stuff')),
         'delete_local_virtual_host' => array('label' => 'Virtual host',
             'condition' => array('delete', 'delete_local_stuff')),
         'delete_local_web_directory_setup' => array('label' => 'Delete web directory',
-            'condition' => array('delete', 'delete_local_stuff')),
-        'delete_local_version_control' => array('label' => 'Delete version control',
             'condition' => array('delete', 'delete_local_stuff')),
         'delete_local_database_components' => array('label' => 'Database & DB User',
             'condition' => array('delete', 'delete_local_stuff')),

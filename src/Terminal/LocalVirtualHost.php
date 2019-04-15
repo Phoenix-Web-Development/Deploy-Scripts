@@ -148,7 +148,7 @@ class LocalVirtualHost extends AbstractTerminal
 
         $domain = !empty($args['domain']) ? sprintf(' for domain <strong>%s</strong>', $args['domain']) : '';
         $vhostFilePath = !empty($args['sites_available_path']) ? sprintf(' in virtual host file <strong>%s</strong>', $args['sites_available_path']) : '';
-        $webDir = !empty($args['web_dir']) ? sprintf(' in web directory <strong>%s</strong>', $args['web_dir']) : '';
+        $webDir = !empty($args['web_dir']) ? sprintf(' for web directory <strong>%s</strong>', $args['web_dir']) : '';
 
         return $this->_mainStr = sprintf("%s virtual host%s%s%s", $this->environment, $domain, $vhostFilePath, $webDir);
     }

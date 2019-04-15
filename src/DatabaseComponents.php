@@ -40,14 +40,14 @@ class DatabaseComponents extends AbstractDeployer
             return $this->logError("Couldn't get args");
 
         if ($this->environ != 'local') {
-            $created_db_user = $this->whm->create_db_user($args['username'], $args['password']);
-            $created_db = $this->whm->create_db($args['name']);
-            $added_user_to_db = $this->whm->db_user_privileges('set', $args['username'], $args['name']);
+            $created_db_user = $this->whm->create_db_user($args['username'], $args['password'], $args['cpanel_account']['user']);
+            $created_db = $this->whm->create_db($args['name'], $args['cpanel_account']['user']);
+            $added_user_to_db = $this->whm->db_user_privileges('set', $args['username'], $args['name'], $args['cpanel_account']['user']);
         } else {
 
             $created_db = $this->pdo->db()->create($args);
             $created_db_user = $this->pdo->user()->create($args);
-            $added_user_to_db = true;
+            $added_user_to_db = $this->pdo->userprivileges()->create($args);;
         }
         $success = !empty($created_db_user) && !empty($created_db) && !empty($added_user_to_db) ? true : false;
 
@@ -68,8 +68,8 @@ class DatabaseComponents extends AbstractDeployer
             return $this->logError("Couldn't get args");
 
         if ($this->environ != 'local') {
-            $deleted_db = $this->whm->delete_db($args['name']);
-            $deleted_db_user = $this->whm->delete_db_user($args['username']);
+            $deleted_db = $this->whm->delete_db($args['name'], $args['cpanel_account']['user']);
+            $deleted_db_user = $this->whm->delete_db_user($args['username'], $args['cpanel_account']['user']);
 
         } else {
             $deleted_db = $this->pdo->db()->delete($args);

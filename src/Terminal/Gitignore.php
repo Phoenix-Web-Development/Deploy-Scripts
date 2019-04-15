@@ -50,7 +50,7 @@ class Gitignore extends AbstractTerminal
         if (!$this->is_dir($worktree)) {
             return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $worktree));
         }
-        if (!$this->client->git()->check($worktree))
+        if (!$this->client->git()->checkGitWorktree($worktree))
             return $this->logError(sprintf("Directory <strong>%s</strong> is not a Git worktree.", $worktree));
         return true;
     }

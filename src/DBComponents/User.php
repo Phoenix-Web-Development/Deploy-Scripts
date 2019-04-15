@@ -17,7 +17,6 @@ class User extends AbstractDBComponents
             WHERE User = '" . $args['username'] . "'"
         );
         $result = $existingUser->fetch();
-        d($result);
         $success = $result['User'] == $args['username'] ? true : false;
         return $success;
     }
@@ -34,7 +33,10 @@ class User extends AbstractDBComponents
             return false;
         if ($this->check($args))
             return $this->logError("User already exists.");
-        $this->pdo->run("CREATE USER " . $args['username'] . "@'localhost' IDENTIFIED BY '" . $args['password'] . "';");
+        //VIA mysql_native_password
+        $stmt = "CREATE USER " . $args['username'] . "@'localhost' IDENTIFIED BY '" . $args['password'] . "';";
+        //$stmt = "CREATE USER " . $args['username'] . "@'localhost' IDENTIFIED VIA mysql_native_password USING '" . $args['password'] . "';";
+        $this->pdo->run($stmt);
         $success = $this->check($args);
 
         return $this->logFinish($success);

@@ -7,7 +7,7 @@ namespace Phoenix;
  * @method DBComponents\Database database()
  * @method DBComponents\Database db()
  * @method DBComponents\User user()
- * @method DBComponents\UserPermissions userpermissions()
+ * @method DBComponents\UserPrivileges userprivileges()
  *
  * @property PDOWrap $pdo
  *

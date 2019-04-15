@@ -34,7 +34,7 @@ class Database extends AbstractDBComponents
         if ($this->check($args))
             return $this->logError("DB already exists.");
 
-        $this->pdo->run('CREATE DATABASE ' . $args['name'] . ';');
+        $this->pdo->run("CREATE DATABASE " . $args['name'] . ";");
         $success = $this->check($args);
 
         return $this->logFinish($success);

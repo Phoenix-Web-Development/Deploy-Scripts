@@ -15,8 +15,8 @@ virtualhost-create)
 virtualhost-delete)
   BASHFILE="virtualhost-delete.sh"
   ;;
-webdir-setup)
-  BASHFILE="webdir-setup.sh"
+projectdir-setup)
+  BASHFILE="projectdir-setup.sh"
   ;;
 *)
   echo "That's not a legitimate bash script"

@@ -40,7 +40,7 @@ class DotGitFile extends AbstractTerminal
         $filepath = self::trailing_slash($worktree) . '.git';
         if (!$this->file_exists($filepath))
             return $this->logError(sprintf("Dot Git file at <strong>%s</strong> doesn't exist so no need to delete.", $worktree), 'warning');
-        $success = $this->ssh->deleteFile($filepath) ? true : false;
+        $success = $this->deleteFile($filepath) ? true : false;
         return $this->logFinish($success);
     }
 

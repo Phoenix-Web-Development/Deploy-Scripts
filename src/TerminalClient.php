@@ -6,6 +6,9 @@ use phpseclib\Net\SFTP;
 
 /**
  *
+ *
+ * @method Terminal\Dir dir()
+ * @method Terminal\Dir directory()
  * @method Terminal\DotGitFile dotGitFile()
  * @method Terminal\DotGitFile dot_git_file()
  * @method Terminal\Git git()
@@ -20,7 +23,7 @@ use phpseclib\Net\SFTP;
  * @method Terminal\GithubWebhookEndpointConfig github_webhook_endpoint_config()
  * @method Terminal\GithubWebhookEndpointConfig githubWebhookEndpointConfig()
  * @method Terminal\LocalVirtualHost localVirtualHost()
- * @method Terminal\LocalWebDirSetup localWebDirSetup()
+ * @method Terminal\LocalProjectDirSetup localProjectDirSetup()
  * @method Terminal\WP wp()
  * @method Terminal\WP wordpress()
  * @method Terminal\WPCLI wp_cli()
@@ -85,6 +88,10 @@ class TerminalClient extends BaseClient
 
         $name = strtolower($name);
         switch ($name) {
+            case 'dir':
+            case 'directory':
+                $api = new Terminal\Dir($this);
+                break;
             case 'dotgitfile':
             case 'dot_git_file':
                 $api = new Terminal\DotGitFile($this);
@@ -118,11 +125,11 @@ class TerminalClient extends BaseClient
             case 'virtualhost':
                 $api = new Terminal\LocalVirtualHost($this);
                 break;
-            case 'localwebdirsetup':
-                $api = new Terminal\LocalWebDirSetup($this);
+            case 'localprojectdirsetup':
+                $api = new Terminal\LocalProjectDirSetup($this);
                 break;
             case 'root':
-                $api = new Terminal\AbstractTerminal ($this);
+                $api = new Terminal\AbstractTerminal($this);
                 return $api->root;
                 break;
             case 'wp':

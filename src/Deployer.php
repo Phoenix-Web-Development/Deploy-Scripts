@@ -440,16 +440,25 @@ final class Deployer extends Base
             $staging_subdomain = $this->$function_name();
         }
 
-        if ($actions['db'] && ($action == 'create' || $environment == 'staging' || ($action == 'delete' && !$actions['live_site'])))
-            $db = $this->database_components($action, $environment);
+        if ($actions['db'] && ($action == 'create' || $environment == 'staging' || ($action == 'delete' && !$actions['live_site']))) {
+            $databaseComponents = new DatabaseComponents($environment, $this->whm);
+            $db = $databaseComponents->$action();
+        }
 
         //shared actions
         if ($actions['email_filters'])
             $email_filters = $this->email_filters($action, $environment);
         if ($actions['version_control']) {
-            $version_control = $this->environVersionControl($action, $environment);
-            //$version_control =
+            $version_control = new EnvironVersionControl(
+                $this->terminal($environment),
+                $this->github,
+                $this->whm,
+                $environment
+            );
+            $version_control = $version_control->$action();
         }
+
+
         if ($actions['wp']) {
             $wp = $this->wordpress($action, $environment);
         }
@@ -555,25 +564,6 @@ final class Deployer extends Base
     function localStuff($action = 'create')
     {
         $webDir = $this->get_environ_dir('local', 'web');
-        $projectDir = $this->get_environ_dir('local', 'project');
-        $logDir = $this->get_environ_dir('local', 'log');
-
-        if ($this->actionRequests->can_do($action . "_local_web_directory_setup")) {
-            $webOwner = $this->config->environ->local->web_owner ?? '';
-            $webGroup = $this->config->environ->local->web_group ?? '';
-            $projectOwner = $this->config->environ->local->project_owner ?? '';
-            $projectGroup = $this->config->environ->local->project_group ?? '';
-            $webDirArgs = [
-                'web_dir' => $webDir,
-                'web_owner' => $webOwner,
-                'web_group' => $webGroup,
-                'project_dir' => $projectDir,
-                'project_owner' => $projectOwner,
-                'project_group' => $projectGroup,
-                'log_dir' => $logDir
-            ];
-            $this->terminal('local')->localWebDirSetup()->$action($webDirArgs);
-        }
 
         if ($this->actionRequests->can_do($action . "_local_version_control")) {
             $version_control = new EnvironVersionControl(
@@ -585,19 +575,58 @@ final class Deployer extends Base
             $version_control->$action();
         }
 
+        $localDirSetup = $this->terminal('local')->LocalProjectDirSetup();
+
+        $localDirSetup->setProjectArgs([
+            'dir' => $this->get_environ_dir('local', 'project') ?? '',
+            'owner' => $this->config->environ->local->directory->project->owner ?? '',
+            'group' => $this->config->environ->local->directory->project->group ?? '',
+        ]);
+
+        if ($this->actionRequests->can_do($action . "_local_web_directory_setup")) {
+
+            $webOwner = $this->config->environ->local->directory->web->owner ?? '';
+            $webGroup = $this->config->environ->local->directory->web->group ?? '';
+
+
+            $localDirSetup->$action([
+                'dir' => $webDir,
+                'owner' => $webOwner ?? '',
+                'group' => $webGroup ?? '',
+                'purpose' => 'web'
+            ]);
+        }
+
         if ($this->actionRequests->can_do($action . "_local_virtual_host")) {
-            $admin_email = $this->config->environ->local->email ?? '';
             $domain = $this->config->environ->local->domain ?? '';
             $sitesAvailable = $this->config->environ->local->sites_available ?? '';
+            $logDir = $this->get_environ_dir('local', 'log');
 
             $virtualHostArgs = [
                 'domain' => $domain,
                 'sites_available_path' => $sitesAvailable . $domain . '.conf',
                 'web_dir' => $webDir,
-                'admin_email' => $admin_email,
+                'admin_email' => $this->config->environ->local->email ?? '',
                 'log_dir' => $logDir
             ];
             $this->terminal('local')->localVirtualHost()->$action($virtualHostArgs);
+
+            $logDirSuccess = $localDirSetup->$action([
+                'dir' => $logDir,
+                'owner' => $webOwner ?? '',
+                'group' => $webGroup ?? '',
+                'purpose' => 'log'
+            ]);
+            if (!$logDirSuccess && $action == 'delete') {
+                $this->terminal('local')->LocalProjectDirSetup()->delete([
+                    'dir' => $logDir . 'access.log',
+                    'purpose' => 'access log'
+                ]);
+                $this->terminal('local')->LocalProjectDirSetup()->delete([
+                    'dir' => $logDir . 'error.log',
+                    'purpose' => 'error log'
+                ]);
+            }
         }
 
         if ($this->actionRequests->can_do($action . "_local_database_components")) {
@@ -610,17 +639,13 @@ final class Deployer extends Base
                     'port' => $this->config->environ->local->db->port ?? 3306
                 ]);
             } catch (\PDOException $e) {
-                //throw new \PDOException($e->getMessage(), (int)$e->getCode());
                 $pdoWrap = $e;
-                $errorStr = 'Connecting to local DB failed. ' . $e->getMessage() . ' ' . (int)$e->getCode();
             }
 
             $client = new DBComponentsClient('local', $pdoWrap);
 
             $databaseComponents = new DatabaseComponents('local', null, $client);
             $databaseComponents->$action();
-
-
         }
     }
 
@@ -730,56 +755,6 @@ final class Deployer extends Base
     }
 
     /**
-     * @param string $action
-     * @param string $environment
-     * @return bool
-     */
-    function database_components(string $action = 'create', string $environment = 'live')
-    {
-        if (!$this->validate_action($action, array('create', 'delete'), sprintf("Can't do %s cPanel database stuff.", $environment)))
-            return false;
-
-        $error_string = sprintf("Can't %s %s cPanel database components.", $action, $environment);
-        $this->log(sprintf('<h4>%s database components for %s cPanel account.</h4>',
-            ucfirst($this->actions[$action]['present']), $environment), 'info');
-        $db_args = $this->config->environ->$environment->db ?? null;
-        if (!isset($db_args->name, $db_args->username, $db_args->password)) {
-            $this->log($error_string . " DB name, username and/or password are missing from config.", 'error');
-            return false;
-        }
-
-        $cPanel_account = $this->find_environ_cpanel($environment);
-        if (!$cPanel_account) {
-            $this->log(sprintf("%s Couldn't find %s cPanel account.",
-                $error_string, $environment));
-            return false;
-        }
-
-        switch ($action) {
-            case 'create':
-                $created_db_user = $this->whm->create_db_user($db_args->username, $db_args->password);
-                $created_db = $this->whm->create_db($db_args->name);
-                $added_user_to_db = $this->whm->db_user_privileges('set', $db_args->username, $db_args->name);
-                if ($created_db_user && $created_db && $added_user_to_db)
-                    $success = true;
-                break;
-            case 'delete':
-                $deleted_db = $this->whm->delete_db($db_args->name);
-                $deleted_db_user = $this->whm->delete_db_user($db_args->username);
-                if ($deleted_db && $deleted_db_user)
-                    $success = true;
-                break;
-        }
-        if (!empty($success)) {
-            $this->log(sprintf('Successfully %s %s database components.', $this->actions[$action]['past'], $environment), 'success');
-            return true;
-        }
-        $this->log(sprintf('Something may have gone wrong %s %s database components.', $this->actions[$action]['present'], $environment), 'error');
-        return false;
-    }
-
-
-    /**
      * @return bool
      */
     private function delete_live_cpanel_account()
@@ -882,7 +857,7 @@ final class Deployer extends Base
         $directory = $this->get_environ_dir('staging', 'web');
         if (!empty($directory)) {
             $deletedSubdomainDirectory = $this->terminal('staging')->ssh->delete($directory);
-            $prunedSubdomainDirectoryTree = $this->terminal('staging')->api()->pruneDirTree(dirname($directory));
+            $prunedSubdomainDirectoryTree = $this->terminal('staging')->dir()->prune(dirname($directory));
         }
         if (!empty($deleted_subdomain) && !empty($deletedSubdomainDirectory) && !empty($prunedSubdomainDirectoryTree)) {
             return true;
@@ -973,141 +948,6 @@ final class Deployer extends Base
     }
 
     /**
-     * @param string $action
-     * @param string $environment
-     * @return bool
-     * @throws \Github\Exception\MissingArgumentException
-     */
-    function environVersionControl(string $action = 'create', string $environment = 'live')
-    {
-        if (!$this->validate_action($action, array('create', 'delete'), sprintf("Can't do %s environment version control stuff.", $environment)))
-            return false;
-
-        $this->log(sprintf('<h3>%s %s version control components.</h3>', ucfirst($this->actions[$action]['present']), $environment), 'info');
-        $message_string = sprintf('%s version control components.', $environment);
-        $error_string = sprintf("Can't %s %s", $action, $message_string);
-        if ($environment == 'local') {
-            $this->log(sprintf("%s Environment is local where VC access components not needed.",
-                $error_string));
-            return false;
-        }
-        $repo_name = $this->config->version_control->repo_name ?? '';
-        if (empty($repo_name)) {
-            $this->log(sprintf("%s Repository name is missing from config.",
-                $error_string));
-            return false;
-        }
-        $cPanel_account = $this->find_environ_cpanel($environment);
-        if (!$cPanel_account) {
-            $this->log(sprintf("%s Couldn't find %s cPanel account.",
-                $error_string, $environment));
-            return false;
-        }
-        $key_name = $this->config->environ->$environment->ssh_keys->version_control_deploy_key->key_name ?? '';
-        //$passphrase = $this->config->environ->$environment->ssh_keys->version_control_deploy_key->passphrase ?? '';
-        $passphrase = '';
-
-        $root = $this->terminal($environment)->root;
-        if (empty($root)) {
-            $this->log(sprintf("%s Couldn't get %s environment SSH root directory.", $error_string, $environment));
-            return false;
-        }
-        $web_dir = $this->get_environ_dir($environment, 'web');
-        $repo_location = $this->get_environ_dir($environment, 'git');
-        $downstream_repo_name = $repo_name . '_website';
-        $key_title = ucfirst($environment) . ' cPanel';
-        $webhook_url = 'https://' . $cPanel_account['domain'] . '/github-webhook.php?github=yes';
-        $webhook_endpoint_config_dir = $this->get_environ_dir($environment, 'github_webhook_endpoint_config') . '/' . $repo_name . '.json';
-        switch ($action) {
-            case 'create':
-                $ssh_key = $this->whm->genkey($key_name, $passphrase, 2048, $cPanel_account['user']);
-                if (!empty($ssh_key)) {
-                    $authkey = $this->whm->authkey($key_name);
-                    $ssh_config = $this->terminal($environment)->ssh_config()->create($key_name, 'github.com', $key_name, 'git');
-                }
-                $upstream_repository = $this->github->repo()->get($repo_name);
-
-                if ($upstream_repository) {
-                    if (!empty($ssh_key)) {
-                        $deploy_key = $this->github->deploy_key()->upload($repo_name, $key_title, $ssh_key['key']);
-                        $ssh_url = str_replace('git@github.com', $key_name, $upstream_repository['ssh_url']);
-                        $source_repository = json_encode((object)['url' => $ssh_url, 'remote_name' => "origin"]);
-                        $downstream_repository = $this->whm->version_control('clone',
-                            $repo_location,
-                            $downstream_repo_name,
-                            $source_repository
-                        );
-                        if (!$downstream_repository)
-                            $downstream_repository = $this->whm->version_control('get', $repo_location);
-                        if ($downstream_repository && $this->terminal($environment)->git()->waitForUnlock($repo_location)) {
-                            $dotGit = $this->terminal($environment)->dotGitFile()->create($web_dir, $repo_location);
-                            $gitignore = $this->terminal($environment)->gitignore()->create($web_dir);
-                            $gitPurge = $this->terminal($environment)->git()->purge($repo_location);
-                            if ($downstream_repository)
-                                $gitReset = $this->terminal($environment)->gitBranch()->reset(['worktree' => $web_dir, 'branch' => 'master']);
-                        }
-
-                    }
-
-                    if ($environment == 'staging') { //webhook
-                        $secret = $this->config->version_control->github->webhook->secret ?? '';
-                        $webhook_config = $this->terminal($environment)->githubWebhookEndpointConfig()->create($webhook_endpoint_config_dir, $web_dir, $secret);
-                        $webhook = $this->github->webhook()->create($repo_name, $webhook_url, $secret);
-
-                    }
-                } else
-                    $this->log("Can't upload deploy key or clone repository. Upstream repository not found.");
-
-                $this->terminal($environment)->exec('git config --global user.name "James Jones"; git config --global user.email "james.jones@phoenixweb.com.au"');
-                if (!empty($ssh_key)
-                    && !empty($authkey)
-                    && !empty($ssh_config)
-                    && !empty($deploy_key)
-                    && !empty($downstream_repository)
-                    && !empty($dotGit)
-                    && !empty($gitignore)
-                    && !empty($gitPurge)
-                    && !empty($gitReset)
-                    && ($environment != 'staging' || (!empty($webhook) && !empty($webhook_config)))
-                )
-                    $success = true;
-                break;
-            case 'delete':
-                $gitignore = $this->terminal($environment)->gitignore()->delete($web_dir);
-                $downstream_repository = $this->whm->version_control('delete', $repo_location, '', '', $cPanel_account['user']);
-                $deleted_git_folder = $this->terminal($environment)->git()->delete($repo_location);
-                $ssh_key = $this->whm->delkey($key_name, $cPanel_account['user']);
-                $ssh_config = $this->terminal($environment)->ssh_config()->delete('github_' . $repo_name);
-                $deploy_key = $this->github->deploy_key()->remove($repo_name, $key_title);
-
-                if ($environment == 'staging') { //webhook
-                    $webhook = $this->github->webhook()->remove($repo_name, $webhook_url);
-                    $webhook_config = $this->terminal($environment)->githubWebhookEndpointConfig()->delete($webhook_endpoint_config_dir);
-                }
-                $dotGit = $this->terminal($environment)->ssh->delete($web_dir . '/.git');
-
-                if (!empty($gitignore)
-                    && !empty($downstream_repository)
-                    && !empty($ssh_key)
-                    && !empty($ssh_config)
-                    && !empty($deploy_key)
-                    && !empty($deleted_git_folder)
-                    && ((!empty($webhook) && !empty($webhook_config)) || $environment != 'staging')
-                    && !empty($dotGit)
-                )
-                    $success = true;
-
-                break;
-        }
-        if (!empty($success)) {
-            $this->log(sprintf('Successfully %s %s', $this->actions[$action]['past'], $message_string), 'success');
-            return true;
-        }
-        $this->log(sprintf("Something may have gone wrong while %s %s", $this->actions[$action]['present'], $message_string), 'error');
-        return false;
-    }
-
-    /**
      * @param string $environment
      * @return bool
      */
@@ -1184,15 +1024,17 @@ final class Deployer extends Base
             }
         }
 
-
         switch ($environment) {
             case 'live':
                 switch ($type) {
                     case 'web':
                         $dir = '/public_html';
                         break;
+                    case 'worktree':
+                        $dir = $this->config->environ->$environment->version_control->worktree_dir ?? '/public_html';
+                        break;
                     case 'git':
-                        $dir = '/git/website';
+                        $dir = $this->config->environ->$environment->version_control->repo_dir ?? '/git/website';
                         break;
                 }
                 break;
@@ -1201,13 +1043,21 @@ final class Deployer extends Base
                     case 'web':
                         $dir = $this->config->environ->$environment->cpanel->subdomain->directory ?? '';
                         break;
+                    case 'worktree':
+                        $dir = $this->config->environ->$environment->version_control->worktree_dir ??
+                            $this->config->environ->$environment->cpanel->subdomain->directory ?? '';
+                        break;
                     case 'git':
-                        $repo_name = $this->config->version_control->repo_name ?? '';
-                        if (empty($repo_name)) {
-                            $this->log($error_string . ' Version control repo name missing from config.');
-                            return false;
+                        if (!empty($this->config->environ->$environment->version_control->repo_dir))
+                            $dir = $this->config->environ->$environment->version_control->repo_dir;
+                        else {
+                            $repo_name = $this->config->version_control->repo_name ?? '';
+                            if (empty($repo_name)) {
+                                $this->log($error_string . ' Version control repo name missing from config.');
+                                return false;
+                            }
+                            $dir = '/git/' . $repo_name . '/website';
                         }
-                        $dir = '/git/' . $repo_name . '/website';
                         break;
                     case 'github_webhook_endpoint_config':
                         $dir = '/.github_webhook_configs';
@@ -1215,7 +1065,7 @@ final class Deployer extends Base
                 }
                 break;
             case 'local':
-                $rootWebDir = $this->config->environ->local->root_web_dir ?? '';
+                $rootWebDir = $this->config->environ->local->directory->root ?? '';
                 if (empty($rootWebDir)) {
                     $this->log($error_string . ' Root web dir missing from config.');
                     return false;
@@ -1229,10 +1079,16 @@ final class Deployer extends Base
 
                 switch ($type) {
                     case 'web':
-                        $dir .= '/Project/public';
+                        $dir .= '/Project/public_html';
+                        break;
+                    case 'git':
+                        $dir .= $this->config->environ->$environment->directory->version_control->repo ?? '/Project/public_html';
+                        break;
+                    case 'worktree':
+                        $dir .= $this->config->environ->$environment->directory->version_control->worktree ?? '/Project/public_html';
                         break;
                     case 'log':
-                        $dir .= '/Project/';
+                        $dir .= $this->config->environ->$environment->directory->log ?? '/Project/';
                         break;
                     case 'project':
                         break;

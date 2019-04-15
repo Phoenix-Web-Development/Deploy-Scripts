@@ -307,8 +307,8 @@ class GitBranch extends AbstractTerminal
         if (isset($this->_validated))
             return $this->_validated;
 
-        if (!$this->client->git()->check($args['worktree']))
-            return $this->_validated = false;
+        if (!$this->client->git()->checkGitWorktree($args['worktree']))
+            return $this->_validated = $this->logError(sprintf("Directory <strong>%s</strong> is not a Git worktree.", $args['worktree']));
         if (($this->getCaller() != 'getCurrent')) {
             if (empty($args['branch'])) {
                 return $this->_validated = $this->logError("No branch name inputted to method.");

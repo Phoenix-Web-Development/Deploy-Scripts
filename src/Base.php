@@ -78,6 +78,11 @@ class Base
             'past' => 'got',
             'action' => 'get'
         ),
+        'give' => array(
+            'present' => 'giving',
+            'past' => 'gave',
+            'action' => 'give'
+        ),
         'import' => array(
             'present' => 'importing',
             'past' => 'imported',

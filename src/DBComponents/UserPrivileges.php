@@ -8,57 +8,54 @@ namespace Phoenix\DBComponents;
  */
 class UserPrivileges extends AbstractDBComponents
 {
+    /**
+     * @param array $args
+     * @return bool
+     */
     function check(array $args = [])
     {
         if (!$this->validate($args))
             return false;
-
-        $existingUser = $this->pdo->run("SELECT User FROM mysql.user
-            WHERE User = '" . $args['username'] . "'"
-        );
-        $result = $existingUser->fetch();
-        d($result);
-        $success = $result['User'] == $args['username'] ? true : false;
-        return $success;
-        //GRANT USAGE ON *.* TO 'potentialabilitygroup'@'loc...
+        $existingUser = $this->pdo->run("SHOW GRANTS FOR '" . $args['username'] . "'@'localhost'");
+        $results = $existingUser->fetchAll();
+        d($results);
+        foreach ($results as $result) {
+            if (strpos($result['Grants for ' . $args['username'] . '@localhost'],
+                    "GRANT ALL PRIVILEGES ON `" . $args['name'] . "`.* TO '" . $args['username'] . "'@'localhost'") !== false)
+                return true;
+        }
+        return false;
     }
 
     /**
      * @param array $args
      * @return bool|null
      */
-    function create(array $args = [])
+    function give(array $args = [])
     {
         $this->mainStr($args);
         $this->logStart();
         if (!$this->validate($args))
             return false;
         if ($this->check($args))
-            return $this->logError("User already exists.");
-
-        $this->pdo->run("GRANT ALL ON '" . $args['name'] . "'.* TO '" . $args['username'] . "'@'localhost'; FLUSH PRIVILEGES;");
+            return $this->logError("User already has privileges.");
+        $stmt = "GRANT ALL PRIVILEGES ON " . $args['name'] . ".* TO '" . $args['username'] . "'@'localhost';";
+        //d($stmt);
+        $this->pdo->run($stmt);
         $success = $this->check($args);
 
         return $this->logFinish($success);
     }
 
     /**
+     * Alias for give
+     *
      * @param array $args
      * @return bool|null
      */
-    function delete(array $args = [])
+    function create(array $args = [])
     {
-        $this->mainStr($args);
-        $this->logStart();
-        if (!$this->validate($args))
-            return false;
-        if (!$this->check($args))
-            return $this->logError("User doesn't exist to delete.");
-
-        $this->pdo->run("DROP USER '" . $args['username'] . "'@localhost;");
-        $success = $this->check($args) ? false : true;
-
-        return $this->logFinish($success);
+        return $this->give($args);
     }
 
     /**
@@ -72,9 +69,9 @@ class UserPrivileges extends AbstractDBComponents
 
         $argKeys = [
             'username',
+            'name'
         ];
-        if ($this->getCaller() == 'create')
-            $argKeys[] = 'password';
+
         foreach ($argKeys as $argKey) {
             if (empty($args[$argKey]))
                 return $this->logError("Argument <strong>" . $argKey . "</strong> missing from input");
@@ -94,8 +91,9 @@ class UserPrivileges extends AbstractDBComponents
             if (!empty($this->_mainStr[$action]))
                 return $this->_mainStr[$action];
         }
-        $dbUser = !empty($args['username']) ? ' <strong>' . $args['username'] . '</strong>' : '';
-
-        return $this->_mainStr[$action] = sprintf('%s database user%s', $this->environment, $dbUser);
+        $dbUser = !empty($args['username']) ? ' to user <strong>' . $args['username'] . '</strong>' : '';
+        $dbName = !empty($args['name']) ? ' for database <strong>' . $args['name'] . '</strong>' : '';
+        //%s
+        return $this->_mainStr[$action] = sprintf('%s database permissions%s%s', $this->environment, $dbUser, $dbName);
     }
 }
