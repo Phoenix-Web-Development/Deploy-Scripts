@@ -37,8 +37,11 @@ class BaseAbstract extends Base
     {
         $dbt = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5);
         array_shift($dbt);
+        $i = 0;
         foreach ($dbt as $function) {
-            $caller = isset($function['function']) ? $function['function'] : null;
+            if ($i == 5)
+                break;
+            $caller = $function['function'] ?? null;
             try {
                 $reflection = new \ReflectionMethod($this, $caller);
                 if ($reflection->isPublic()) {
@@ -48,6 +51,7 @@ class BaseAbstract extends Base
             } catch (\Exception $e) {
                 echo 'Caught exception: ', $e->getMessage(), "\n";
             }
+            $i++;
         }
         return false;
     }
@@ -89,8 +93,10 @@ class BaseAbstract extends Base
      */
     protected function logError($error = '', $type = 'error')
     {
-        $string = sprintf("Can't %s %s. %s", $this->actions[$this->getCaller()]['action'], $this->mainStr(), $error);
-        $string = $this->elementWrap($string);
+        $caller = $this->getCaller() ?? 'missing action string';
+        $action = !empty($caller) ? $this->actions[$caller]['action'] : 'missing action string';
+        $string = sprintf("Can't %s %s.", $action, $this->mainStr());
+        $string = $this->elementWrap($string) . ' ' . $error;
         $this->log($string, $type);
         return false;
     }

@@ -25,12 +25,20 @@ class Git extends AbstractTerminal
             $args['worktree_path'] = $args['repo_path'];
         if (empty($args['repo_path']))
             $args['repo_path'] = $args['worktree_path'];
+
+        if ($this->isGitWorktree($args['worktree_path'])) {
+            if ($this->isRemoteOriginUrl($args["worktree_path"], $args['url']))
+                return $this->logFinish(true, "Git repo already cloned from url <strong>" . $args['url'] . "</strong> at <strong>" . $args['worktree_path'] . "</strong>.");
+            return $this->logError("Already a git worktree in <strong>" . $args['worktree_path'] . "</strong> directory.");
+        }
+        if ($this->isGitRepo($args['repo_path'])) {
+            if ($this->isRemoteOriginUrl($args["worktree_path"], $args['url']))
+                return $this->logFinish(true, "Git repo already cloned from url <strong>" . $args['url'] . "</strong> at <strong>" . $args['worktree_path'] . "</strong>.");
+            return $this->logError("Already a git repository in <strong>" . $args['repo_path'] . "</strong> directory.");
+        }
         if (!$this->isDirClear($args['repo_path'], $args['worktree_path']))
             return false;
-        if ($this->isGitWorktree($args['worktree_path']))
-            return $this->logError("Already a git worktree in <strong>" . $args['worktree_path'] . "</strong> directory.");
-        if ($this->isGitRepo($args['repo_path']))
-            return $this->logError("Already a git repository in <strong>" . $args['repo_path'] . "</strong> directory.");
+
 
         $successMessage = "Git clone from " . $args['url'] . " successful";
 
@@ -65,7 +73,7 @@ class Git extends AbstractTerminal
         if (!$this->is_dir($args['repo_path']))
             return $this->logError(sprintf("Repository path directory <strong>%s</strong> doesn't exist.", $args['repo_path']));
         if (!$this->is_dir($separate_repo_path)) {
-            $this->ssh->mkdir($separate_repo_path, -1, true);
+            $this->mkdir($separate_repo_path, -1, true);
             if (!$this->is_dir($separate_repo_path))
                 return $this->logError(sprintf("Destination directory <strong>%s</strong> doesn't exist and couldn't create it.", $separate_repo_path));
         }
@@ -81,7 +89,6 @@ class Git extends AbstractTerminal
     /**
      * Deletes Git Repo but not worktree or .git file at worktree.
      *
-     * @param string $worktree
      * @param string $repo_path
      * @return bool
      */
@@ -93,11 +100,14 @@ class Git extends AbstractTerminal
         $this->logStart();
         if (!$this->validate($args))
             return false;
+        if (!$this->is_dir($args['repo_path']))
+            return $this->logFinish(true,
+                sprintf("No need to delete as directory <strong>%s</strong> doesn't exist.", $args['repo_path']));
         if (!$this->isGitRepo($args['repo_path'])) {
             $appendedRepoPath = self::trailing_slash($args['repo_path']) . '.git';
             if (!$this->isGitRepo($appendedRepoPath))
-                return $this->logError(
-                    sprintf("Nominated directory <strong>%s</strong> and <strong>%s</strong> are not a git repository.",
+                return $this->logFinish(true,
+                    sprintf("No need to delete as directory <strong>%s</strong> and <strong>%s</strong> are not a git repository.",
                         $args['repo_path'], $appendedRepoPath)
                 );
             $args['repo_path'] = $appendedRepoPath;
@@ -128,7 +138,6 @@ class Git extends AbstractTerminal
      * Little more than a public wrapper for isGitWorktree
      *
      * @param string $worktree
-     * @param string $repopath
      * @return bool
      */
     public function checkGitWorktree(string $worktree = '')
@@ -203,7 +212,19 @@ class Git extends AbstractTerminal
             return true;
         return false;
     }
-    //git rev-parse --is-inside-work-tree /home/james/data/Dropbox/htdocs/powertomove/Project/public
+
+    /**
+     * @param string $dir
+     * @param string $url
+     * @return bool
+     */
+    protected function isRemoteOriginUrl(string $dir = '', string $url = '')
+    {
+        $output = $this->exec('git config remote.origin.url', $dir);
+        if ($output == $url)
+            return true;
+        return false;
+    }
 
     /**
      * @param array $args

@@ -24,7 +24,7 @@ class ActionRequests
             'condition' => array('create', 'create_live_stuff')),
         'create_live_version_control' => array('label' => 'Setup version control',
             'condition' => array('create', 'create_live_stuff')),
-        'create_live_wp' => array('label' => 'Install WordPress and WP CLI',
+        'create_live_wp' => array('label' => 'Install WordPress & WP CLI',
             'condition' => array('create', 'create_live_stuff')),
         'create_live_initial_git_commit' => array('label' => 'Initial Git commit',
             'condition' => array('create', 'create_live_stuff')),
@@ -39,7 +39,7 @@ class ActionRequests
             'condition' => array('create', 'create_staging_stuff')),
         'create_staging_version_control' => array('label' => 'Setup version control',
             'condition' => array('create', 'create_staging_stuff')),
-        'create_staging_wp' => array('label' => 'Install WordPress and WP CLI',
+        'create_staging_wp' => array('label' => 'Install WordPress & WP CLI',
             'condition' => array('create', 'create_staging_stuff')),
         'create_staging_initial_git_commit' => array('label' => 'Initial Git commit',
             'condition' => array('create', 'create_staging_stuff')),
@@ -53,6 +53,10 @@ class ActionRequests
         'create_local_virtual_host' => array('label' => 'Virtual Host',
             'condition' => array('create', 'create_local_stuff')),
         'create_local_database_components' => array('label' => 'Database & DB User',
+            'condition' => array('create', 'create_local_stuff')),
+        'create_local_wp' => array('label' => 'Install WordPress & WP CLI',
+            'condition' => array('create', 'create_local_stuff')),
+        'create_local_initial_git_commit' => array('label' => 'Initial Git commit',
             'condition' => array('create', 'create_local_stuff')),
 
         //'create_wp_auto_update' => array('label' => 'Setup WordPress auto-update',
@@ -71,7 +75,7 @@ class ActionRequests
             'condition' => array('delete', 'delete_live_stuff')),
         'delete_live_version_control' => array('label' => 'Remove version control',
             'condition' => array('delete', 'delete_live_stuff')),
-        'delete_live_wp' => array('label' => 'Remove WordPress',
+        'delete_live_wp' => array('label' => 'Remove WordPress & WP CLI',
             'condition' => array('delete', 'delete_live_stuff')),
 
         'delete_staging_stuff' => array('label' => 'Staging stuff',
@@ -84,7 +88,7 @@ class ActionRequests
             'condition' => array('delete', 'delete_staging_stuff')),
         'delete_staging_version_control' => array('label' => 'Remove version control',
             'condition' => array('delete', 'delete_staging_stuff')),
-        'delete_staging_wp' => array('label' => 'WordPress',
+        'delete_staging_wp' => array('label' => 'Remove WordPress & WP CLI',
             'condition' => array('delete', 'delete_staging_stuff')),
 
         'delete_local_stuff' => array('label' => 'Delete local stuff',
@@ -97,7 +101,8 @@ class ActionRequests
             'condition' => array('delete', 'delete_local_stuff')),
         'delete_local_database_components' => array('label' => 'Database & DB User',
             'condition' => array('delete', 'delete_local_stuff')),
-
+        'delete_local_wp' => array('label' => 'Remove WordPress & WP CLI',
+            'condition' => array('delete', 'delete_local_stuff')),
 
         'update' => array('label' => 'Update'),
         'update_live_stuff' => array('label' => 'Live stuff',

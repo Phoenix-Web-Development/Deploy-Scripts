@@ -10,6 +10,11 @@ use phpseclib\Net\SFTP;
  */
 class WPDB extends AbstractTerminal
 {
+    /**
+     * @var string
+     */
+    protected $logElement = 'h4';
+
     const EXT = '.gz';
 
     /**

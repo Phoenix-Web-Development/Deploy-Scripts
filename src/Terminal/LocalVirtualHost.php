@@ -10,26 +10,10 @@ class LocalVirtualHost extends AbstractTerminal
 {
 
     /**
-     * @param string $wp_dir
-     * @return bool
+     * @var string
      */
-    public function check($wp_dir = '')
-    {
-        if (!$this->validate($wp_dir))
-            return false;
-        $output = $this->exec("cd " . $wp_dir . "; wp core is-installed;");
-        $potential_errors = array(
-            "This does not seem to be a WordPress install",
-            "'wp-config.php' not found",
-            "Error establishing a database connection",
-            "The site you have requested is not installed"
-        );
-        foreach ($potential_errors as $potential_error) {
-            if (stripos($output, $potential_error) !== false)
-                return false;
-        }
-        return true;
-    }
+    protected $logElement = 'h4';
+
 
     /**
      * @param array $args
@@ -58,12 +42,14 @@ class LocalVirtualHost extends AbstractTerminal
 
         $command = $this->formatSudoCommand('virtualhost-create', [
             $args['domain'],
-            $args['sites_available_path'],
+            $args['conf_path'],
             $hostEntry
         ]);
 
         $output = $this->exec($command);
-        $success = strpos($output, 'Successfully created virtual host for ' . $args['domain']) !== false ? true : false;
+        $success = strpos($output, 'Successfully created virtual host for ' . $args['domain']) !== false
+        || strpos($output, 'This domain already exists.') !== false
+            ? true : false;
         //sudo: no tty present and no askpass program specified
         return $this->logFinish($success, $output, '');
     }
@@ -74,9 +60,9 @@ class LocalVirtualHost extends AbstractTerminal
      * @param array $wp_args
      * @return bool
      */
-    public function install(string $wp_dir = '', array $db_args = array(), array $wp_args = array())
+    public function install($args)
     {
-        return $this->create($wp_dir, $db_args, $wp_args);
+        return $this->create($args);
     }
 
     /**
@@ -93,22 +79,26 @@ class LocalVirtualHost extends AbstractTerminal
 
         $command = $this->formatSudoCommand('virtualhost-delete', [
             $args['domain'],
-            $args['sites_available_path']
+            $args['conf_path']
         ]);
 
         $output = $this->exec($command);
-        $success = strpos($output, 'Successfully removed Virtual Host for ' . $args['domain']) !== false ? true : false;
+
+
+        $success = strpos($output, 'Successfully removed Virtual Host for ' . $args['domain']) !== false ||
+        strpos($output, 'No need to delete virtualhost. Domain <strong>' . $args['domain'] . '</strong> does not exist.') !== false
+            ? true : false;
         //sudo: no tty present and no askpass program specified
         return $this->logFinish($success, $output);
     }
 
     /**
-     * @param string $wp_dir
-     * @return bool
+     * @param array $args
+     * @return bool|null
      */
-    public function uninstall($wp_dir = '')
+    public function uninstall(array $args = [])
     {
-        return $this->delete($wp_dir);
+        return $this->delete($args);
     }
 
     /**
@@ -123,7 +113,7 @@ class LocalVirtualHost extends AbstractTerminal
         $argKeys = [
             'domain',
             'admin_email',
-            'sites_available_path'
+            'conf_path'
         ];
 
         foreach ($argKeys as $argKey) {
@@ -147,7 +137,7 @@ class LocalVirtualHost extends AbstractTerminal
         }
 
         $domain = !empty($args['domain']) ? sprintf(' for domain <strong>%s</strong>', $args['domain']) : '';
-        $vhostFilePath = !empty($args['sites_available_path']) ? sprintf(' in virtual host file <strong>%s</strong>', $args['sites_available_path']) : '';
+        $vhostFilePath = !empty($args['conf_path']) ? sprintf(' in virtual host config file <strong>%s</strong>', $args['conf_path']) : '';
         $webDir = !empty($args['web_dir']) ? sprintf(' for web directory <strong>%s</strong>', $args['web_dir']) : '';
 
         return $this->_mainStr = sprintf("%s virtual host%s%s%s", $this->environment, $domain, $vhostFilePath, $webDir);

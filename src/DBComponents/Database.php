@@ -32,7 +32,7 @@ class Database extends AbstractDBComponents
         if (!$this->validate($args))
             return false;
         if ($this->check($args))
-            return $this->logError("DB already exists.");
+            return $this->logFinish(true, "DB already exists.");
 
         $this->pdo->run("CREATE DATABASE " . $args['name'] . ";");
         $success = $this->check($args);
@@ -51,7 +51,7 @@ class Database extends AbstractDBComponents
         if (!$this->validate($args))
             return false;
         if (!$this->check($args))
-            return $this->logError("DB doesn't exist to delete.");
+            return $this->logFinish(true, "No need to delete, DB " . $args['name'] . " doesn't exist to delete.");
 
         $this->pdo->run('DROP DATABASE ' . $args['name'] . ';');
         $success = $this->check($args) ? false : true;

@@ -14,6 +14,9 @@ class GitBranch extends AbstractTerminal
      */
     public function delete(string $worktree = '', string $separate_repo_path = '')
     {
+        d($worktree);
+        d($separate_repo_path);
+
         /*
         $this->mainStr($worktree, $separate_repo_path);
         $this->logStart();
@@ -23,6 +26,7 @@ class GitBranch extends AbstractTerminal
         $success = ($delete_branch) ? true : false;
         return $this->logFinish($success);
         */
+        return false;
     }
     /*
         public function create(string $worktree = '', string $branch = '')
@@ -197,20 +201,20 @@ class GitBranch extends AbstractTerminal
             return $this->logError(sprintf("Couldn't checkout branch <strong>%s</strong>.", $args['branch']));
         $command = "git pull --verbose;";
         $output = $this->exec($command, $args['worktree']);
-        $errorStrs = array('error: ', 'would be overwritten');
-        foreach ($errorStrs as $errorStr) {
-            if (stripos($output, $errorStr) !== false) {
-                $success = false;
+
+        $success = false;
+        $errorStrings = array('error: ', 'would be overwritten');
+        $successStrings = array('Already up to date', 'Fast-forward');
+        foreach ($successStrings as $successStr) {
+            if (strpos($output, $successStr) !== false) {
+                $success = true;
                 break;
             }
         }
-        if (!isset($success)) {
-            $successStrs = array('Already up to date', 'Fast-forward');
-            foreach ($successStrs as $successStr) {
-                if (strpos($output, $successStr) !== false) {
-                    $success = true;
-                    break;
-                }
+        foreach ($errorStrings as $errorStr) {
+            if (stripos($output, $errorStr) !== false) {
+                $success = false;
+                break;
             }
         }
         return $this->logFinish($success, $output, $command);
@@ -238,16 +242,13 @@ class GitBranch extends AbstractTerminal
         if (!$this->validate($args))
             return false;
         $upstreamBranch = $this->check($args['worktree'], $args['branch'], 'up');
-        if ($this->getChanges($args['worktree']) === false && $upstreamBranch === true) {
-            $this->log("No need to " . $this->mainStr() . ". No changes in repository to commit.", 'info');
-            return true;
-        }
+        if ($this->getChanges($args['worktree']) === false && $upstreamBranch === true)
+            return $this->logFinish(true, "No changes in repository to commit.");
         $this->exec("git fetch --all", $args['worktree']);
 
         $currentBranch = $this->getCurrent($args['worktree']);
         $strCheckout = '';
         if ($currentBranch != $args['branch']) {
-            //should be on branch master. is on branch dev
             return $this->logError(sprintf("Repository is checked out to wrong branch <strong>%s</strong>. Should be checked out to branch <strong>%s</strong>",
                 $currentBranch, $args['branch']));
             /*
@@ -275,6 +276,7 @@ class GitBranch extends AbstractTerminal
                         git commit -m '" . $git_message . "';
                         git push " . $strNewRemoteBranch . "--porcelain;";
         $output = $this->exec($commands, $args['worktree']);
+        d($output);
         $status = $this->exec("git status", $args['worktree']);
         if (substr(trim($output), -4) === 'Done' && $this->getChanges($args['worktree']) === false && strpos($status, "Your branch is ahead of") === false)
             $success = true;
@@ -329,6 +331,6 @@ class GitBranch extends AbstractTerminal
         }
         $branchStr = !empty($args['branch']) ? " <strong>" . $args['branch'] . "</strong>" : '';
         $workTreeStr = !empty($args['worktree']) ? sprintf(" with worktree at <strong>%s</strong>", $args['worktree']) : '';
-        return $this->_mainStr = sprintf("%s environment Git repository branch%s%s", $this->environment, $branchStr, $workTreeStr);
+        return $this->_mainStr = sprintf("%s environ Git repository branch%s%s", $this->environment, $branchStr, $workTreeStr);
     }
 }

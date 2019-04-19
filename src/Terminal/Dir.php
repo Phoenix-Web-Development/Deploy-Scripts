@@ -32,16 +32,16 @@ class Dir extends AbstractTerminal
                 $deleted_upstream = $this->deleteFile($upstream_dir, true);
                 if ($deleted_upstream) {
                     $actuallyDeletedSomething = true;
-                    $message .= sprintf("Deleted empty directory <strong>%s</strong>. ", $upstream_dir);
+                    $message .= sprintf("<br>Deleted empty directory <strong>%s</strong>. ", $upstream_dir);
                     $upstream_dir = dirname($upstream_dir);
                 } else {
-                    $message .= sprintf("Failed to delete <strong>%s</strong> even though it is empty.", $upstream_dir);
+                    $message .= sprintf("<br>Failed to delete <strong>%s</strong> even though it is empty.", $upstream_dir);
                     $continue = false;
                     $success = false;
                 }
             } else {
                 if ($actuallyDeletedSomething)
-                    $message .= sprintf("Didn't delete <strong>%s</strong> as it contains files and/or directories.", $upstream_dir);
+                    $message .= sprintf("<br>Didn't delete <strong>%s</strong> as it contains files and/or directories.", $upstream_dir);
                 else
                     $message .= "Didn't actually delete anything.";
                 $continue = false;
@@ -67,9 +67,8 @@ class Dir extends AbstractTerminal
         if (!$this->is_dir($dir))
             return $this->logError(sprintf("<strong>%s</strong> is not a directory.", $dir));
 
-        $root = self::trailing_slash($this->root);
-        if (self::trailing_slash($dir) == $root || self::trailing_slash(dirname($dir)) == $root)
-            return $this->logError("Shouldn't be pruning root directory.");
+        if ($this->inSanityList($dir))
+            return $this->logError("Shouldn't be pruning directory in sanity list.");
 
         return $this->_validated = true;
     }
@@ -117,7 +116,7 @@ class Dir extends AbstractTerminal
                 $error_string, $origin_dir));
             return false;
         }
-        if (!$this->is_dir($dest_dir) && !$this->ssh->mkdir($dest_dir)) {
+        if (!$this->is_dir($dest_dir) && !$this->mkdir($dest_dir)) {
             $this->log(sprintf("%s Failed to create directory at <strong>%s</strong> in %s environment.", $error_string, $dest_dir, $this->environment));
             return false;
         }

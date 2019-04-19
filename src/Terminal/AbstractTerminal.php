@@ -30,6 +30,16 @@ class AbstractTerminal extends BaseAbstract
     protected $_prompt;
 
     /**
+     * @var
+     */
+    private $sanityList;
+
+    /**
+     * @var string
+     */
+    protected $logElement = 'h4';
+
+    /**
      * AbstractTerminal constructor.
      * @param TerminalClient $client
      */
@@ -98,9 +108,34 @@ class AbstractTerminal extends BaseAbstract
      */
     protected function exec(string $command = '', string $startDir = '')
     {
+
+
         return $this->client->exec($command, $startDir);
     }
 
+    /**
+     * @param string $dir
+     * @return bool
+     */
+    public
+    function is_readable(string $dir = '')
+    {
+        if ($this->environment != 'local')
+            return $this->ssh->is_readable($dir);
+        return $this->is_readable($dir);
+    }
+
+    /**
+     * @param string $dir
+     * @return bool
+     */
+    public
+    function is_writable(string $dir = '')
+    {
+        if ($this->environment != 'local')
+            return $this->ssh->is_writable($dir);
+        return is_writable($dir);
+    }
 
     /**
      * @param string $dir
@@ -136,7 +171,13 @@ class AbstractTerminal extends BaseAbstract
         if ($this->environment != 'local') {
             return $this->ssh->file_exists($path);
         }
-        return file_exists($path);
+        if (file_exists($path))
+            return true;
+        $command = $this->formatSudoCommand('file-exists', [$path]);
+        $output = $this->exec($command);
+        if (strpos($output, 'File ' . $path . ' exists') !== false)
+            return true;
+        return false;
     }
 
     /**
@@ -151,7 +192,45 @@ class AbstractTerminal extends BaseAbstract
         if ($this->environment != 'local') {
             return $this->ssh->is_dir($dir);
         }
-        return is_dir($dir);
+
+        //Directory $dir exists
+        if (is_dir($dir))
+            return true;
+
+        $command = $this->formatSudoCommand('is-dir', [$dir]);
+        $output = $this->exec($command);
+        if (strpos($output, 'Directory ' . $dir . ' exists') !== false)
+            return true;
+        return false;
+    }
+
+    /**
+     * @param string $filepath
+     * @param int $mode
+     * @param bool $recursive
+     * @return bool
+     */
+    public
+    function mkdir(string $filepath = '', int $mode = 07777, $recursive = false)
+    {
+        if ($this->environment != 'local') {
+            return $this->ssh->mkdir($filepath, $mode, $recursive);
+        }
+        return mkdir($filepath, $mode, $recursive);
+    }
+
+    /**
+     * @param $filepath
+     * @param $mode
+     * @param bool $recursive
+     * @return bool|mixed
+     */
+    function chmod($filepath, $mode, $recursive = false)
+    {
+        if ($this->environment != 'local') {
+            return $this->ssh->chmod($mode, $filepath, $recursive);
+        }
+        return chmod($filepath, $mode);
     }
 
     /**
@@ -226,29 +305,18 @@ class AbstractTerminal extends BaseAbstract
         if (empty($filepath))
             return $this->logError('No filepath inputted to <code>deleteFile</code> method');
 
-        //sanity check, nowhere near thorough
-        $sanityList =
-            ['/', '~/', '/bin', '/bin', '/boot', '/cdrom', '/dev', '/etc', '/home', '/lib', '/lost+found', '/media',
-                '/opt', '/proc', '/root', '/run', '/sbin', '/snap', '/srv', '/swapfile', '/sys', '/tmp', '/usr', '/var'
-            ];
-        $sanityListTrailingSlash = [];
-        foreach ($sanityList as $sanityItem) {
-            $sanityItemTrailingSlash = self::trailing_slash($sanityItem);
-            if ($sanityItem != $sanityItemTrailingSlash)
-                $sanityListTrailingSlash[] = $sanityItemTrailingSlash;
-        }
-        if (in_array($filepath, array_merge($sanityList, $sanityListTrailingSlash)))
+        if ($this->inSanityList($filepath))
             return $this->logError(sprintf("Won't delete <strong>%s</strong> as it's in the sanity list.", $filepath));
 
         if ($this->environment != 'local') {
             return $this->ssh->delete($filepath, $recursive);
         }
 
-        if (!file_exists($filepath))
+        if (!$this->file_exists($filepath) && !$this->is_dir($filepath))
             return $this->logError(sprintf("Can't delete <strong>%s</strong> as it doesn't exist.", $filepath));
 
-        if (!is_writable($filepath))
-            return $this->logError(sprintf("Can't delete <strong>%s</strong> as it isn't writable.", $filepath));
+        if (!$this->is_writable($filepath))
+            return $this->logError(sprintf("Can't delete <strong>%s</strong> as it isn't writable. Probably insufficient permissions.", $filepath));
 
         $perms = fileperms($filepath);
 
@@ -318,15 +386,15 @@ class AbstractTerminal extends BaseAbstract
 
         if (!empty($action)) {
             if (!empty($success)) {
-                $string = sprintf('Successfully %s %s. %s%s', $this->actions[$this->getCaller()]['past'], $this->mainStr(), $command, $output);
+                $string = sprintf('Successfully %s %s.', $this->actions[$this->getCaller()]['past'], $this->mainStr());
                 $messageType = 'success';
                 $return = true;
             } else {
-                $string = sprintf('Failed to %s %s. %s%s', $this->actions[$this->getCaller()]['action'], $this->mainStr(), $command, $output);
+                $string = sprintf('Failed to %s %s.', $this->actions[$this->getCaller()]['action'], $this->mainStr());
                 $messageType = 'error';
                 $return = false;
             }
-            $string = $this->elementWrap($string);
+            $string = $this->elementWrap($string) . ' ' . $command . $output;
             $this->log($string, $messageType);
             return $return;
         }
@@ -344,7 +412,7 @@ class AbstractTerminal extends BaseAbstract
         if (empty($output)) {
             return false;
         }
-        $maxStrLen = 300;
+        $maxStrLen = 800;
         if (strlen($output) > $maxStrLen * 2)
             $output = substr($output, 0, $maxStrLen) . '...<strong><i>snipped for brevity</i></strong>...' . substr($output, -1 * $maxStrLen, $maxStrLen);
         $append = '</pre>';
@@ -429,6 +497,37 @@ class AbstractTerminal extends BaseAbstract
     function whoami()
     {
         return trim($this->exec('whoami')) ?? false;
+    }
+
+    /**
+     * Sanity check, nowhere near thorough
+     *
+     * @param string $filepath
+     * @return bool
+     */
+    protected function inSanityList(string $filepath = '')
+    {
+        if (empty($filepath))
+            return false;
+
+        if (empty($this->sanityList)) {
+            $sanityList = [
+                '/', '~/', '/bin', '/bin', '/boot', '/cdrom', '/dev', '/etc', '/home', '/lib', '/lost+found', '/media',
+                '/opt', '/proc', '/root', '/run', '/sbin', '/snap', '/srv', '/swapfile', '/sys', '/tmp', '/usr', '/var'
+            ];
+            if (!empty($this->root))
+                $sanityList[] = $this->root;
+            $sanityListTrailingSlash = [];
+            foreach ($sanityList as $sanityItem) {
+                $sanityItemTrailingSlash = self::trailing_slash($sanityItem);
+                if ($sanityItem != $sanityItemTrailingSlash)
+                    $sanityListTrailingSlash[] = $sanityItemTrailingSlash;
+            }
+            $this->sanityList = array_merge($sanityList, $sanityListTrailingSlash);
+        }
+        if (in_array($filepath, $this->sanityList))
+            return true;
+        return false;
     }
 
 }

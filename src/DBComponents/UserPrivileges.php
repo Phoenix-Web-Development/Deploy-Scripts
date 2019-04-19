@@ -38,7 +38,7 @@ class UserPrivileges extends AbstractDBComponents
         if (!$this->validate($args))
             return false;
         if ($this->check($args))
-            return $this->logError("User already has privileges.");
+            return $this->logFinish(true, "User already has DB privileges.");
         $stmt = "GRANT ALL PRIVILEGES ON " . $args['name'] . ".* TO '" . $args['username'] . "'@'localhost';";
         //d($stmt);
         $this->pdo->run($stmt);

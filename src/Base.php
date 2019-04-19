@@ -143,6 +143,11 @@ class Base
             'past' => 'set permissions for',
             'action' => 'set permissions for'
         ),
+        'sync' => array(
+            'present' => 'syncing',
+            'past' => 'synced',
+            'action' => 'sync'
+        ),
         'transfer' => array(
             'present' => 'transferring',
             'past' => 'transferred',

@@ -8,6 +8,10 @@ namespace Phoenix\Terminal;
  */
 class Htaccess extends AbstractTerminal
 {
+    /**
+     * @var string
+     */
+    protected $logElement = 'h4';
 
     /**
      * @param string $webDir
@@ -42,7 +46,7 @@ class Htaccess extends AbstractTerminal
         $remoteFile = self::trailing_slash($webDir) . '.htaccess';
         $existingHtaccess = $this->get($remoteFile);
         if (strpos($existingHtaccess, $htaccessRules) !== false)
-            return $this->logError("The <code>.htaccess</code> file already contains new rules.", 'warning');
+            return $this->logFinish(true, "No need as the <code>.htaccess</code> file already contains new rules.");
         $newHtaccessRules = $htaccessRules . $existingHtaccess;
 
         $success = $this->put($remoteFile, $newHtaccessRules);

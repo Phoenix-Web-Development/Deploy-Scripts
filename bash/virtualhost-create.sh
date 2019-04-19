@@ -19,7 +19,7 @@ if [[ -e "$vHostFilePath" ]]; then
 fi
 
 ### create virtual host rules file
-if ! echo "$hostEntry" > $vHostFilePath
+if ! echo "$hostEntry" > "$vHostFilePath"
 then
 	echo -e $"There is an ERROR creating $domain file"
 	exit;
@@ -33,7 +33,7 @@ then
 fi
 
 ### enable website
-a2ensite $domain
+a2ensite "$domain"
 
 ### restart Apache
 /etc/init.d/apache2 reload

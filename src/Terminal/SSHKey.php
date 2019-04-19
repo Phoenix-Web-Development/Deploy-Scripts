@@ -10,6 +10,11 @@ class SSHKey extends AbstractTerminal
 {
 
     /**
+     * @var string
+     */
+    protected $logElement = 'h4';
+
+    /**
      * @param string $key_name
      * @param string $passphrase
      * @return bool|string
@@ -65,22 +70,9 @@ class SSHKey extends AbstractTerminal
     {
         if (empty($key_name))
             return $this->logError("Key name function input is missing.");
+        if (empty($this->filepath()))
+            return $this->logError(sprintf("Couldn't get %s environ home directory.", $this->environment));
         return true;
-    }
-
-    /**
-     * @param string $key_name
-     * @return bool|string|null
-     */
-    protected
-    function filepath($key_name = '')
-    {
-        if (empty($key_name)) {
-            if (!empty($this->_filepath))
-                return $this->_filepath;
-            return false;
-        }
-        return $this->root . '/.ssh/' . $key_name;
     }
 
     /**
@@ -94,6 +86,21 @@ class SSHKey extends AbstractTerminal
                 return $this->_mainStr;
         }
         $key_name = !empty($key_name) ? ' named <strong>' . $key_name . '</strong>' : '';
-        return $this->_mainStr = sprintf("%s environment SSH key%s.", $this->environment, $key_name);
+        $dirStr = !empty($this->filepath) ? sprintf(" at path <strong>%s</strong>", $this->filepath) : '';
+        return $this->_mainStr = sprintf("%s environment SSH key%s%s", $this->environment, $key_name, $dirStr);
+    }
+
+    /**
+     * @param string $key_name
+     * @return bool|string|null
+     */
+    protected
+    function filepath($key_name = '')
+    {
+        if (empty($key_name))
+            return false;
+        if (empty($this->root))
+            return false;
+        return $this->root . '/.ssh/' . $key_name;
     }
 }

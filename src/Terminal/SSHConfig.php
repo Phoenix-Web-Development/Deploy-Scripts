@@ -9,6 +9,11 @@ namespace Phoenix\Terminal;
 class SSHConfig extends AbstractTerminal
 {
     /**
+     * @var string
+     */
+    protected $logElement = 'h4';
+
+    /**
      * @param string $host
      * @param string $hostname
      * @param string $key_name
@@ -25,6 +30,8 @@ class SSHConfig extends AbstractTerminal
     {
         $this->mainStr($host, $hostname, $key_name, $user, $port);
         $this->logStart();
+        if (empty($this->filepath()))
+            return $this->logError(sprintf("Couldn't get %s environ home directory.", $this->environment));
         if ($this->file_exists($this->filepath()))
             $config_before = $this->get($this->filepath());
         else {
@@ -32,9 +39,9 @@ class SSHConfig extends AbstractTerminal
             $this->ssh->touch($this->filepath());
         }
         $perms = substr(decoct($this->ssh->fileperms($this->filepath())), -3, 3);
-        if ($perms != '0600') {
+        if ($perms != 0600) {
             $this->log(sprintf("SSH Config file permissions <strong>%s</strong> are wrong. Setting to 0600.", $perms), 'warning');
-            $this->ssh->chmod(0600, $this->filepath());
+            $this->chmod($this->filepath(), 0600);
         }
         if ($this->check($host))
             return $this->logError(sprintf("Config entry for <strong>%s</strong> already exists.", $host), 'warning');
@@ -55,6 +62,8 @@ class SSHConfig extends AbstractTerminal
     {
         $this->mainStr($host);
         $this->logStart();
+        if (empty($this->filepath()))
+            return $this->logError(sprintf("Couldn't get %s environ home directory.", $this->environment));
         if (!$this->file_exists($this->filepath()))
             return $this->logError(sprintf("Config file doesn't exist at <strong>%s</strong>.", $this->filepath()));
         if (!$this->check($host))
@@ -109,11 +118,17 @@ class SSHConfig extends AbstractTerminal
         $key_name = !empty($key_name) ? sprintf(' and key named <strong>%s</strong>', $key_name) : '';
         $user = !empty($user) ? sprintf(' and user <strong>%s</strong>', $user) : '';
         $port = !empty($port) ? sprintf(' and port <strong>%s</strong>', $port) : '';
-        return $this->_mainStr = sprintf("%s environment SSH config%s%s%s%s%s", $this->environment, $host, $hostname, $key_name, $user, $port);
+        $dirStr = !empty($this->filepath) ? sprintf(" in config file at <strong>%s</strong>", $this->filepath) : '';
+        return $this->_mainStr = sprintf("%s environment SSH config%s%s%s%s%s%s", $this->environment, $host, $hostname, $key_name, $user, $port, $dirStr);
     }
 
+    /**
+     * @return bool|string
+     */
     protected function filepath()
     {
-        return self::trailing_slash($this->root) . '.ssh/config';
+        if (!empty($this->root))
+            return self::trailing_slash($this->root) . '.ssh/config';
+        return false;
     }
 }

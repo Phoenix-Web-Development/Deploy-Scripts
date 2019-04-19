@@ -18,6 +18,12 @@ virtualhost-delete)
 projectdir-setup)
   BASHFILE="projectdir-setup.sh"
   ;;
+is-dir)
+  BASHFILE="is-dir.sh"
+  ;;
+file-exists)
+  BASHFILE="file-exists.sh"
+  ;;
 *)
   echo "That's not a legitimate bash script"
   exit 1

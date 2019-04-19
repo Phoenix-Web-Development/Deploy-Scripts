@@ -42,7 +42,7 @@ class EnvironVersionControl extends AbstractDeployer
      * @param WHM|null $whm
      * @param string $environ
      */
-    function __construct(TerminalClient $terminal, GithubClient $github, WHM $whm = null, $environ = 'live')
+    function __construct($environ = 'live', TerminalClient $terminal = null, GithubClient $github = null, WHM $whm = null)
     {
         $this->environ = $environ;
         $this->logElement = 'h3';
@@ -123,6 +123,7 @@ class EnvironVersionControl extends AbstractDeployer
             $createdGitignore = $this->terminal->gitignore()->create($args['repo']['worktree']);
             if ($this->environ != 'local')
                 $resetGit = $this->terminal->gitBranch()->reset(['worktree' => $args['repo']['worktree'], 'branch' => 'master']);
+
         }
 
 
@@ -180,7 +181,9 @@ class EnvironVersionControl extends AbstractDeployer
             $deployKey = $this->github->deploy_key()->remove($args['repo']['name'], $args['key']['title']);
             $sshConfig = $this->terminal->ssh_config()->delete('github_' . $args['repo']['name']);
         }
+
         $gitignore = $this->terminal->gitignore()->delete($args['repo']['worktree']);
+
         $deleted_git_folder = $this->terminal->git()->delete($args['repo']['dir']);
 
 
@@ -193,7 +196,6 @@ class EnvironVersionControl extends AbstractDeployer
             $dotGit = $this->terminal->dotGitFile()->delete($args['repo']['worktree']);
         else
             $dotGit = true;
-
         $success = (
             ($this->environ == 'local' || (
                     !empty($downstream_repository)
@@ -211,7 +213,37 @@ class EnvironVersionControl extends AbstractDeployer
         ) ? true : false;
 
         return $this->logFinish($success);
+    }
 
+    /**
+     * @return bool|null
+     */
+    function sync()
+    {
+        $this->mainStr();
+        $this->logStart();
+        if (!$this->validate())
+            return false;
+        $args = $this->getArgs();
+        if (!$args)
+            return $this->logError("Couldn't get args");
+
+        $environ = $this->environ;
+
+        $committedMaster = $this->terminal->gitBranch()->commit($args['repo']['worktree'], 'master',
+            'initial Deployer auto commit from ' . $environ . ' environment');
+
+        if ($committedMaster && $environ != 'live') {
+            if ($this->terminal->gitBranch()->checkout($args['repo']['worktree'], 'dev')) {
+                if ($this->terminal->gitBranch()->check($args['repo']['worktree'], 'dev', 'up'))
+                    $syncDevBranch = $this->terminal->gitBranch()->pull(['worktree' => $args['repo']['worktree'], 'branch' => 'dev']);
+                else
+                    $syncDevBranch = $this->terminal->gitBranch()->commit($args['repo']['worktree'], 'dev', 'create dev branch');
+            }
+        }
+
+        $success = !empty($committedMaster) && ($environ != 'live') || !empty($syncDevBranch) ? true : false;
+        return $this->logFinish($success);
     }
 
     /**
@@ -239,8 +271,8 @@ class EnvironVersionControl extends AbstractDeployer
         $args['repo']['downstream_name'] = $args['repo']['name'] . '_website';
         $args['repo']['worktree'] = ph_d()->get_environ_dir($environ, 'worktree');
 
-        $args['repo']['owner'] = ph_d()->config->environ->$environ->directory->web->owner ?? '';
-        $args['repo']['group'] = ph_d()->config->environ->$environ->directory->web->group ?? '';
+        $args['repo']['owner'] = ph_d()->config->environ->$environ->dirs->web->owner ?? '';
+        $args['repo']['group'] = ph_d()->config->environ->$environ->dirs->web->group ?? '';
 
 
         if ($environ != 'local') {
@@ -258,8 +290,8 @@ class EnvironVersionControl extends AbstractDeployer
         } else {
             $args['project'] = [
                 'dir' => ph_d()->get_environ_dir('local', 'project') ?? '',
-                'owner' => ph_d()->config->environ->$environ->directory->project->owner ?? '',
-                'group' => ph_d()->config->environ->$environ->directory->project->group ?? '',
+                'owner' => ph_d()->config->environ->$environ->dirs->project->owner ?? '',
+                'group' => ph_d()->config->environ->$environ->dirs->project->group ?? '',
             ];
         }
         return $args;

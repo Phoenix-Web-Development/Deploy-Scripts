@@ -8,6 +8,12 @@ namespace Phoenix\Terminal;
  */
 class WP extends AbstractTerminal
 {
+
+    /**
+     * @var string
+     */
+    protected $logElement = 'h4';
+
     const WP_FILES = array(
         'wp-admin/',
         'wp-content/',
@@ -47,14 +53,17 @@ class WP extends AbstractTerminal
     );
 
     /**
-     * @param string $wp_dir
+     * @param array $args
      * @return bool
      */
-    public function check($wp_dir = '')
+    public function check(array $args = [])
     {
-        if (!$this->validate($wp_dir))
+        if (!$this->validate($args))
             return false;
-        $output = $this->exec(" wp core is-installed;", $wp_dir);
+        $output = $this->exec("wp core is-installed", $args['directory']);
+        //$output = $this->readWrite(array("wp core is-installed;"), $args['directory']);
+
+        d($output);
         $potential_errors = array(
             "This does not seem to be a WordPress install",
             "'wp-config.php' not found",
@@ -71,41 +80,34 @@ class WP extends AbstractTerminal
     /**
      * alias of install
      *
-     * @param string $wp_dir
-     * @param array $db_args
-     * @param array $wp_args
+     * @param array $args
      * @return bool
      */
-    public function create(string $wp_dir = '', array $db_args = array(), array $wp_args = array())
+    public function create($args = array())
     {
-        return $this->install($wp_dir, $db_args, $wp_args);
+        return $this->install($args);
     }
 
     /**
-     * @param string $wp_dir
-     * @param array $db_args
-     * @param array $wp_args
+     * @param array $args
      * @return bool
      */
-    public function install(string $wp_dir = '', array $db_args = array(), array $wp_args = array())
+    public function install(array $args = [])
     {
-        $this->mainStr($wp_dir);
+        $this->mainStr($args);
         $this->logStart();
-        if (!$this->validate($wp_dir))
+        if (!$this->validate($args))
             return false;
-        if ($this->check($wp_dir))
-            return $this->logError(sprintf('WordPress already installed at <strong>%s</strong>.', $wp_dir), 'warning');
-        if (!isset($db_args['name'], $db_args['username'], $db_args['password']))
-            return $this->logError("DB name, username and/or password are missing from config.");
-        if (!isset($wp_args['username'], $wp_args['password'], $wp_args['email'], $wp_args['url'], $wp_args['title'], $wp_args['prefix']))
-            return $this->logError("WordPress username, password, email, url, title and/or prefix are missing from config.");
-        $wp_plugins = !empty($wp_args['plugins']) ? sprintf('wp plugin install %s;', implode(' ', (array)$wp_args['plugins'])) : '';
-        //$wp_plugins = "wp plugin install jetpack --version=6.5; wp plugin install jetpack --version=7.0; ";
-        //                wp plugin update --all;
-        $output = $this->exec("wp core download --skip-content;", $wp_dir);
-        $this->ssh->setTimeout(false); //downloading WP can take a while
-        if (stripos($output, 'success') === false && strpos($output, 'WordPress files seem to already be present here') === false)
-            return $this->logError("WordPress download failed.");
+        if ($this->check($args))
+            return $this->logFinish(true, sprintf('WordPress already installed at <strong>%s</strong>.', $args['directory']));
+
+        $output = $this->exec("wp core download --skip-content", $args['directory']);
+        d($output);
+        if (stripos($output, 'success') === false) {
+            if (stripos($output, 'WordPress files seem to already be present here') === false)
+                return $this->logError("WordPress download failed." . $output);
+            $filesAlreadyDownloaded = true;
+        }
 
         $config_constants = $this->getConfigConstants();
         $config_set = '';
@@ -113,102 +115,92 @@ class WP extends AbstractTerminal
             $config_set .= sprintf("wp config set %s %s --raw --type=constant;", $config_constant, $constant);
         }
 
-        $wp_lang = !empty($wp_args['language']) ? 'wp language core install ' . $wp_args['language'] . '; wp site switch-language ' . $wp_args['language'] . ';' : '';
-        $commands1 = "                
-                wp config create --dbname='" . $db_args['name'] . "' --dbuser='" . $db_args['username'] . "' --dbpass='" . $db_args['password'] . "' --dbprefix='" . rtrim($wp_args['prefix'], '_') . "_'" . " --locale=en_AU;         
+        $wp_lang = !empty($args['language']) ? 'wp language core install ' . $args['language'] . '; wp site switch-language ' . $args['language'] . ';' : '';
+        $commands = "                
+                wp config create --dbname='" . $args['db']['name'] . "' --dbuser='" . $args['db']['username'] . "' --dbpass='" . $args['db']['password'] . "' --dbprefix='" . rtrim($args['prefix'], '_') . "_'" . " --locale=en_AU;         
                 " . $config_set . "
-                wp core install --url='" . $wp_args['url'] . "' --title='" . $wp_args['title'] . "' --admin_user='" . $wp_args['username']
-            . "' --admin_password='" . $wp_args['password'] . "' --admin_email='" . $wp_args['email'] . "' --skip-email;"
-            . $wp_plugins . '
-                wp post delete 1;
-                wp theme install twentyseventeen --activate;'
-            . $wp_lang;
-        $commands2 = '              
+                wp core install --url='" . $args['url'] . "' --title='" . $args['title'] . "' --admin_user='" . $args['username']
+            . "' --admin_password='" . $args['password'] . "' --admin_email='" . $args['email'] . "' --skip-email; wp post delete 1;"
+            . $wp_lang . '              
                 mv wp-config.php ../
                 wp rewrite structure "/%postname%/";
                 wp rewrite flush --hard;
                 wp plugin activate --all;
                 rm wp-config-sample.php license.txt readme.html
                 ';
-        $output .= $this->exec($commands1, $wp_dir);
-        $output .= $this->exec($commands2, $wp_dir);
-        $setOption = $this->setOption($wp_dir, 'default_comment_status', 'closed');
-        $setOption2 = $this->setOption($wp_dir, 'blogdescription', 'Enter tagline for ' . $wp_args['title'] . ' here');
-        $wp_blog_public = $this->environment == 'live' ? 1 : 0;
-        $setOption3 = $this->setOption($wp_dir, 'blog_public', $wp_blog_public);
-        if (!empty($wp_args['timezone']))
-            $setOption4 = $this->setOption($wp_dir, 'timezone_string', $wp_args['timezone']);
+        $output .= $this->exec($commands, $args['directory']);
 
-        $widgets = $this->exec("wp widget list sidebar-1 --format=ids", $wp_dir);
+        if (empty($filesAlreadyDownloaded)) {
+            $wp_plugins = !empty($args['plugins']) ? sprintf('wp plugin install %s;', implode(' ', (array)$args['plugins'])) : '';
+            //$wp_plugins = "wp plugin install jetpack --version=6.5; wp plugin install jetpack --version=7.0; ";
+            //                wp plugin update --all;
+            $output .= $this->exec($wp_plugins . 'wp theme install twentynineteen --activate;', $args['directory']);
+        }
+
+        $widgets = $this->exec("wp widget list sidebar-1 --format=ids", $args['directory']);
         if (!empty($widgets)) {
             foreach (array('search-1', 'search-2', 'search') as $search) {
                 $widgets = str_replace($widgets, $search, '');
             }
-            $output .= $this->exec("wp widget delete " . trim($widgets), $wp_dir);
+            $output .= $this->exec("wp widget delete " . trim($widgets), $args['directory']);
         }
-        $update = $this->update($wp_dir);
-        $success = $this->check($wp_dir) ? true : false;
-        return $this->logFinish($success, $output, $commands1 . $commands2);
+        $success = $this->check($args) ? true : false;
+        return $this->logFinish($success, $output, $commands);
     }
 
     /**
-     * @param string $wp_dir
+     * @param array $args
      * @return bool|null
      */
-    public function setPermissions(string $wp_dir = '')
+    public function setPermissions(array $args = [])
     {
-        $this->mainStr($wp_dir);
+        $this->mainStr($args);
         $this->logStart();
-        if (!$this->validate($wp_dir))
+        if (!$this->validate($args))
             return false;
-        if (!$this->check($wp_dir))
-            return $this->logError(sprintf('WordPress not installed at <strong>%s</strong>.', $wp_dir));
-        $wp_dir = self::trailing_slash($wp_dir);
+        if (!$this->check($args))
+            return $this->logError(sprintf('WordPress not installed at <strong>%s</strong>.', $args['directory']));
+        $args['directory'] = self::trailing_slash($args['directory']);
         $commands = '
-                find ' . $wp_dir . ' -type d -exec chmod 755 {} \;
+                find ' . $args['directory'] . ' -type d -exec chmod 770 {} \;
                 echo status is $?;
-                find ' . $wp_dir . ' -type f -exec chmod 644 {} \;
-                echo status is $?;  
-                find ' . $wp_dir . 'wp-content -type d -exec chmod 775 {} \;
-                echo status is $?;
-                find ' . $wp_dir . 'wp-content -type f -exec chmod 664 {} \;
-                echo status is $?;
+                find ' . $args['directory'] . ' -type f -exec chmod 660 {} \;
+                echo status is $?;                  
         ';
-        $output = $this->exec($commands, $wp_dir);
+
+        $output = $this->exec($commands, $args['directory']);
         if (stripos($output, 'status is 0') !== false && stripos($output, 'status is 1') === false)
             $findCommands = true;
         if (!empty($findCommands)) {
-            $configFilePath = $wp_dir . '../wp-config.php';
+            $configFilePath = $args['directory'] . '../wp-config.php';
             if ($this->file_exists($configFilePath))
-                $wpConfig = $this->ssh->chmod(0660, $configFilePath);
-            $htaccessFilePath = $wp_dir . '.htaccess';
+                $wpConfig = $this->chmod($configFilePath, 0660);
+            $htaccessFilePath = $args['directory'] . '.htaccess';
             if ($this->file_exists($htaccessFilePath))
-                $htaccess = $this->ssh->chmod(0644, $htaccessFilePath);
+                $htaccess = $this->chmod($htaccessFilePath, 0664);
         }
         $success = (!empty($findCommands) && !empty($wpConfig) && !empty($htaccess)) ? true : false;
         return $this->logFinish($success, $output, $commands);
     }
 
     /**
-     * @param string $wp_dir
-     * @param string $option
-     * @param string $value
+     * @param array $args
      * @return bool|null
      */
-    public function setOption(string $wp_dir = '', $option = '', $value = '')
+    public function setOption(array $args = [])
     {
-        $this->mainStr($wp_dir);
+        $this->mainStr($args);
         $this->logStart();
-        if (!$this->validate($wp_dir))
+        if (!$this->validate($args))
             return false;
-        if (!$this->check($wp_dir))
-            return $this->logError(sprintf('WordPress not installed at <strong>%s</strong>.', $wp_dir));
-        if (empty($option))
+        if (!$this->check($args))
+            return $this->logError(sprintf('WordPress not installed at <strong>%s</strong>.', $args['directory']));
+        if (empty($args['option']['name']))
             return $this->logError("Option name not passed to setOption method");
-        if (!isset($value) || $value === '')
+        if (!isset($args['option']['value']) || $args['option']['value'] === '')
             return $this->logError("Option value not passed to setOption method");
-        $command = 'wp option update ' . $option . ' "' . $value . '"';
-        $output = $this->exec($command, $wp_dir);
+        $command = 'wp option update ' . $args['option']['name'] . ' "' . $args['option']['value'] . '"';
+        $output = $this->exec($command, $args['directory']);
         $success = (stripos($output, "Success:") !== false) ? true : false;
         return $this->logFinish($success, $output, $command);
     }
@@ -218,7 +210,7 @@ class WP extends AbstractTerminal
      */
     protected function getConfigConstants()
     {
-        //$debug = !empty($wp_args['debug']) && $wp_args['debug'] ? 'true' : 'false';
+        //$debug = !empty($args['debug']) && $args['debug'] ? 'true' : 'false';
         $debug = false;
         $config_constants = array(
             'AUTOSAVE_INTERVAL' => 300,
@@ -237,26 +229,29 @@ class WP extends AbstractTerminal
     /**
      * Alias of uninstall
      *
-     * @param string $wp_dir
+     * @param array $args
      * @return bool
      */
-    public function delete($wp_dir = '')
+    public function delete(array $args = [])
     {
-        return $this->uninstall($wp_dir);
+        return $this->uninstall($args);
     }
 
     /**
-     * @param string $wp_dir
+     * @param array $args
      * @return bool
      */
-    public function uninstall($wp_dir = '')
+    public function uninstall(array $args = [])
     {
-        $this->mainStr($wp_dir);
+        $this->mainStr($args);
         $this->logStart();
-        if (!$this->validate($wp_dir))
+        if (!$this->validate($args))
             return false;
-        if ($this->check($wp_dir)) {
-            $output = $this->exec('wp db clean --yes;', $wp_dir);
+        if (!$this->is_dir($args['directory']))
+            return $this->logFinish(true, sprintf("No need to delete as WordPress directory <strong>%s</strong> doesn't exist.", $args['directory']));
+
+        if ($this->check($args)) {
+            $output = $this->exec('wp db clean --yes;', $args['directory']);
             $cleanedDB = (stripos($output, 'Success') !== false && stripos($output, 'Tables dropped') !== false) ? true : false;
             if ($cleanedDB)
                 $output = "Successfully cleaned DB of all WordPress tables. ";
@@ -267,44 +262,44 @@ class WP extends AbstractTerminal
 
         $wp_files = self::WP_FILES;
         foreach ($wp_files as $wp_file) {
-            $wp_file_path = self::trailing_slash($wp_dir) . $wp_file;
+            $wp_file_path = self::trailing_slash($args['directory']) . $wp_file;
             if ($this->file_exists($wp_file_path))
                 $wp_file_paths[] = $wp_file_path;
         }
         $succeededDeleting = true;
         if (!empty($wp_file_paths)) {
             foreach ($wp_file_paths as $wp_file_path) {
-                if (!$this->deleteFile($wp_file_path)) {
+                if ($this->deleteFile($wp_file_path)) {
+                    $output .= "<br>Deleted <strong>" . $wp_file_path . "</strong>";
+                } else {
                     $succeededDeleting = false;
                     $output .= "Failed to delete one or more WordPress files. ";
                     break;
                 }
             }
             if ($succeededDeleting)
-                $output .= "Deleted WordPress files. ";
+                $output .= "<br>Deleted WordPress files. ";
         } else {
             $output = "Apparently no WordPress files were found so no need to delete them. ";
             $noNeedDeleteFiles = true;
         }
-        if (!empty($noNeedCleanDB) && !empty($noNeedDeleteFiles)) {
-            $this->log("No need to uninstall WordPress. " . $output, 'warning');
-            return true;
-        }
-        $success = (!$this->check($wp_dir) && (!empty($cleanedDB) || !empty($noNeedCleanDB)) && $succeededDeleting) ? true : false;
+        if (!empty($noNeedCleanDB) && !empty($noNeedDeleteFiles))
+            return $this->logFinish(true, "No need to uninstall WordPress. " . $output);
+        $success = (!$this->check($args) && (!empty($cleanedDB) || !empty($noNeedCleanDB)) && $succeededDeleting) ? true : false;
         return $this->logFinish($success, $output);
     }
 
     /**
-     * @param string $wp_dir
+     * @param array $args
      * @return bool
      */
-    public function update($wp_dir = '')
+    public function update(array $args = [])
     {
-        if (!$this->validate($wp_dir))
+        if (!$this->validate($args))
             return false;
-        if (!$this->check($wp_dir))
-            return $this->logError(sprintf('WordPress not installed at <strong>%s</strong>.', $wp_dir));
-        $version = trim($this->exec('wp core version;', $wp_dir));
+        if (!$this->check($args))
+            return $this->logError(sprintf('WordPress not installed at <strong>%s</strong>.', $args['directory']));
+        $version = trim($this->exec('wp core version;', $args['directory']));
         $updateToVersion = ($version != '5.0' && $version != '5.0.1') ? ' --version=4.9.9' : '';
         $output = $this->exec('                     
             wp core update --locale="en_AU" ' . $updateToVersion . ';
@@ -314,7 +309,7 @@ class WP extends AbstractTerminal
             wp core language update;
             wp language plugin update --all;
             wp language theme update --all;
-            wp db optimize', $wp_dir
+            wp db optimize', $args['directory']
         );
         $success = null;
         if (stripos($output, 'error') !== false)
@@ -325,37 +320,69 @@ class WP extends AbstractTerminal
     }
 
     /**
-     * @param string $wp_dir
+     * @param array $args
      * @return bool
      */
-    protected function validate(string $wp_dir = '')
+    protected function validate(array $args = [])
     {
-        if (empty($wp_dir))
+        if (empty($args['directory']))
             return $this->logError("File directory missing from function input.");
-        $wp_dir = self::trailing_slash($wp_dir);
-        if (in_array($wp_dir, array('~/', self::trailing_slash($this->root))))
+        $caller = $this->getCaller();
+        $args['directory'] = self::trailing_slash($args['directory']);
+        if ($this->inSanityList($args['directory']))
             return $this->logError(sprintf("Shouldn't be %s WordPress in root directory <strong>%s</strong>.",
-                $this->actions[$this->getCaller()]['present'], $wp_dir));
-        if (!$this->is_dir($wp_dir))
-            return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $wp_dir));
+                $this->actions[$caller]['present'], $args['directory']));
+        if (!$this->is_dir($args['directory']) && $caller != 'uninstall') {
+            return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $args['directory']));
+        }
         if (!$this->client->WPCLI()->install_if_missing())
             return $this->logError("WP CLI missing and install failed.");
+
+        if ($caller == 'install') {
+            if (!$this->is_dir($args['directory']) && $caller != 'uninstall') {
+                return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $args['directory']));
+            }
+            if (!isset($args['db']['name'], $args['db']['username'], $args['db']['password']))
+                return $this->logError("DB name, username and/or password are missing from config.");
+            if (!isset($args['username'], $args['password'], $args['email'], $args['url'], $args['title'], $args['prefix']))
+                return $this->logError("WordPress username, password, email, url, title and/or prefix are missing from config.");
+            if (!$this->is_writable($args['directory']))
+                return $this->logError("Nominated WordPress directory is not writable.");
+        }
         return true;
     }
 
+
+    /*
+        protected function getLatestDefaultTheme(string $args['directory'] = '')
+        {
+            $output = $this->exec("wp theme search --per-page=30 --fields=name,author,slug --format=json Twenty");
+            $themes = json_decode($output);
+            d($themes);
+            foreach($themes as $theme){
+                if($theme['author'] == 'wordpressdotorg')
+            }
+
+        }
+    */
+
     /**
-     * @param string $wp_dir
-     * @return bool|string
+     * @param array $args
+     * @return string
      */
     protected
-    function mainStr(string $wp_dir = '')
+    function mainStr(array $args = [])
     {
         if (func_num_args() == 0) {
             if (!empty($this->_mainStr))
                 return $this->_mainStr;
         }
 
-        $wp_dir = !empty($wp_dir) ? sprintf(' in directory <strong>%s</strong>', $wp_dir) : '';
-        return $this->_mainStr = sprintf("%s environment WordPress%s", $this->environment, $wp_dir);
+        $dirStr = !empty($args['directory']) ? sprintf(' in directory <strong>%s</strong>', $args['directory']) : '';
+        $optionStr = !empty($args['option']['name']) && !empty($args['option']['value']) ?
+            sprintf(' with option "<strong>%s</strong>" and value "<strong>%s</strong>"',
+                $args['option']['name'], $args['option']['value']) : '';
+
+        return $this->_mainStr = sprintf("%s environment WordPress%s%s", $this->environment, $dirStr, $optionStr);
     }
 }

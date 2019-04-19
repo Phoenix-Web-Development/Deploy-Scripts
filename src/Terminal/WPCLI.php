@@ -11,6 +11,11 @@ class WPCLI extends AbstractTerminal
 {
 
     /**
+     * @var string
+     */
+    protected $logElement = 'h4';
+
+    /**
      * @return bool
      */
     public function check()
@@ -35,10 +40,10 @@ class WPCLI extends AbstractTerminal
     public function uninstall()
     {
         $this->logStart();
-        if (!$this->check()) {
-            $this->log("Can't delete " . $this->mainStr() . ' WordPress CLI not installed.', 'info');
-            return true;
-        }
+        if (!$this->check())
+            return $this->logFinish(true, "No need to uninstall as WordPress CLI isn't installed");
+        if (!$this->validate())
+            return false;
         $success = $this->deleteFile($this->filepath()) ? true : false;
         return $this->logFinish($success);
     }
@@ -57,27 +62,23 @@ class WPCLI extends AbstractTerminal
     public function install()
     {
         $this->logStart();
-        if ($this->check()) {
-            $this->log(sprintf("No need to install %s It's already installed.", $this->mainStr()), 'success');
-            return true;
-        }
+        if ($this->check())
+            return $this->logFinish(true, 'WP CLI already installed');
+        if (!$this->validate())
+            return false;
+
+        $this->mkdir(dirname($this->filepath()));
+        if (!is_dir($this->filepath()))
+            return $this->logError("Couldn't create directory <strong>" . $this->filepath() . "</strong>.");
         $output = $this->exec(
             'curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar; 
-        chmod +x wp-cli.phar; 
-        mkdir ' . dirname($this->filepath()) . '; 
+        chmod +x wp-cli.phar;
         mv wp-cli.phar ' . $this->filepath() . '; 
-        echo -e "PATH=$PATH:$HOME/.local/bin:$HOME/bin\n\nexport PATH" >> ~/.bashrc;');
+        echo -e "PATH=$PATH:$HOME/.local/bin:$HOME/bin\n\nexport PATH" >> ~/.bashrc;'
+        );
+
+
         $success = $this->check() ? true : false;
-
-        $CLIConfigDir = self::trailing_slash($this->root) . ".wp-cli";
-        $CLIConfigFilePath = $CLIConfigDir . "/config.yml";
-        if ($this->file_exists($CLIConfigFilePath))
-
-            if (!$this->is_dir($CLIConfigDir))
-                $this->ssh->mkdir($CLIConfigDir);
-        $CLIConfig = "apache_modules:
-  - mod_rewrite";
-        $this->put($CLIConfigFilePath, $CLIConfig);
 
         return $this->logFinish($success, $output);
     }
@@ -93,14 +94,27 @@ class WPCLI extends AbstractTerminal
         if ($this->install())
             return true;
         return false;
+
     }
+
+    /**
+     * @return string
+     */
+    protected function validate()
+    {
+        if (empty($this->filepath()))
+            return $this->logError(sprintf("Couldn't get %s environ home directory.", $this->environment));
+        return true;
+    }
+
 
     /**
      * @return string
      */
     protected function mainStr()
     {
-        return sprintf("WP CLI in %s environment in directory <strong>%s</strong>.", $this->environment, $this->filepath());
+        $dirStr = !empty($this->filepath) ? sprintf(" at path <strong>%s</strong>", $this->filepath) : '';
+        return sprintf("WP CLI in %s environment%s", $this->environment, $dirStr);
     }
 
     /**
@@ -108,6 +122,9 @@ class WPCLI extends AbstractTerminal
      */
     protected function filepath()
     {
-        return self::trailing_slash($this->root) . 'bin/wp';
+        $root = $this->root;
+        if (!empty($root))
+            return self::trailing_slash($root) . 'bin/wp';
+        return false;
     }
 }

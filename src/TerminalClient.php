@@ -192,6 +192,16 @@ class TerminalClient extends BaseClient
             $this->environment, $command);
 
         if (!empty($startDir)) {
+            if (!$this->is_dir($startDir)) {
+                $this->log($error_string . "Directory " . $startDir . " doesn't exist.");
+                return false;
+            }
+            if (!$this->is_readable($startDir)) {
+                $this->log($error_string . "Directory " . $startDir . " inaccessible.");
+                return false;
+            }
+
+
             $command = 'cd ' . $startDir . '; ' . $command;
         }
 
@@ -235,16 +245,27 @@ class TerminalClient extends BaseClient
     }
 
     /**
-     * @return mixed
+     * @param string $root
+     * @return array|bool|false|mixed|string
      */
-    protected function root()
+    protected function root(string $root = '')
     {
+        if (!empty($root))
+            return $this->_root = $root;
         if (!empty($this->_root))
             return $this->_root;
-        $pwd = trim($this->exec('pwd')) ?? false;
-        if (!empty($pwd))
-            return $this->_root = $pwd;
-        $this->log(sprintf("Couldn't get %s environment root directory", $this->environment));
+
+        if ($this->environment == 'local') {
+            if (isset($_SERVER['HOME'])) {
+                return $this->_root = $_SERVER['HOME'];
+            } else {
+                if (!empty(getenv("HOME")))
+                    return $this->_root = getenv("HOME");
+            }
+        }
+        $root = trim($this->exec('echo ~')) ?? false;
+        if (!empty($root))
+            return $this->_root = $root;
         return false;
     }
 

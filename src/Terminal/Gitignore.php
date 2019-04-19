@@ -18,6 +18,11 @@ class Gitignore extends AbstractTerminal
         $this->logStart();
         if (!$this->validate($worktree))
             return false;
+        if (!$this->is_dir($worktree)) {
+            return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $worktree));
+        }
+        if (!$this->client->git()->checkGitWorktree($worktree))
+            return $this->logError(sprintf("Directory <strong>%s</strong> is not a Git worktree.", $worktree));
         $filepath = self::trailing_slash($worktree) . '.gitignore';
         if ($this->file_exists($filepath) && $this->size($filepath) > 0)
             return $this->logError(sprintf("Gitignore file at <strong>%s</strong> already exists so no need to create.", $worktree), 'warning');
@@ -36,7 +41,7 @@ class Gitignore extends AbstractTerminal
             return false;
         $filepath = self::trailing_slash($worktree) . '.gitignore';
         if (!$this->file_exists($filepath))
-            return $this->logError(sprintf("Gitignore file at <strong>%s</strong> doesn't exist so no need to delete.", $worktree), 'warning');
+            return $this->logFinish(true, sprintf("Gitignore file at <strong>%s</strong> doesn't exist so no need to delete.", $worktree));
         $success = $this->deleteFile($filepath) ? true : false;
         return $this->logFinish($success);
     }
@@ -47,12 +52,8 @@ class Gitignore extends AbstractTerminal
      */
     protected function validate(string $worktree = '')
     {
-        if (!$this->is_dir($worktree)) {
-            return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $worktree));
-        }
-        if (!$this->client->git()->checkGitWorktree($worktree))
-            return $this->logError(sprintf("Directory <strong>%s</strong> is not a Git worktree.", $worktree));
         return true;
+
     }
 
     /**

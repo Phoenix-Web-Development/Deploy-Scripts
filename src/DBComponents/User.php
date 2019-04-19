@@ -32,7 +32,7 @@ class User extends AbstractDBComponents
         if (!$this->validate($args))
             return false;
         if ($this->check($args))
-            return $this->logError("User already exists.");
+            return $this->logFinish(true, "User already exists.");
         //VIA mysql_native_password
         $stmt = "CREATE USER " . $args['username'] . "@'localhost' IDENTIFIED BY '" . $args['password'] . "';";
         //$stmt = "CREATE USER " . $args['username'] . "@'localhost' IDENTIFIED VIA mysql_native_password USING '" . $args['password'] . "';";
@@ -53,7 +53,7 @@ class User extends AbstractDBComponents
         if (!$this->validate($args))
             return false;
         if (!$this->check($args))
-            return $this->logError("User doesn't exist to delete.");
+            return $this->logFinish(true, "No need to delete, user " . $args['username'] . " doesn't exist to delete.");
 
         $this->pdo->run("DROP USER '" . $args['username'] . "'@'localhost';");
         $success = $this->check($args) ? false : true;

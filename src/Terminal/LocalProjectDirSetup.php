@@ -8,9 +8,19 @@ namespace Phoenix\Terminal;
  */
 class LocalProjectDirSetup extends AbstractTerminal
 {
+    /**
+     * @var string
+     */
+    protected $logElement = 'h4';
 
+    /**
+     * @var
+     */
     public $projectArgs;
 
+    /**
+     * @param array $args
+     */
     public function setProjectArgs(array $args = [])
     {
         $this->projectArgs = $args;
@@ -29,8 +39,11 @@ class LocalProjectDirSetup extends AbstractTerminal
             return false;
 
         if ($this->is_dir($args['dir'])) {
+
             $owner = posix_getpwuid(fileowner($args['dir']))['name'];
             $group = posix_getgrgid(filegroup($args['dir']))['name'];
+            d($owner);
+            d($group);
             if ($owner == $args['owner'] && $group == $args['group'])
                 return $this->logFinish(true, "Directory already exists and has correct permissions");
             return $this->logError("Directory already exists and has wrong permissions.");
@@ -49,16 +62,12 @@ class LocalProjectDirSetup extends AbstractTerminal
             $this->projectArgs['group']
         ]);
         $output = $this->exec($command);
-
-        $needle = 'Successfully setup directory at ' . $args['dir'] . '.';
-        if (strpos($output, $needle) !== false
+        $needle = sprintf('Created directory at <strong>%s</strong> with correct owner <strong>%s</strong> and correct group <strong>%s</strong>.', $args['dir'], $args['owner'], $args['group']);
+        $success = ((strpos($output, $needle) !== false || strpos($output, 'No need to proceed further') !== false)
             && $this->is_dir($args['dir'])
-            && posix_getpwuid(fileowner($args['dir']))['name'] == $args['owner']
-            && posix_getgrgid(filegroup($args['dir']))['name'] == $args['group']
-        )
-            $success = true;
-        else
-            $success = false;
+            //&& posix_getpwuid(fileowner($args['dir']))['name'] == $args['owner']
+            //&& posix_getgrgid(filegroup($args['dir']))['name'] == $args['group']
+        ) ? true : false;
 
         return $this->logFinish($success, $output, $command);
     }
@@ -82,6 +91,8 @@ class LocalProjectDirSetup extends AbstractTerminal
         $this->logStart();
         if (!$this->validate($args))
             return false;
+        if (!$this->is_dir($args['dir']) && !$this->file_exists($args['dir']))
+            return $this->logFinish(true, "Directory doesn't exist so no need to delete");
         if (!$this->deleteFile($args['dir'], true))
             return false;
         return $this->logFinish(true);
