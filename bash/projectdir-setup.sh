@@ -38,7 +38,7 @@ if [[ -d "$projectDir" ]]; then
     projectDirMessage="\nno need to setup project directory as it already exists."
 else
     # create the project directory
-    mkdir -m 775 "$projectDir"
+    mkdir -m 750 "$projectDir"
     creatingProjectDir=true
 fi
 
@@ -51,7 +51,7 @@ if [[ "$creatingProjectDir" = true ]] ; then
     #web owner on subdirectories
     chown -R "$owner:$group" "$projectDir"/*
     chmod -R g+s "$projectDir"
-    setfacl -R -d -m u::rwx,g::rwx,a::rx "$projectDir"
+    setfacl -R -d -m u::rwx,g::rwx "$projectDir"
     projectDirMessage="\nSuccessfully setup project directory at $projectDir."
 fi
 

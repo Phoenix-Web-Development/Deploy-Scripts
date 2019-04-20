@@ -35,6 +35,7 @@ class WPCLIConfig extends AbstractTerminal
             return false;
         if ($this->file_exists($this->filepath))
             return true;
+
         return false;
     }
 
@@ -46,10 +47,8 @@ class WPCLIConfig extends AbstractTerminal
         $this->logStart();
         if (!$this->validate())
             return false;
-        if (!$this->check()) {
-            $this->log("No need to delete " . $this->mainStr() . ' File doesn\'t exist.', 'info');
-            return true;
-        }
+        if (!$this->check())
+            return $this->logFinish(true, "No need to delete " . $this->mainStr() . ' as file doesn\'t exist.');
         $success = $this->deleteFile($this->filepath) ? true : false;
         return $this->logFinish($success);
 
@@ -77,9 +76,12 @@ class WPCLIConfig extends AbstractTerminal
         }
 
         $filepath = $this->filepath;
-
-        if (!$this->is_dir(dirname($filepath)))
-            $this->mkdir(dirname($filepath));
+        $dirpath = dirname($filepath);
+        if (!$this->is_dir($dirpath)) {
+            $this->mkdir($dirpath);
+            if (!$this->is_dir($dirpath))
+                return $this->logError("Directory " . $dirpath . " doesn't exist.");
+        }
         $CLIConfig = "apache_modules:
   - mod_rewrite";
         $success = $this->put($filepath, $CLIConfig);
@@ -122,14 +124,12 @@ class WPCLIConfig extends AbstractTerminal
         if (!empty($this->_filepath))
             return $this->_filepath;
 
-        $filename = 'config.yml';
+        if (!empty($this->root))
+            return $this->_filepath = self::trailing_slash($this->root) . '.wp-cli/config.yml';
 
-        if (empty($this->dirPath)) {
-            $path = '.wp-cli/' . $filename;
-            if (!empty($this->root))
-                return $this->_filepath = self::trailing_slash($this->root) . $path;
-            return false;
+        if (!empty($this->dirPath)) {
+            return $this->_filepath = self::trailing_slash($this->dirPath) . 'wp-cli.yml';
         }
-        return $this->_filepath = self::trailing_slash($this->dirPath) . $filename;
+        return false;
     }
 }

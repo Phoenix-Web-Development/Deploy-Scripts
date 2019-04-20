@@ -56,13 +56,9 @@ class WP extends AbstractTerminal
      * @param array $args
      * @return bool
      */
-    public function check(array $args = [])
+    protected function check(array $args = [])
     {
-        if (!$this->validate($args))
-            return false;
-        $output = $this->exec("wp core is-installed", $args['directory']);
-        //$output = $this->readWrite(array("wp core is-installed;"), $args['directory']);
-
+        $output = $this->exec("wp core is-installed; echo $?", $args['directory']);
         d($output);
         $potential_errors = array(
             "This does not seem to be a WordPress install",
@@ -74,7 +70,9 @@ class WP extends AbstractTerminal
             if (stripos($output, $potential_error) !== false)
                 return false;
         }
-        return true;
+        if ($output == '0')
+            return true;
+        return false;
     }
 
     /**
@@ -98,9 +96,9 @@ class WP extends AbstractTerminal
         $this->logStart();
         if (!$this->validate($args))
             return false;
+
         if ($this->check($args))
             return $this->logFinish(true, sprintf('WordPress already installed at <strong>%s</strong>.', $args['directory']));
-
         $output = $this->exec("wp core download --skip-content", $args['directory']);
         d($output);
         if (stripos($output, 'success') === false) {
@@ -122,9 +120,7 @@ class WP extends AbstractTerminal
                 wp core install --url='" . $args['url'] . "' --title='" . $args['title'] . "' --admin_user='" . $args['username']
             . "' --admin_password='" . $args['password'] . "' --admin_email='" . $args['email'] . "' --skip-email; wp post delete 1;"
             . $wp_lang . '              
-                mv wp-config.php ../
-                wp rewrite structure "/%postname%/";
-                wp rewrite flush --hard;
+                mv wp-config.php ../                
                 wp plugin activate --all;
                 rm wp-config-sample.php license.txt readme.html
                 ';
@@ -144,8 +140,7 @@ class WP extends AbstractTerminal
             }
             $output .= $this->exec("wp widget delete " . trim($widgets), $args['directory']);
         }
-        $success = $this->check($args) ? true : false;
-        return $this->logFinish($success, $output, $commands);
+        return $this->logFinish($this->check($args), $output, $commands);
     }
 
     /**
@@ -158,8 +153,6 @@ class WP extends AbstractTerminal
         $this->logStart();
         if (!$this->validate($args))
             return false;
-        if (!$this->check($args))
-            return $this->logError(sprintf('WordPress not installed at <strong>%s</strong>.', $args['directory']));
         $args['directory'] = self::trailing_slash($args['directory']);
         $commands = '
                 find ' . $args['directory'] . ' -type d -exec chmod 770 {} \;
@@ -193,8 +186,6 @@ class WP extends AbstractTerminal
         $this->logStart();
         if (!$this->validate($args))
             return false;
-        if (!$this->check($args))
-            return $this->logError(sprintf('WordPress not installed at <strong>%s</strong>.', $args['directory']));
         if (empty($args['option']['name']))
             return $this->logError("Option name not passed to setOption method");
         if (!isset($args['option']['value']) || $args['option']['value'] === '')
@@ -297,8 +288,6 @@ class WP extends AbstractTerminal
     {
         if (!$this->validate($args))
             return false;
-        if (!$this->check($args))
-            return $this->logError(sprintf('WordPress not installed at <strong>%s</strong>.', $args['directory']));
         $version = trim($this->exec('wp core version;', $args['directory']));
         $updateToVersion = ($version != '5.0' && $version != '5.0.1') ? ' --version=4.9.9' : '';
         $output = $this->exec('                     
@@ -325,23 +314,21 @@ class WP extends AbstractTerminal
      */
     protected function validate(array $args = [])
     {
-        if (empty($args['directory']))
-            return $this->logError("File directory missing from function input.");
         $caller = $this->getCaller();
+        if (empty($args['directory']))
+            return $this->logError("File directory missing from <code>" . $caller . "</code> method input.");
+
         $args['directory'] = self::trailing_slash($args['directory']);
         if ($this->inSanityList($args['directory']))
             return $this->logError(sprintf("Shouldn't be %s WordPress in root directory <strong>%s</strong>.",
                 $this->actions[$caller]['present'], $args['directory']));
-        if (!$this->is_dir($args['directory']) && $caller != 'uninstall') {
+        if ($caller != 'uninstall' && !$this->is_dir($args['directory'])) {
             return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $args['directory']));
         }
         if (!$this->client->WPCLI()->install_if_missing())
             return $this->logError("WP CLI missing and install failed.");
 
         if ($caller == 'install') {
-            if (!$this->is_dir($args['directory']) && $caller != 'uninstall') {
-                return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $args['directory']));
-            }
             if (!isset($args['db']['name'], $args['db']['username'], $args['db']['password']))
                 return $this->logError("DB name, username and/or password are missing from config.");
             if (!isset($args['username'], $args['password'], $args['email'], $args['url'], $args['title'], $args['prefix']))
@@ -349,10 +336,68 @@ class WP extends AbstractTerminal
             if (!$this->is_writable($args['directory']))
                 return $this->logError("Nominated WordPress directory is not writable.");
         }
+        if ($caller != 'install' && $caller != 'uninstall') {
+            if (!$this->check($args))
+                return $this->logError(sprintf('WordPress not installed at <strong>%s</strong>.', $args['directory']));
+        }
         return true;
     }
 
+    public function setRewriteRules(array $args = [])
+    {
+        $this->mainStr($args);
+        $this->logStart();
+        if (!$this->validate($args))
+            return false;
 
+        if (!$this->canRewriteFlushHard($args)) {
+            $WPCLIConfig = $this->client->wp_cli_config();
+            $WPCLIConfig->dirPath = $args['directory'];
+            $WPCLIConfig->create();
+            if (!$this->canRewriteFlushHard($args))
+                return $this->logError("Can't regenerate .htaccess file because mod_rewrite isn't loaded in WP CLI.");
+        }
+
+        $command = 'wp rewrite structure "/%postname%/";wp rewrite flush --hard';
+        $output = $this->exec($command, $args['directory']);
+
+        //check success
+        $successMessages = array(
+            'Success: Rewrite rules flushed.',
+            'Success: Rewrite structure set.',
+            'Success: Rewrite rules flushed.'
+        );
+        $success = true;
+        foreach ($successMessages as $successMessage) {
+            if (strpos($output, $successMessage) === false) {
+                $success = false;
+                break;
+            }
+        }
+        $failMessages = array('Warning: Regenerating a .htaccess file requires special configuration. See usage docs.');
+        foreach ($failMessages as $failMessage) {
+            if (strpos($output, $failMessage) !== false) {
+                $success = false;
+                break;
+            }
+        }
+        return $this->logFinish($success, $output);
+    }
+
+    /**
+     * @param array $args
+     * @return bool
+     */
+    protected function canRewriteFlushHard(array $args = [])
+    {
+        $WPCLIparams = $this->exec("wp cli param-dump --with-values", $args['directory']);
+        $WPCLIparams = json_decode($WPCLIparams, true);
+        d($WPCLIparams);
+        $apacheModules = $WPCLIparams['apache_modules']['current'] ?? [];
+        if (in_array('mod_rewrite', $apacheModules))
+            return true;
+        return false;
+    }
     /*
         protected function getLatestDefaultTheme(string $args['directory'] = '')
         {

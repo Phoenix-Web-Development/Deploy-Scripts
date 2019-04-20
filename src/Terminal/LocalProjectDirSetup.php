@@ -39,14 +39,13 @@ class LocalProjectDirSetup extends AbstractTerminal
             return false;
 
         if ($this->is_dir($args['dir'])) {
-
+            if (!$this->is_readable($args['dir']))
+                return $this->logError("Directory already exists but can't figure out the directory owner and group.");
             $owner = posix_getpwuid(fileowner($args['dir']))['name'];
             $group = posix_getgrgid(filegroup($args['dir']))['name'];
-            d($owner);
-            d($group);
             if ($owner == $args['owner'] && $group == $args['group'])
                 return $this->logFinish(true, "Directory already exists and has correct permissions");
-            return $this->logError("Directory already exists and has wrong permissions.");
+            return $this->logError("Directory already exists but it has wrong permissions.");
         }
 
         //check if project dir is a subdirectory of nominated dir
@@ -136,8 +135,7 @@ class LocalProjectDirSetup extends AbstractTerminal
      * @param array $args
      * @return string
      */
-    protected
-    function mainStr(array $args = [])
+    protected function mainStr(array $args = [])
     {
         if (func_num_args() == 0) {
             if (!empty($this->_mainStr))

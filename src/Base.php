@@ -133,6 +133,11 @@ class Base
             'past' => 'set',
             'action' => 'set'
         ),
+        'setGitUser' => array(
+            'present' => 'setting user config for',
+            'past' => 'set user config for',
+            'action' => 'set user config for'
+        ),
         'setOption' => array(
             'present' => 'setting option for',
             'past' => 'set option for',
@@ -142,6 +147,11 @@ class Base
             'present' => 'setting permissions for',
             'past' => 'set permissions for',
             'action' => 'set permissions for'
+        ),
+        'setRewriteRules' => array(
+            'present' => 'setting rewrite rules for',
+            'past' => 'set rewrite rules for',
+            'action' => 'set rewrite rules for'
         ),
         'sync' => array(
             'present' => 'syncing',
@@ -175,7 +185,7 @@ class Base
      */
     public function __construct()
     {
-        return true;
+        return;
     }
 
     /**

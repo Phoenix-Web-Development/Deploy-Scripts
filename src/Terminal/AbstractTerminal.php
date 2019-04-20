@@ -122,7 +122,7 @@ class AbstractTerminal extends BaseAbstract
     {
         if ($this->environment != 'local')
             return $this->ssh->is_readable($dir);
-        return $this->is_readable($dir);
+        return is_readable($dir);
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace Phoenix\Terminal;
 
 /**
+ * Installs or uninstalls WP command line interface
  *
  * Class WPCLI
  * @package Phoenix\Terminal

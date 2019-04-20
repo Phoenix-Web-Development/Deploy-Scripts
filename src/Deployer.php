@@ -176,7 +176,7 @@ final class Deployer extends Base
             template()->get('form');
             $unixUser = posix_getpwuid(posix_geteuid())['name'] ?? 'unknown';
             $unixUser = sprintf('Local server unix user is <strong>%s</strong>.', $unixUser);
-            $root = $this->terminal('local')->root ?? 'unknown';
+            $root = !empty($this->terminal('local')->root) ? $this->terminal('local')->root : 'unknown';
             $root = sprintf(' Local root directory is <strong>%s</strong>.', $root);
             $this->log($unixUser . $root, 'info');
             $diskspace = $this->getWHMDiskSpace();
@@ -566,7 +566,6 @@ final class Deployer extends Base
      */
     function localStuff($action = 'create')
     {
-
         if ($this->actionRequests->can_do($action . "_local_version_control") ||
             ($action == 'create' && $this->actionRequests->can_do("create_local_initial_git_commit")))
             $versionControl = new EnvironVersionControl(

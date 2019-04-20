@@ -65,14 +65,9 @@ class WordPress extends AbstractDeployer
 
         $WPCLI = $this->terminal->wp_cli()->install();
 
-        $WPCLIConfig = $this->terminal->wpcliconfig();
-        if ($environ == 'local') {
-            $WPCLIConfig->dirPath = $args['cli']['config']['path'];
-        }
-
-        $WPCLIConfig->create();
         $wp = $this->terminal->wp();
         $installed = $wp->install($args);
+
         if ($installed) {
             $wp_blog_public = $this->environment == 'live' ? 1 : 0;
             $setOptions = array(
@@ -90,16 +85,19 @@ class WordPress extends AbstractDeployer
             }
 
             $www = ($environ == 'live' && !empty($args['www'])) ? true : false;
-            $htaccess = $this->terminal->htaccess()->prepend($args['directory'], $www);
-            $permissions = $this->terminal->wp()->setPermissions($args);
+            $setRewriteRules = $wp->setRewriteRules($args);
+            if ($setRewriteRules)
+                $htaccess = $this->terminal->htaccess()->prepend($args['directory'], $www);
+            $permissions = $wp->setPermissions($args);
             $updated = $wp->update($args);
         }
+
         $success = !empty($WPCLI)
-        && !empty($WPCLIConfig)
         && !empty($installed)
+        && !empty($setRewriteRules)
         && !empty($htaccess)
         && !empty($permissions)
-        && !in_array(false, $setOptionSuccess)
+        && (!in_array(false, $setOptionSuccess))
         && !empty($updated) ? true : false;
 
         return $this->logFinish($success);
@@ -120,11 +118,13 @@ class WordPress extends AbstractDeployer
             return false;
 
         $deleted_wp = $this->terminal->wp()->delete($args);
-        if ($this->environ != 'live')
-            return $this->logFinish($deleted_wp);
+
         if ($deleted_wp) {
-            $deleted_wp_cli = $this->terminal->wp_cli()->delete();
-            $deletedWPConfig = $this->terminal->wpcliconfig()->delete();
+            $deleted_wp_cli = $this->environ == 'live' ? $this->terminal->wp_cli()->delete() : true;
+
+            $WPCLIConfig = $this->terminal->wp_cli_config();
+            $WPCLIConfig->dirPath = $args['directory'];
+            $deletedWPConfig = $WPCLIConfig->delete();
         }
         $success = $deleted_wp && !empty($deleted_wp_cli) && !empty($deletedWPConfig) ? true : false;
         return $this->logFinish($success);

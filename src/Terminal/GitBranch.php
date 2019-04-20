@@ -40,6 +40,7 @@ class GitBranch extends AbstractTerminal
             return false;
         }
     */
+
     /**
      * Determine whether repo includes a certain branch
      *
@@ -60,14 +61,14 @@ class GitBranch extends AbstractTerminal
             $strFails = array('fatal', 'not a valid ref');
             $strSuccess = "refs/heads/" . $args['branch'];
         } elseif ($stream == 'up') {
-            $exists = $this->exec("git branch --remotes --contains " . $args['branch'], $args['worktree']);
+            //$exists = $this->exec("git branch --remotes --contains " . $args['branch'], $args['worktree']);
+            $exists = $this->exec("git branch -a", $args['worktree']);
+
             $strFails = array('error: malformed object name ' . $args['branch']);
-            $strSuccess = "origin/" . $args['branch'];
+            //$strSuccess = "origin/" . $args['branch'];
+            $strSuccess = "remotes/origin/" . $args['branch'];
         } else
             return $this->logError("Stream should be set to upstream or downstream only.");
-        d($exists);
-        d($strFails);
-        d($strSuccess);
 
         foreach ($strFails as $strFail) {
             if (stripos($exists, $strFail) !== false) {
@@ -75,10 +76,8 @@ class GitBranch extends AbstractTerminal
                 return false;
             }
         }
-        if (stripos($exists, $strSuccess) !== false) {
-            d("branch " . $args['branch'] . " exists");
+        if (stripos($exists, $strSuccess) !== false)
             return true;
-        }
         return null;
     }
 
@@ -103,12 +102,12 @@ class GitBranch extends AbstractTerminal
             $strNewLocalBranch = '-b ';
 
             if ($this->check($args['worktree'], $args['branch'], 'up') === true)
-                $strSetUpstream = "; git branch --set-upstream-to=origin/" . $args['branch'] . " " . $args['branch'] . "";
+                $strSetUpstream = " --track=origin/" . $args['branch'];
         }
         $command = "git checkout " . $strNewLocalBranch . $args['branch'] . $strSetUpstream;
         $output = $this->exec($command, $args['worktree']);
 
-        $success = ($this->getCurrent($args['worktree']) == $args['branch']) ? true : false;
+        $success = $this->getCurrent($args['worktree']) == $args['branch'] ? true : false;
         $this->logFinish($success, $output, $command);
         if ($success)
             return $args['branch'];
@@ -275,7 +274,9 @@ class GitBranch extends AbstractTerminal
                         git add . --all;
                         git commit -m '" . $git_message . "';
                         git push " . $strNewRemoteBranch . "--porcelain;";
-        $output = $this->exec($commands, $args['worktree']);
+        $output = $this->exec("git add . --all", $args['worktree']);
+        $output .= $this->exec("git commit -m '" . $git_message . "'", $args['worktree']);
+        $output .= $this->exec("git push " . $strNewRemoteBranch . "--porcelain;", $args['worktree']);
         d($output);
         $status = $this->exec("git status", $args['worktree']);
         if (substr(trim($output), -4) === 'Done' && $this->getChanges($args['worktree']) === false && strpos($status, "Your branch is ahead of") === false)
@@ -295,7 +296,7 @@ class GitBranch extends AbstractTerminal
         if (!$this->validate($args))
             return null;
         $output = $this->exec("git status --porcelain", $args['worktree']);
-        if (strlen($output) == 0)
+        if (strlen($output) == 0 || strpos($output, 'nothing to commit, working tree clean') !== false)
             return false;
         return $output;
     }

@@ -19,8 +19,7 @@ class Git extends AbstractTerminal
         $this->logStart();
         if (!$this->validate($args))
             return false;
-        if (empty($args['worktree_path']) && empty($args['repo_path']))
-            return $this->logError("Both worktree path and repo path missing from method input. Need at least one.");
+
         if (empty($args['worktree_path']))
             $args['worktree_path'] = $args['repo_path'];
         if (empty($args['repo_path']))
@@ -168,6 +167,35 @@ class Git extends AbstractTerminal
         return false;
     }
 
+
+    public function setGitUser(array $args = [])
+    {
+        $this->mainStr($args);
+        $this->logStart();
+
+        if (!$this->validate($args))
+            return false;
+
+        $username = $this->exec('git config user.name', $args['worktree_path']);
+        $email = $this->exec('git config user.email', $args['worktree_path']);
+        if ($username == $args['config_user'] && $email == $args['config_email'])
+            return $this->logFinish(true, "No need as config user and email are already correctly set.");
+
+        $rawCommand = 'git config%s user.name "' . $args['config_user'] . '"; git config%s user.email "' . $args['config_email'] . '"';
+        $command = sprintf($rawCommand, ' --global', ' --global');
+        $output = $this->exec($command, $args['worktree_path']);
+        if (strpos($output, 'fatal: $HOME not set') !== false) {
+            $command = sprintf($rawCommand, '', '');
+            $output = $this->exec($command, $args['worktree_path']);
+        }
+        $username = $this->exec('git config user.name', $args['worktree_path']);
+        $email = $this->exec('git config user.email', $args['worktree_path']);
+        $success = $username == $args['config_user'] && $email == $args['config_email'] ? true : false;
+        return $this->logFinish($success, $output, $command);
+
+    }
+
+
     /**
      * @param string $dir
      * @return bool
@@ -194,6 +222,8 @@ class Git extends AbstractTerminal
     protected function isGitThing(string $dir = '', $thing = 'repo')
     {
         if (!$this->is_dir($dir))
+            return false;
+        if (!$this->is_readable($dir))
             return false;
 
         switch ($thing) {
@@ -252,6 +282,10 @@ class Git extends AbstractTerminal
             case 'purge':
                 $argsToValidate = ['worktree_path'];
                 break;
+            case 'setGitUser':
+                $argsToValidate = ['config_user', 'config_email'];
+                break;
+
         }
         foreach ($argsToValidate as $argToValidate) {
             if (empty($args[$argToValidate]))
@@ -265,7 +299,19 @@ class Git extends AbstractTerminal
                     return $this->_validated = $this->logError(sprintf("Nominated git worktree <strong>%s</strong> is not a git repository.", $args['worktree_path']));
             }
         }
+        if ($action == 'clone' || $action == 'setGitUser') {
+            if (empty($args['worktree_path']) && empty($args['repo_path']))
+                return $this->logError("Both worktree path and repo path missing from method input. Need at least one.");
+            if (empty($args['worktree_path']))
+                $args['worktree_path'] = $args['repo_path'];
+            if (empty($args['repo_path']))
+                $args['repo_path'] = $args['worktree_path'];
+        }
 
+        if (!empty($args['worktree_path']) && !$this->is_readable(dirname($args['worktree_path'])))
+            return $this->_validated = $this->logError(sprintf("Can't access directory <strong>%s</strong>.", $args['worktree_path']));
+        if (!empty($args['repo_path']) && !$this->is_readable(dirname($args['repo_path'])))
+            return $this->_validated = $this->logError(sprintf("Can't access directory <strong>%s</strong>.", $args['repo_path']));
 
         return $this->_validated = true;
     }
@@ -321,6 +367,11 @@ class Git extends AbstractTerminal
             }
         }
         $branchStr = !empty($args['branch']) ? " on branch <strong>" . $args['branch'] . "</strong>" : '';
+
+
+        $configStr = !empty($args['config_email']) && !empty($args['config_user']) ?
+            " with user name <strong>" . $args['config_user'] . "</strong> and email <strong>" . $args['config_email'] . "</strong>" : '';
+
         return $this->_mainStr[$action] = sprintf("%s environment Git repository%s%s%s", $this->environment, $urlStr, $worktreePathStr, $branchStr);
     }
 }

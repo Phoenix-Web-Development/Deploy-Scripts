@@ -62,6 +62,7 @@ class EnvironVersionControl extends AbstractDeployer
         $this->logStart();
         if (!$this->validate())
             return false;
+
         $args = $this->getArgs();
         if (!$args)
             return $this->logError("Couldn't get args");
@@ -103,13 +104,16 @@ class EnvironVersionControl extends AbstractDeployer
             ];
 
             if ($localDirSetup->create($webDirArgs)) {
+
                 $clonedRepository = $this->terminal->git()->clone([
                     //'url' => str_replace('git@github.com', 'github', $upstream_repository['ssh_url']),
                     'url' => $upstream_repository['ssh_url'],
                     'worktree_path' => $args['repo']['worktree'],
                     'repo_path' => $args['repo']['dir']
                 ]);
+
             }
+
         }
 
 
@@ -140,7 +144,13 @@ class EnvironVersionControl extends AbstractDeployer
             );
         }
 
-        $this->terminal->exec('git config --global user.name "James Jones"; git config --global user.email "james.jones@phoenixweb.com.au"');
+        $setGitUserConfig = $this->terminal->git()->setGitUser([
+            'worktree_path' => $args['repo']['worktree'],
+            'repo_path' => $args['repo']['dir'],
+            'config_user' => $args['config']['user'],
+            'config_email' => $args['config']['email']
+        ]);
+
         $success = (
             ($this->environ == 'local' || (
                     !empty($sshKey)
@@ -153,12 +163,12 @@ class EnvironVersionControl extends AbstractDeployer
             && !empty($clonedRepository)
             && !empty($createdDotGit)
             && !empty($createdGitignore)
+            && !empty($setGitUserConfig)
             && ($this->environ != 'staging' || (!empty($webhook) && !empty($webhook_config)))
         ) ? true : false;
 
 
         return $this->logFinish($success);
-
     }
 
     /**
@@ -226,23 +236,27 @@ class EnvironVersionControl extends AbstractDeployer
             return false;
         $args = $this->getArgs();
         if (!$args)
-            return $this->logError("Couldn't get args");
-
+            return false;
         $environ = $this->environ;
 
-        $committedMaster = $this->terminal->gitBranch()->commit($args['repo']['worktree'], 'master',
-            'initial Deployer auto commit from ' . $environ . ' environment');
+        $gitBranch = $this->terminal->gitBranch();
 
-        if ($committedMaster && $environ != 'live') {
-            if ($this->terminal->gitBranch()->checkout($args['repo']['worktree'], 'dev')) {
-                if ($this->terminal->gitBranch()->check($args['repo']['worktree'], 'dev', 'up'))
-                    $syncDevBranch = $this->terminal->gitBranch()->pull(['worktree' => $args['repo']['worktree'], 'branch' => 'dev']);
-                else
-                    $syncDevBranch = $this->terminal->gitBranch()->commit($args['repo']['worktree'], 'dev', 'create dev branch');
-            }
+        $currentBranch = $gitBranch->getCurrent($args['repo']['worktree']);
+        $targetBranch = $environ == 'live' ? 'master' : 'dev';
+        $committedCurrent = $gitBranch->commit($args['repo']['worktree'], $currentBranch,
+            'initial Deployer auto commit from ' . $environ . ' environment');
+        $pulledCurrent = $gitBranch->pull(['worktree' => $args['repo']['worktree'], 'branch' => $currentBranch]);
+
+        if ($currentBranch != $targetBranch) {
+
+            $gitBranch->checkout($args['repo']['worktree'], $targetBranch);
+            if ($gitBranch->check($args['repo']['worktree'], $targetBranch, 'up'))
+                $syncDevBranch = $gitBranch->pull(['worktree' => $args['repo']['worktree'], 'branch' => $targetBranch]);
+            else
+                $syncDevBranch = $gitBranch->commit($args['repo']['worktree'], $targetBranch, 'create dev branch');
         }
 
-        $success = !empty($committedMaster) && ($environ != 'live') || !empty($syncDevBranch) ? true : false;
+        $success = !empty($committedCurrent) && ($currentBranch == $targetBranch || !empty($syncDevBranch)) ? true : false;
         return $this->logFinish($success);
     }
 
@@ -260,10 +274,11 @@ class EnvironVersionControl extends AbstractDeployer
     protected function getArgs()
     {
         $environ = $this->environ;
+        /*
         $root = $this->terminal->root;
         if (empty($root))
             return $this->logError(sprintf("Couldn't get %s environment root directory.", $environ));
-
+*/
         $args['repo']['name'] = ph_d()->config->version_control->repo_name ?? '';
         if (empty($args['repo']['name']))
             return $this->logError("Repository name is missing from config.");
@@ -294,6 +309,10 @@ class EnvironVersionControl extends AbstractDeployer
                 'group' => ph_d()->config->environ->$environ->dirs->project->group ?? '',
             ];
         }
+
+        $args['config']['user'] = ph_d()->config->environ->$environ->version_control->config->user ?? ph_d()->config->version_control->config->user ?? '';
+        $args['config']['email'] = ph_d()->config->environ->$environ->version_control->config->email ?? ph_d()->config->version_control->config->email ?? '';
+
         return $args;
     }
 

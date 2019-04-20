@@ -25,7 +25,7 @@ class Gitignore extends AbstractTerminal
             return $this->logError(sprintf("Directory <strong>%s</strong> is not a Git worktree.", $worktree));
         $filepath = self::trailing_slash($worktree) . '.gitignore';
         if ($this->file_exists($filepath) && $this->size($filepath) > 0)
-            return $this->logError(sprintf("Gitignore file at <strong>%s</strong> already exists so no need to create.", $worktree), 'warning');
+            return $this->logFinish(true, sprintf("Gitignore file at <strong>%s</strong> already exists so no need to create.", $worktree));
         $success = $this->put($filepath, BASE_DIR . '/../configs/gitignore-template', 'file') ? true : false;
         return $this->logFinish($success);
     }
