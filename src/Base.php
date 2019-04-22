@@ -18,6 +18,11 @@ class Base
             'past' => 'authorised',
             'action' => 'authorise'
         ),
+        'backup' => array(
+            'present' => 'backing up',
+            'past' => 'backed up',
+            'action' => 'back up'
+        ),
         'check' => array(
             'present' => 'checking',
             'past' => 'checked',
@@ -92,6 +97,11 @@ class Base
             'present' => 'installing',
             'past' => 'installed',
             'action' => 'install'
+        ),
+        'installLatestDefaultTheme' => array(
+            'present' => 'installing latest default theme',
+            'past' => 'installed latest default theme',
+            'action' => 'install latest default theme'
         ),
         'move' => array(
             'present' => 'moving',

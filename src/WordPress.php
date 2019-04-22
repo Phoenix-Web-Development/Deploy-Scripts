@@ -38,7 +38,6 @@ class WordPress extends AbstractDeployer
     function __construct($environ = 'live', TerminalClient $terminal = null, WHM $whm = null)
     {
         $this->environ = $environ;
-        //$this->logElement = 'h3';
         $this->terminal = $terminal;
         $this->whm = $whm;
         parent::__construct();
@@ -88,6 +87,7 @@ class WordPress extends AbstractDeployer
             $setRewriteRules = $wp->setRewriteRules($args);
             if ($setRewriteRules)
                 $htaccess = $this->terminal->htaccess()->prepend($args['directory'], $www);
+            $installedLatestTheme = $wp->installLatestDefaultTheme($args);
             $permissions = $wp->setPermissions($args);
             $updated = $wp->update($args);
         }
@@ -98,6 +98,7 @@ class WordPress extends AbstractDeployer
         && !empty($htaccess)
         && !empty($permissions)
         && (!in_array(false, $setOptionSuccess))
+        && !empty($installedLatestTheme)
         && !empty($updated) ? true : false;
 
         return $this->logFinish($success);
@@ -123,7 +124,7 @@ class WordPress extends AbstractDeployer
             $deleted_wp_cli = $this->environ == 'live' ? $this->terminal->wp_cli()->delete() : true;
 
             $WPCLIConfig = $this->terminal->wp_cli_config();
-            $WPCLIConfig->dirPath = $args['directory'];
+            $WPCLIConfig->dirPath = dirname($args['directory']);
             $deletedWPConfig = $WPCLIConfig->delete();
         }
         $success = $deleted_wp && !empty($deleted_wp_cli) && !empty($deletedWPConfig) ? true : false;

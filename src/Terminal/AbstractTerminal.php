@@ -249,18 +249,22 @@ class AbstractTerminal extends BaseAbstract
     }
 
     /**
-     * get remote or local file return contents as string
+     * get remote or local file return contents as string or write to file
      *
      * @param string $filepath
+     * @param bool $local_file
      * @return false|mixed|string
      */
     public
-    function get(string $filepath = '')
+    function get(string $filepath = '', $local_file = false)
     {
         if ($this->environment != 'local') {
-            return $this->ssh->get($filepath);
+            return $this->ssh->get($filepath, $local_file);
         }
-        return file_get_contents($filepath);
+        $content = file_get_contents($filepath);
+        if (!$local_file)
+            return $content;
+        return file_put_contents($local_file, $content);
     }
 
     /**
@@ -412,7 +416,7 @@ class AbstractTerminal extends BaseAbstract
         if (empty($output)) {
             return false;
         }
-        $maxStrLen = 800;
+        $maxStrLen = 2000;
         if (strlen($output) > $maxStrLen * 2)
             $output = substr($output, 0, $maxStrLen) . '...<strong><i>snipped for brevity</i></strong>...' . substr($output, -1 * $maxStrLen, $maxStrLen);
         $append = '</pre>';

@@ -35,17 +35,15 @@ class WPDB extends AbstractTerminal
 
         if ($this->file_exists($dest_paths['path']['uncompressed']) || $this->file_exists($dest_paths['path']['compressed']))
             return $this->logError("Backup file already exists in WordPress directory.");
-        //$this->ssh->setTimeout(240); //exporting DB can take a while
         $exec_commands = "cd " . $wp_dir . "; 
         wp db export --add-drop-table " . $dest_paths['name']['uncompressed'] . ";
         tar -vczf " . $dest_paths['name']['compressed'] . " " . $dest_paths['name']['uncompressed'] . ";";
         $output = $this->exec($exec_commands);
-        //$this->ssh->setTimeout(false); //exporting DB can take a while
         $success = false;
         if (stripos($output, 'success') === false || stripos($output, 'error') !== false)
             return $this->logFinish($success, $output);
         if (
-            $this->ssh->get($dest_paths['path']['compressed'], self::trailing_char($local_dest_filepath, self::EXT))
+            $this->get($dest_paths['path']['compressed'], self::trailing_char($local_dest_filepath, self::EXT))
             && $this->deleteFile($dest_paths['path']['compressed'], false)
             && $this->deleteFile($dest_paths['path']['uncompressed'], false)
         )
@@ -94,7 +92,8 @@ class WPDB extends AbstractTerminal
         $output = $this->exec($exec_commands);
         $success = (stripos($output, 'success') !== false && stripos($output, 'error') === false) ? true : false;
         if ($success)
-            if (!$this->deleteFile($dest_paths['path']['compressed'], false) || !$this->ssh->delete($dest_paths['path']['uncompressed'], false)) {
+            if (!$this->deleteFile($dest_paths['path']['compressed'], false)
+                || !$this->deleteFile($dest_paths['path']['uncompressed'], false)) {
                 $success = false;
             }
         return $this->logFinish($success, $output);

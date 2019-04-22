@@ -28,39 +28,25 @@ class GitBranch extends AbstractTerminal
         */
         return false;
     }
-    /*
-        public function create(string $worktree = '', string $branch = '')
-        {
-            $this->mainStr($worktree);
-            if (!$this->validate($worktree))
-                return null;
-            $currentBranch = trim($this->exec("git checkout -b " . $branch, $worktree));
-            if (strlen($currentBranch) > 0)
-                return $currentBranch;
-            return false;
-        }
-    */
 
     /**
      * Determine whether repo includes a certain branch
      *
-     * @param string $worktree
-     * @param string $branch
-     * @param string $stream
+     * @param array $args
      * @return bool|null
      */
-    public function check(string $worktree = '', string $branch = '', string $stream = 'down')
+    public function check(array $args = [])
     {
-        $args = ['worktree' => $worktree, 'branch' => $branch];
         $this->mainStr($args);
-        $this->logStart();
         if (!$this->validate($args))
             return null;
-        if ($stream == 'down') {
+        if (empty($args['stream']))
+            $args['stream'] = 'down';
+        if ($args['stream'] == 'down') {
             $exists = $this->exec("git show-ref --verify refs/heads/" . $args['branch'], $args['worktree']);
             $strFails = array('fatal', 'not a valid ref');
             $strSuccess = "refs/heads/" . $args['branch'];
-        } elseif ($stream == 'up') {
+        } elseif ($args['stream'] == 'up') {
             //$exists = $this->exec("git branch --remotes --contains " . $args['branch'], $args['worktree']);
             $exists = $this->exec("git branch -a", $args['worktree']);
 
@@ -72,7 +58,6 @@ class GitBranch extends AbstractTerminal
 
         foreach ($strFails as $strFail) {
             if (stripos($exists, $strFail) !== false) {
-                d("branch " . $args['branch'] . " doesn't exist");
                 return false;
             }
         }
@@ -82,32 +67,30 @@ class GitBranch extends AbstractTerminal
     }
 
     /**
-     * @param string $worktree
-     * @param string $branch
-     * @return bool|string
+     * @param array $args
+     * @return bool|mixed
      */
-    public function checkout(string $worktree = '', string $branch = '')
+    public function checkout(array $args = [])
     {
-        $args = ['worktree' => $worktree, 'branch' => $branch];
         $this->mainStr($args);
         $this->logStart();
         if (!$this->validate($args))
             return false;
-        $currentBranch = $this->getCurrent($args['worktree']);
+        $currentBranch = $this->getCurrent($args);
         if ($currentBranch == $args['branch'])
-            return true;
+            $this->logFinish(true, "Correct branch <strong>" . $currentBranch . "</strong> already checked out");
         $strNewLocalBranch = '';
         $strSetUpstream = '';
-        if ($this->check($args['worktree'], $args['branch']) === false) {
+        if ($this->check($args) === false) {
             $strNewLocalBranch = '-b ';
-
-            if ($this->check($args['worktree'], $args['branch'], 'up') === true)
-                $strSetUpstream = " --track=origin/" . $args['branch'];
+            $args['stream'] = 'up';
+            if ($this->check($args) === true)
+                $strSetUpstream = " --track origin/" . $args['branch'];
         }
         $command = "git checkout " . $strNewLocalBranch . $args['branch'] . $strSetUpstream;
         $output = $this->exec($command, $args['worktree']);
 
-        $success = $this->getCurrent($args['worktree']) == $args['branch'] ? true : false;
+        $success = $this->getCurrent($args) == $args['branch'] ? true : false;
         $this->logFinish($success, $output, $command);
         if ($success)
             return $args['branch'];
@@ -134,16 +117,16 @@ class GitBranch extends AbstractTerminal
         return null;
     }
 
+
     /**
-     * @param string $worktree
+     * Get current checked-out Git branch
+     *
+     * @param array $args
      * @return bool|string
      */
-    public function getCurrent(string $worktree = '')
+    protected function getCurrent(array $args = [])
     {
-        $args = ['worktree' => $worktree];
-        if (!$this->validate($args))
-            return false;
-        $currentBranch = trim($this->exec("git symbolic-ref --short HEAD", $args['worktree']));
+        $currentBranch = $this->exec("git symbolic-ref --short HEAD", $args['worktree']);
         if (strlen($currentBranch) > 0)
             return $currentBranch;
         return false;
@@ -159,12 +142,14 @@ class GitBranch extends AbstractTerminal
         $this->logStart();
         if (!$this->validate($args))
             return false;
-        $currentBranch = $this->getCurrent($args['worktree']);
+        $currentBranch = $this->getCurrent($args);
         if ($currentBranch != $args['branch']) {
-            if (!$this->check($args['worktree'], $args['branch'], 'down') ||
-                $this->check($args['worktree'], $args['branch'], 'up'))
-                return $this->logError(sprintf("Upstream and/or downstream branch <strong>%s</strong> doesn't exist.", $args['branch']));
-            if (!$this->checkout($args['worktree'], $args['branch']))
+            if (!$this->check($args))
+                return $this->logError(sprintf("Downstream branch <strong>%s</strong> doesn't exist.", $args['branch']));
+            $args['stream'] = 'up';
+            if (!$this->check($args))
+                return $this->logError(sprintf("Upstream branch <strong>%s</strong> doesn't exist.", $args['branch']));
+            if (!$this->checkout($args))
                 return $this->logError(sprintf("Couldn't checkout branch <strong>%s</strong>.", $args['branch']));
         }
         $command = 'git reset --hard origin/' . $args['branch'];
@@ -188,14 +173,15 @@ class GitBranch extends AbstractTerminal
             return false;
 
         $this->exec("git fetch --all", $args['worktree']);
-        $changes = $this->getChanges($args['worktree']);
+        $changes = $this->getChanges($args);
         if (!empty($changes))
             return $this->logError("Uncommitted changes in Git repo. " . $this->formatOutput($changes));
-        if ($this->check($args['worktree'], $args['branch'], 'up') === false)
+        $args['stream'] = 'up';
+        if ($this->check($args) === false)
             return $this->logError(sprintf("No upstream branch called <strong>%s</strong>.", $args['branch']));
-        $currentBranch = $this->getCurrent($args['worktree']);
+        $currentBranch = $this->getCurrent($args);
         if ($currentBranch != $args['branch'])
-            $currentBranch = $this->checkout($args['worktree'], $args['branch']);
+            $currentBranch = $this->checkout($args);
         if ($currentBranch != $args['branch'])
             return $this->logError(sprintf("Couldn't checkout branch <strong>%s</strong>.", $args['branch']));
         $command = "git pull --verbose;";
@@ -225,73 +211,48 @@ class GitBranch extends AbstractTerminal
      * Checks out nominated branch if a different branch is checked out
      * Creates new branch if nominated branch doesn't exist.
      *
-     * @param string $worktree
-     * @param string $branch
-     * @param string $git_message
-     * @return bool
+     * @param array $args
+     * @return bool|null
      */
-    public function commit(string $worktree = '',
-                           string $branch = 'master',
-                           string $git_message = 'update WordPress core, plugins and/or themes'
-    )
+    public function commit(array $args = [])
     {
-        $args = ['worktree' => $worktree, 'branch' => $branch];
         $this->mainStr($args);
         $this->logStart();
         if (!$this->validate($args))
             return false;
-        $upstreamBranch = $this->check($args['worktree'], $args['branch'], 'up');
-        if ($this->getChanges($args['worktree']) === false && $upstreamBranch === true)
+        $args['stream'] = 'up';
+        $upstreamBranch = $this->check($args);
+        if ($this->getChanges($args) === false && $upstreamBranch === true)
             return $this->logFinish(true, "No changes in repository to commit.");
         $this->exec("git fetch --all", $args['worktree']);
 
-        $currentBranch = $this->getCurrent($args['worktree']);
-        $strCheckout = '';
-        if ($currentBranch != $args['branch']) {
-            return $this->logError(sprintf("Repository is checked out to wrong branch <strong>%s</strong>. Should be checked out to branch <strong>%s</strong>",
-                $currentBranch, $args['branch']));
-            /*
-                        $this->client->gitBranch()->checkout($worktree);
-
-                        $strNewLocalBranch = '';
-                        if ($this->client->gitBranch()->check($worktree, $branch) === false) {
-                            $strNewLocalBranch = ' -b ';
-                            $newBranch = true;
-                        }
-
-                        $strCheckout = "git checkout " . $strNewLocalBranch . $branch . "; ";
-            */
-        }
-        /*
-        $strNewRemoteBranch = '';
-        if (!empty($newBranch) && $this->client->gitBranch()->check($worktree, $branch, 'up') === true)
-            return $this->logError(sprintf("Upstream branch <strong>%s</strong> already exists. Should probably pull from this first.", $branch));
-        if (!empty($newBranch) || $this->client->gitBranch()->check($worktree, $branch, 'up') === false || $this->client->gitBranch()->hasUpstream($worktree, $branch) === false)
-            $strNewRemoteBranch = ' --set-upstream origin ' . $branch;
-        */
-        $strNewRemoteBranch = ($upstreamBranch === false) ? '--set-upstream origin ' . $branch . ' ' : '';
-        $commands = $strCheckout . "
-                        git add . --all;
-                        git commit -m '" . $git_message . "';
-                        git push " . $strNewRemoteBranch . "--porcelain;";
+        $currentBranch = $this->getCurrent($args);
+        if ($args['branch'] == 'current')
+            $args['branch'] = $currentBranch;
+        if ($currentBranch != $args['branch'])
+            if (!$this->checkout($args))
+                return $this->logError(sprintf("Couldn't checkout nominated branch <strong>%s</strong>. ", $args['branch']));
+        $strNewRemoteBranch = ($upstreamBranch === false) ? '--set-upstream origin ' . $args['branch'] . ' ' : '';
+        $commands = "git add . --all;                       
+                     git commit -m '" . $args['message'] . "';
+                     git push " . $strNewRemoteBranch . "--porcelain;";
         $output = $this->exec("git add . --all", $args['worktree']);
-        $output .= $this->exec("git commit -m '" . $git_message . "'", $args['worktree']);
+        $output .= $this->exec("git commit -m '" . $args['message'] . "'", $args['worktree']);
         $output .= $this->exec("git push " . $strNewRemoteBranch . "--porcelain;", $args['worktree']);
         d($output);
         $status = $this->exec("git status", $args['worktree']);
-        if (substr(trim($output), -4) === 'Done' && $this->getChanges($args['worktree']) === false && strpos($status, "Your branch is ahead of") === false)
+        if (substr(trim($output), -4) === 'Done' && $this->getChanges($args) === false && strpos($status, "Your branch is ahead of") === false)
             $success = true;
         else $success = false;
         return $this->logFinish($success, $output, $commands);
     }
 
     /**
-     * @param string $worktree
-     * @return bool
+     * @param array $args
+     * @return bool|string|null
      */
-    protected function getChanges(string $worktree = '')
+    protected function getChanges(array $args = [])
     {
-        $args = ['worktree' => $worktree];
         $this->mainStr($args);
         if (!$this->validate($args))
             return null;
@@ -310,6 +271,8 @@ class GitBranch extends AbstractTerminal
         if (isset($this->_validated))
             return $this->_validated;
 
+        if (empty($args['worktree']))
+            return $this->_validated = $this->logError("<strong>Worktree</strong> missing from method input.");
         if (!$this->client->git()->checkGitWorktree($args['worktree']))
             return $this->_validated = $this->logError(sprintf("Directory <strong>%s</strong> is not a Git worktree.", $args['worktree']));
         if (($this->getCaller() != 'getCurrent')) {

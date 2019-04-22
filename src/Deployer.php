@@ -95,7 +95,6 @@ final class Deployer extends Base
         parent::__construct();
         if (!defined('BASE_DIR')) define('BASE_DIR', dirname(__FILE__));
         if (!defined('CONFIG_DIR')) define('CONFIG_DIR', BASE_DIR . '/../configs/');
-        if (!defined('BACKUPS_DIR')) define('BACKUPS_DIR', BASE_DIR . '/../backups/');
         if (!defined('BASH_WRAPPER')) define('BASH_WRAPPER', BASE_DIR . '/../bash/wrapper.sh');
 
         new Logging();
@@ -156,18 +155,20 @@ final class Deployer extends Base
                         $this->updateWP('local');
                     break;
                 case 'transfer':
+                    $wpdb = new TransferWPDB();
+                    //transfer_wp_db_live_to_local
                     if ($this->actionRequests->can_do('transfer_wp_db_live_to_staging'))
-                        $this->transferDB('live', 'staging');
+                        $wpdb->transfer('live', 'staging', $this->terminal('live'), $this->terminal('staging'));
                     if ($this->actionRequests->can_do('transfer_wp_db_live_to_local'))
-                        $this->transferDB('live', 'local');
+                        $wpdb->transfer('live', 'local', $this->terminal('live'), $this->terminal('local'));
                     if ($this->actionRequests->can_do('transfer_wp_db_staging_to_live'))
-                        $this->transferDB('staging', 'live');
+                        $wpdb->transfer('staging', 'live', $this->terminal('staging'), $this->terminal('live'));
                     if ($this->actionRequests->can_do('transfer_wp_db_staging_to_local'))
-                        $this->transferDB('staging', 'local');
+                        $wpdb->transfer('staging', 'local', $this->terminal('staging'), $this->terminal('local'));
                     if ($this->actionRequests->can_do('transfer_wp_db_local_to_live'))
-                        $this->transferDB('local', 'live');
+                        $wpdb->transfer('local', 'live', $this->terminal('local'), $this->terminal('live'));
                     if ($this->actionRequests->can_do('transfer_wp_db_local_to_staging'))
-                        $this->transferDB('local', 'staging');
+                        $wpdb->transfer('local', 'staging', $this->terminal('local'), $this->terminal('staging'));
                     break;
             }
             $this->log(sprintf('<h2>Finished %s</h2>', ucfirst($this->actions[$action]['present'])), 'info');
@@ -578,8 +579,6 @@ final class Deployer extends Base
         if ($this->actionRequests->can_do($action . "_local_version_control"))
             $versionControl->$action();
 
-        if ($this->actionRequests->can_do($action . "_local_web_directory_setup")) {
-        }
 
         if ($this->actionRequests->can_do($action . "_local_virtual_host")) {
             $domain = $this->config->environ->local->domain ?? '';
@@ -1006,6 +1005,8 @@ final class Deployer extends Base
      */
     function get_environ_dir(string $environ = 'live', $type = 'web')
     {
+        if (empty($environ))
+            return false;
         $error_string = sprintf("Couldn't determine %s environment %s directory.", $environ, $type);
         $root = '';
         if ($environ != 'local') {
@@ -1131,7 +1132,8 @@ final class Deployer extends Base
             $this->log($errorString . " Couldn't get web directory.");
             return false;
         }
-        $backup = $this->backupDB($environment);
+        $backupDB = new TransferWPDB();
+        $backup = $backupDB->backup($environment, $this->terminal($environment));
         if ($backup) {
             $gitPull = $this->terminal($environment)->git()->pull(['worktree' => $directory, 'branch' => 'dev']);
             if ($gitPull) {
@@ -1146,85 +1148,6 @@ final class Deployer extends Base
         }
         $this->log(sprintf('Failed to update WordPress in %s environment.', $environment));
         return false;
-    }
-
-    /**
-     * @param string $from_environment
-     * @param string $dest_environment
-     * @return bool
-     */
-    protected function transferDB(string $from_environment = '', string $dest_environment = '')
-    {
-        $message = sprintf(' %s DB to %s environment', $from_environment, $dest_environment);
-        $this->log('<h2>Migrating' . $message . '</h2>', 'info');
-
-        $from_directory = $this->get_environ_dir($from_environment, 'web');
-        $from_db_name = $this->config->environ->$from_environment->db->name ?? null;
-        if ($from_environment != 'local') {
-            $from_cpanel = $this->find_environ_cpanel($from_environment);
-            if (!empty($from_cpanel))
-                $from_db_name = $this->whm->db_prefix_check($from_db_name, $from_cpanel['user']);
-        }
-        $date_format = "-Y-m-d-H_i_s";
-
-        $from_filename = $from_db_name . '-' . $from_environment . date($date_format) . '.sql';
-
-        $export = $this->terminal($from_environment)->wp_db()->export($from_directory, BACKUPS_DIR . $from_filename);
-
-        if ($export) {
-            $to_directory = $this->get_environ_dir($dest_environment, 'web');
-
-            $from_url = $this->get_environ_url($from_environment);
-            $dest_url = $this->get_environ_url($dest_environment);
-
-            $backup = $this->backupDB($dest_environment);
-            if ($backup) {
-                $import = $this->terminal($dest_environment)->wp_db()->import($to_directory, BACKUPS_DIR . $from_filename . '.gz', $from_url, $dest_url);
-                if ($import) {
-                    $blogPublic = $dest_environment == 'live' ? 1 : 0;
-                    $updateSearchVisibility = $this->terminal($dest_environment)->wp()->setOption($to_directory, 'blog_public', $blogPublic);
-                }
-            }
-        }
-        if (!empty($export) && !empty($backup) && !empty($import) && !empty($updateSearchVisibility)) {
-            $this->log('<h3>Finished migrating ' . $message . '</h3>', 'success');
-            return true;
-        }
-        $this->log('<h3>Something may have gone wrong migrating ' . $message . '</h3>');
-        return false;
-
-    }
-
-    /**
-     * @param string $environment
-     * @return bool
-     */
-    protected function backupDB(string $environment = '')
-    {
-        $errorString = sprintf("Can't backup %s environment WordPress DB. ", $environment);
-        $directory = $this->get_environ_dir($environment, 'web');
-        if (empty($directory)) {
-            $this->log($errorString . " Couldn't get web directory.");
-            return false;
-        }
-        $db_name = $this->config->environ->$environment->db->name ?? null;
-        if (empty($db_name)) {
-            $this->log($errorString . " DB name missing from config");
-            return false;
-        }
-        if ($environment != 'local') {
-            $cpanel = $this->find_environ_cpanel($environment);
-            if (!empty($cpanel))
-                $db_name = $this->whm->db_prefix_check($db_name, $cpanel['user']);
-        }
-        $date_format = "-Y-m-d-H_i_s";
-        $backup_filename = $db_name . '-' . $environment . date($date_format) . '-backup.sql';
-        $backup = $this->terminal($environment)->wp_db()->export($directory, BACKUPS_DIR . $backup_filename);
-        if ($backup) {
-            return true;
-        }
-        return false;
-
     }
 
     /**

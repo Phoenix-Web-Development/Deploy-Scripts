@@ -107,31 +107,30 @@ class WP extends AbstractTerminal
             $filesAlreadyDownloaded = true;
         }
 
-        $config_constants = $this->getConfigConstants();
+        $config_constants = $this->getConfigConstants($args);
         $config_set = '';
         foreach ($config_constants as $config_constant => $constant) {
             $config_set .= sprintf("wp config set %s %s --raw --type=constant;", $config_constant, $constant);
         }
 
         $wp_lang = !empty($args['language']) ? 'wp language core install ' . $args['language'] . '; wp site switch-language ' . $args['language'] . ';' : '';
+        $wp_plugins = '';
+        //$wp_plugins = "wp plugin install jetpack --version=6.5; wp plugin install jetpack --version=7.0; ";
+        if (empty($filesAlreadyDownloaded))
+            $wp_plugins = !empty($args['plugins']) ? sprintf('wp plugin install %s', implode(' ', (array)$args['plugins'])) : '';
+
+
         $commands = "                
                 wp config create --dbname='" . $args['db']['name'] . "' --dbuser='" . $args['db']['username'] . "' --dbpass='" . $args['db']['password'] . "' --dbprefix='" . rtrim($args['prefix'], '_') . "_'" . " --locale=en_AU;         
                 " . $config_set . "
                 wp core install --url='" . $args['url'] . "' --title='" . $args['title'] . "' --admin_user='" . $args['username']
             . "' --admin_password='" . $args['password'] . "' --admin_email='" . $args['email'] . "' --skip-email; wp post delete 1;"
             . $wp_lang . '              
-                mv wp-config.php ../                
-                wp plugin activate --all;
-                rm wp-config-sample.php license.txt readme.html
-                ';
+                mv wp-config.php ../                                
+                rm wp-config-sample.php license.txt readme.html            
+                ' . $wp_plugins . '
+                wp plugin activate --all';
         $output .= $this->exec($commands, $args['directory']);
-
-        if (empty($filesAlreadyDownloaded)) {
-            $wp_plugins = !empty($args['plugins']) ? sprintf('wp plugin install %s;', implode(' ', (array)$args['plugins'])) : '';
-            //$wp_plugins = "wp plugin install jetpack --version=6.5; wp plugin install jetpack --version=7.0; ";
-            //                wp plugin update --all;
-            $output .= $this->exec($wp_plugins . 'wp theme install twentynineteen --activate;', $args['directory']);
-        }
 
         $widgets = $this->exec("wp widget list sidebar-1 --format=ids", $args['directory']);
         if (!empty($widgets)) {
@@ -197,23 +196,23 @@ class WP extends AbstractTerminal
     }
 
     /**
+     * @param array $args
      * @return array
      */
-    protected function getConfigConstants()
+    protected function getConfigConstants(array $args = [])
     {
-        //$debug = !empty($args['debug']) && $args['debug'] ? 'true' : 'false';
-        $debug = false;
         $config_constants = array(
             'AUTOSAVE_INTERVAL' => 300,
             'WP_POST_REVISIONS' => 6,
             'EMPTY_TRASH_DAYS' => 7,
             'DISALLOW_FILE_EDIT' => 'true',
-            'WP_DEBUG' => $debug
         );
         if ($this->environment == 'live') {
             $config_constants['AUTOMATIC_UPDATER_DISABLED'] = 'true';
             $config_constants['DISALLOW_FILE_MODS'] = 'true';
         }
+        $config_constants['WP_DEBUG'] = $this->environment == 'local' ? 'true' : 'false';
+
         return $config_constants;
     }
 
@@ -240,15 +239,17 @@ class WP extends AbstractTerminal
             return false;
         if (!$this->is_dir($args['directory']))
             return $this->logFinish(true, sprintf("No need to delete as WordPress directory <strong>%s</strong> doesn't exist.", $args['directory']));
-
+        $output = '';
         if ($this->check($args)) {
             $output = $this->exec('wp db clean --yes;', $args['directory']);
             $cleanedDB = (stripos($output, 'Success') !== false && stripos($output, 'Tables dropped') !== false) ? true : false;
             if ($cleanedDB)
-                $output = "Successfully cleaned DB of all WordPress tables. ";
+                $output .= " Successfully cleaned DB of all WordPress tables. ";
+            else
+                $output .= "Failed to clean DB of WordPress tables. ";
         } else {
             $noNeedCleanDB = true;
-            $output = "Skipped dropping DB tables as apparently WordPress isn't installed. ";
+            $output .= "Skipped dropping DB tables as apparently WordPress isn't installed. ";
         }
 
         $wp_files = self::WP_FILES;
@@ -352,7 +353,7 @@ class WP extends AbstractTerminal
 
         if (!$this->canRewriteFlushHard($args)) {
             $WPCLIConfig = $this->client->wp_cli_config();
-            $WPCLIConfig->dirPath = $args['directory'];
+            $WPCLIConfig->dirPath = dirname($args['directory']);
             $WPCLIConfig->create();
             if (!$this->canRewriteFlushHard($args))
                 return $this->logError("Can't regenerate .htaccess file because mod_rewrite isn't loaded in WP CLI.");
@@ -398,18 +399,58 @@ class WP extends AbstractTerminal
             return true;
         return false;
     }
-    /*
-        protected function getLatestDefaultTheme(string $args['directory'] = '')
-        {
-            $output = $this->exec("wp theme search --per-page=30 --fields=name,author,slug --format=json Twenty");
-            $themes = json_decode($output);
-            d($themes);
-            foreach($themes as $theme){
-                if($theme['author'] == 'wordpressdotorg')
-            }
 
+    /**
+     * @param array $args
+     * @return bool|mixed
+     */
+    public function installLatestDefaultTheme(array $args = [])
+    {
+        $this->mainStr($args);
+        $this->logStart();
+        if (!$this->validate($args))
+            return false;
+
+        $output = $this->exec("wp theme search --per-page=30 --fields=name,author,slug --format=json Twenty", $args['directory']);
+        $themes = json_decode($output, true);
+        if (empty($themes))
+            return $this->logError("Couldn't find any themes in theme search.");
+        $dotOrgThemes = array();
+        foreach ($themes as $theme) {
+            if ($theme['author'] == 'wordpressdotorg') {
+                $dotOrgThemes[] = $theme['slug'];
+            }
         }
-    */
+        $searchForThemes = [
+            'twentytwentythree',
+            'twentytwentytwo',
+            'twentytwentyone',
+            'twentytwenty',
+            'twentynineteen',
+            'twentyseventeen'
+        ];
+        if (empty($dotOrgThemes))
+            return $this->logError("Couldn't find any themes by 'wordpressdotorg' in theme search.");
+        foreach ($searchForThemes as $searchForTheme) {
+            if (in_array($searchForTheme, $dotOrgThemes)) {
+                $themeToInstall = $searchForTheme;
+                break;
+            }
+        }
+        if (empty($themeToInstall))
+            return $this->logError("Couldn't find theme to install.");
+
+        $checkThemeCommand = 'wp theme is-active ' . $themeToInstall . '; echo $?';
+
+        if ($this->exec($checkThemeCommand, $args['directory']) == '0')
+            return $this->logFinish(true, 'Theme <strong>' . $themeToInstall . '</strong> already installed and activated.', $checkThemeCommand);
+        $command = 'wp theme install ' . $themeToInstall . ' --activate';
+        $output = $this->exec($command, $args['directory']);
+        $success = $this->exec($checkThemeCommand, $args['directory']);
+        $success = $success == '0' ? true : false;
+
+        return $this->logFinish($success, $output, $command);
+    }
 
     /**
      * @param array $args

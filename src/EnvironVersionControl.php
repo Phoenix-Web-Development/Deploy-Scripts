@@ -241,22 +241,23 @@ class EnvironVersionControl extends AbstractDeployer
 
         $gitBranch = $this->terminal->gitBranch();
 
-        $currentBranch = $gitBranch->getCurrent($args['repo']['worktree']);
-        $targetBranch = $environ == 'live' ? 'master' : 'dev';
-        $committedCurrent = $gitBranch->commit($args['repo']['worktree'], $currentBranch,
-            'initial Deployer auto commit from ' . $environ . ' environment');
-        $pulledCurrent = $gitBranch->pull(['worktree' => $args['repo']['worktree'], 'branch' => $currentBranch]);
+        $args['repo']['branch'] = 'master';
+        $args['repo']['message'] = 'initial Deployer auto commit from ' . $environ . ' environment';
+        $committedCurrent = $gitBranch->commit($args['repo']);
+        $pulledCurrent = $gitBranch->pull($args['repo']);
 
-        if ($currentBranch != $targetBranch) {
-
-            $gitBranch->checkout($args['repo']['worktree'], $targetBranch);
-            if ($gitBranch->check($args['repo']['worktree'], $targetBranch, 'up'))
-                $syncDevBranch = $gitBranch->pull(['worktree' => $args['repo']['worktree'], 'branch' => $targetBranch]);
+        if ($environ != 'live') {
+            $args['repo']['branch'] = 'dev';
+            $gitBranch->checkout($args['repo']);
+            $args['repo']['stream'] = 'up';
+            $args['repo']['message'] = 'create dev branch';
+            if ($gitBranch->check($args['repo']))
+                $syncDevBranch = $gitBranch->pull($args['repo']);
             else
-                $syncDevBranch = $gitBranch->commit($args['repo']['worktree'], $targetBranch, 'create dev branch');
+                $syncDevBranch = $gitBranch->commit($args['repo']);
         }
 
-        $success = !empty($committedCurrent) && ($currentBranch == $targetBranch || !empty($syncDevBranch)) ? true : false;
+        $success = !empty($committedCurrent) && !empty($pulledCurrent) && ($environ != 'live' || !empty($syncDevBranch)) ? true : false;
         return $this->logFinish($success);
     }
 
