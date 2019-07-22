@@ -99,7 +99,7 @@ class SSHKey extends AbstractTerminal
     {
         if (empty($key_name))
             return false;
-        if (empty($this->root))
+        if ($this->root == false)
             return false;
         return $this->root . '/.ssh/' . $key_name;
     }

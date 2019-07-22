@@ -127,7 +127,7 @@ class SSHConfig extends AbstractTerminal
      */
     protected function filepath()
     {
-        if (!empty($this->root))
+        if ($this->root != false)
             return self::trailing_slash($this->root) . '.ssh/config';
         return false;
     }

@@ -14,6 +14,9 @@ class WP extends AbstractTerminal
      */
     protected $logElement = 'h4';
 
+    /**
+     *
+     */
     const WP_FILES = array(
         'wp-admin/',
         'wp-content/',
@@ -50,6 +53,30 @@ class WP extends AbstractTerminal
         '.htaccess_lscachebak_10',
         'README.md',
         'wordfence-waf.php'
+    );
+
+    /**
+     *
+     */
+    const WP_PERMISSIONS = array(
+        'local' => array(
+            'directories' => 0770,
+            'files' => 0660,
+            'config' => 0660,
+            'htaccess' => 0660
+        ),
+        'staging' => array(
+            'directories' => 0755,
+            'files' => 0644,
+            'config' => 0600,
+            'htaccess' => 0600
+        ),
+        'live' => array(
+            'directories' => 0755,
+            'files' => 0644,
+            'config' => 0600,
+            'htaccess' => 0600
+        )
     );
 
     /**
@@ -153,10 +180,12 @@ class WP extends AbstractTerminal
         if (!$this->validate($args))
             return false;
         $args['directory'] = self::trailing_slash($args['directory']);
+
+        $permissions = self::WP_PERMISSIONS[$this->environment];
         $commands = '
-                find ' . $args['directory'] . ' -type d -exec chmod 770 {} \;
+                find ' . $args['directory'] . ' -type d -exec chmod ' . base_convert($permissions['directories'], 10, 8) . ' {} \;
                 echo status is $?;
-                find ' . $args['directory'] . ' -type f -exec chmod 660 {} \;
+                find ' . $args['directory'] . ' -type f -exec chmod ' . base_convert($permissions['files'], 10, 8) . ' {} \;
                 echo status is $?;                  
         ';
 
@@ -166,10 +195,10 @@ class WP extends AbstractTerminal
         if (!empty($findCommands)) {
             $configFilePath = $args['directory'] . '../wp-config.php';
             if ($this->file_exists($configFilePath))
-                $wpConfig = $this->chmod($configFilePath, 0660);
+                $wpConfig = $this->chmod($configFilePath, $permissions['config']);
             $htaccessFilePath = $args['directory'] . '.htaccess';
             if ($this->file_exists($htaccessFilePath))
-                $htaccess = $this->chmod($htaccessFilePath, 0664);
+                $htaccess = $this->chmod($htaccessFilePath, $permissions['htaccess']);
         }
         $success = (!empty($findCommands) && !empty($wpConfig) && !empty($htaccess)) ? true : false;
         return $this->logFinish($success, $output, $commands);
@@ -344,6 +373,10 @@ class WP extends AbstractTerminal
         return true;
     }
 
+    /**
+     * @param array $args
+     * @return bool|null
+     */
     public function setRewriteRules(array $args = [])
     {
         $this->mainStr($args);
@@ -364,9 +397,10 @@ class WP extends AbstractTerminal
 
         //check success
         $successMessages = array(
-            'Success: Rewrite rules flushed.',
-            'Success: Rewrite structure set.',
-            'Success: Rewrite rules flushed.'
+            'Success',
+            'Rewrite rules flushed.',
+            'Rewrite structure set.',
+            'Rewrite rules flushed.'
         );
         $success = true;
         foreach ($successMessages as $successMessage) {
@@ -375,7 +409,7 @@ class WP extends AbstractTerminal
                 break;
             }
         }
-        $failMessages = array('Warning: Regenerating a .htaccess file requires special configuration. See usage docs.');
+        $failMessages = array('Regenerating a .htaccess file requires special configuration. See usage docs.');
         foreach ($failMessages as $failMessage) {
             if (strpos($output, $failMessage) !== false) {
                 $success = false;
@@ -416,11 +450,15 @@ class WP extends AbstractTerminal
         if (empty($themes))
             return $this->logError("Couldn't find any themes in theme search.");
         $dotOrgThemes = array();
+        d($themes);
         foreach ($themes as $theme) {
-            if ($theme['author'] == 'wordpressdotorg') {
+            if ($theme['author']['user_nicename'] == 'wordpressdotorg') {
                 $dotOrgThemes[] = $theme['slug'];
             }
         }
+        d($dotOrgThemes);
+        if (empty($dotOrgThemes))
+            return $this->logError("Couldn't find any themes by 'wordpressdotorg' in theme search.");
         $searchForThemes = [
             'twentytwentythree',
             'twentytwentytwo',
@@ -429,8 +467,6 @@ class WP extends AbstractTerminal
             'twentynineteen',
             'twentyseventeen'
         ];
-        if (empty($dotOrgThemes))
-            return $this->logError("Couldn't find any themes by 'wordpressdotorg' in theme search.");
         foreach ($searchForThemes as $searchForTheme) {
             if (in_array($searchForTheme, $dotOrgThemes)) {
                 $themeToInstall = $searchForTheme;

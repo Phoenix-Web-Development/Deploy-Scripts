@@ -447,8 +447,10 @@ final class Deployer extends Base
         }
 
         //shared actions
-        if ($actions['email_filters'])
-            $email_filters = $this->email_filters($action, $environment);
+        if ($actions['email_filters']) {
+            $email_filters = new EmailFilters($environment, $this->whm);
+            $email_filters = $email_filters->$action;
+        }
 
         if (($action == 'create' && $actions['initial_commit']) || $actions['version_control'])
             $versionControl = new EnvironVersionControl(
@@ -880,63 +882,6 @@ final class Deployer extends Base
     }
 
     /**
-     * Creates, deletes or gets cPanel email filter
-     *
-     * @param string $action
-     * @param string $environment
-     * @return bool
-     */
-    function email_filters(string $action = 'create', string $environment = 'live')
-    {
-        if (!$this->validate_action($action, array('create', 'delete'), sprintf("Can't do %s cPanel email filter stuff.", $environment)))
-            return false;
-
-        $this->log(sprintf('<h4>%s %s cPanel email filters.</h4> ', ucfirst($this->actions[$action]['present']), $environment), 'info');
-        $error_string = sprintf("Can't %s %s email filters.", $action, $environment);
-        if (empty($this->config->environ->$environment->cpanel->email_filters)) {
-            $this->log($error_string . " Filter args missing from config.", 'error');
-            return false;
-        }
-        $cpanel_username = $this->config->environ->primary->cpanel->username ?? '';
-        if (empty($cpanel_username)) {
-            $this->log($error_string . " Primary cPanel account username missing from config.", 'error');
-            return false;
-        }
-
-        $number_of_filters = 0;
-        $problems = 0;
-        foreach ($this->config->environ->$environment->cpanel->email_filters as $filter_name => $email_filter) {
-            $number_of_filters++;
-            switch ($action) {
-                case 'create':
-                    $success = $this->whm->create_email_filter(
-                        $email_filter->account,
-                        $this->format_email_filtername($filter_name),
-                        $email_filter->args,
-                        $cpanel_username
-                    );
-                    break;
-                case 'delete':
-                    $success = $this->whm->delete_email_filter(
-                        $email_filter->account,
-                        $this->format_email_filtername($filter_name),
-                        $cpanel_username
-                    );
-            }
-            if (empty($success)) {
-                $problem = true;
-                $problems++;
-            }
-        }
-        if (!empty($problem)) {
-            $this->log(sprintf("Failed to %s %d out of %d %s email filters.", $action, $problems, $number_of_filters, $environment), 'error');
-            return false;
-        }
-        $this->log(sprintf("Successfully %s %s email filters.", $this->actions[$action]['past'], $environment), 'success');
-        return true;
-    }
-
-    /**
      * @param string $action
      * @return bool
      */
@@ -961,9 +906,10 @@ final class Deployer extends Base
 
     /**
      * @param string $environ
+     * @param bool $scheme
      * @return bool|string
      */
-    function get_environ_url(string $environ = 'live')
+    function get_environ_url(string $environ = 'live', bool $scheme = true)
     {
         $error_string = sprintf("Can't get %s environment url.", $environ);
         switch ($environ) {
@@ -990,11 +936,12 @@ final class Deployer extends Base
                 break;
                 break;
         }
-
-        //$protocol = $environ == 'local' ? 'http://' : 'https://';
-        $protocol = 'https://';
-        if (strpos($protocol, $url) !== 0)
-            $url = $protocol . $url;
+        if ($scheme) {
+            //$protocol = $environ == 'local' ? 'http://' : 'https://';
+            $protocol = 'https://';
+            if (strpos($protocol, $url) !== 0)
+                $url = $protocol . $url;
+        }
         return $url;
     }
 
@@ -1163,32 +1110,6 @@ final class Deployer extends Base
             }
         }
         return $domains;
-    }
-
-    /**
-     * @param string $filter_name
-     * @return bool|string
-     */
-    function format_email_filtername(string $filter_name = '')
-    {
-        $project_name = $this->config->project->name ?? '';
-        if (empty($filter_name) || empty($project_name)) {
-            $this->log("Can't format email filter name. Filter name or project name input missing.");
-            return false;
-        }
-        return ucwords($project_name) . ' ' . $filter_name;
-    }
-
-    /**
-     * Return true if same, false if different
-     *
-     * @param $filter1
-     * @param $filter2
-     * @return bool|void
-     */
-    function compare_email_filter($config_filter_args, $queried_filter)
-    {
-
     }
 }
 

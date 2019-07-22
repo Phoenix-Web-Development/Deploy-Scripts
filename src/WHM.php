@@ -953,7 +953,6 @@ class WHM extends Base
                     $cpanel_parameter,
                     $cpanel_parameter_type
                 );
-                d($queried_filter);
 
                 if (!empty($queried_filter)) {
                     foreach ($queried_filter['actions'] as $queried_action) {

@@ -70,7 +70,7 @@ class AbstractTerminal extends BaseAbstract
      */
     protected function root()
     {
-        if (!empty($this->client->root))
+        if ($this->client->root != false)
             return $this->client->root;
         return false;
     }
@@ -132,8 +132,15 @@ class AbstractTerminal extends BaseAbstract
     public
     function is_writable(string $dir = '')
     {
-        if ($this->environment != 'local')
-            return $this->ssh->is_writable($dir);
+        if ($this->environment != 'local') {
+            if ($this->ssh->is_writable($dir))
+                return true;
+            $dummyPath = self::trailing_slash($dir) . 'dummy';
+            if (!$this->put($dummyPath, 'dummy file', 'string'))
+                return false;
+            $this->deleteFile($dummyPath, false);
+            return true;
+        }
         return is_writable($dir);
     }
 

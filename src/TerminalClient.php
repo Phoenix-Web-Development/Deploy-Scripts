@@ -250,6 +250,7 @@ class TerminalClient extends BaseClient
      */
     protected function root(string $root = '')
     {
+
         if (!empty($root))
             return $this->_root = $root;
         if (!empty($this->_root))
@@ -264,6 +265,7 @@ class TerminalClient extends BaseClient
             }
         }
         $root = trim($this->exec('echo ~')) ?? false;
+        d('TerminalClient ' . $root);
         if (!empty($root) && $root != '~')
             return $this->_root = $root;
         return false;

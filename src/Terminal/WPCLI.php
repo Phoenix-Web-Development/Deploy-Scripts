@@ -123,9 +123,8 @@ class WPCLI extends AbstractTerminal
      */
     protected function filepath()
     {
-        $root = $this->root;
-        if (!empty($root))
-            return self::trailing_slash($root) . 'bin/wp';
+        if ($this->root != false)
+            return self::trailing_slash($this->root) . 'bin/wp';
         return false;
     }
 }

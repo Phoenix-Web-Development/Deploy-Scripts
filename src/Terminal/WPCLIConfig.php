@@ -124,7 +124,7 @@ class WPCLIConfig extends AbstractTerminal
         if (!empty($this->_filepath))
             return $this->_filepath;
 
-        if (!empty($this->root))
+        if ($this->root != false)
             return $this->_filepath = self::trailing_slash($this->root) . '.wp-cli/config.yml';
 
         if (!empty($this->dirPath)) {
