@@ -14,35 +14,53 @@ class Htaccess extends AbstractTerminal
     protected $logElement = 'h4';
 
     /**
+     * Adds rules to htaccess to:
+     * redirect http to https
+     * www to non-www (or vice versa)
+     * look for image at live server if not found in staging/local/etc
+     *
      * @param string $webDir
      * @param bool $www
+     * @param string $liveURL
      * @return bool|null
      */
-    public function prepend(string $webDir = '', bool $www = false)
+    public function prepend(string $webDir = '', bool $www = false, $liveURL = '')
     {
         $this->mainStr($webDir, $www);
         $this->logStart();
         if (!$this->validate($webDir))
             return false;
 
-        if ($www)
-            $wwwString = "RewriteCond %{HTTP_HOST} !^www\. [NC]
-    RewriteRule ^(.*)$ http://www.%{HTTP_HOST}/$1 [R=301,L]";
-        elseif (!$www)
-            $wwwString = "RewriteCond %{HTTP_HOST} ^www\.(.*)$ [NC]
+        $wwwString = !empty($www) ? "
+## Redirect non-www to www
+    RewriteCond %{HTTP_HOST} !^www\. [NC]
+    RewriteRule ^(.*)$ http://www.%{HTTP_HOST}/$1 [R=301,L]" : "
+## Redirect www to non-www
+    RewriteCond %{HTTP_HOST} ^www\.(.*)$ [NC]
     RewriteRule ^(.*)$ http://%1/$1 [R=301,L]";
-        $htaccessRules = "<IfModule mod_rewrite.c>
+
+        //If file in WP Uploads dir not found look for it at the live address
+        $missingImageProxy = !empty($liveURL) ? "
+## Query live server for WordPress upload if file not found
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^wp-content/uploads/[^/]+/ " . $liveURL . "%{REQUEST_URI} [R,QSA,L]" : '';
+
+        $htaccessRules = "### Phoenix Web Custom Rules start ###
+<IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /
     <IfModule mod_litespeed.c>
         RewriteRule .* - [E=noabort:1]
-    </IfModule>
-    " . $wwwString . "          
+    </IfModule>" . $wwwString . "
+## Redirect http to https             
     RewriteCond %{HTTPS} !on [NC]
-    RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]" . $missingImageProxy . "         
 </IfModule>
+### Phoenix Web Custom Rules end ###
 
 ";
+
         $remoteFile = self::trailing_slash($webDir) . '.htaccess';
         $existingHtaccess = $this->get($remoteFile);
         if (strpos($existingHtaccess, $htaccessRules) !== false)

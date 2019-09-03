@@ -80,6 +80,8 @@ class WP extends AbstractTerminal
     );
 
     /**
+     * Checks WP is installed at directory in args array
+     *
      * @param array $args
      * @return bool
      */
@@ -129,7 +131,7 @@ class WP extends AbstractTerminal
         $output = $this->exec("wp core download --skip-content", $args['directory']);
         d($output);
         if (stripos($output, 'success') === false) {
-            if (stripos($output, 'WordPress files seem to already be present here') === false)
+            if (strpos($output, 'WordPress files seem to already be present here') === false)
                 return $this->logError("WordPress download failed." . $output);
             $filesAlreadyDownloaded = true;
         }
@@ -137,26 +139,49 @@ class WP extends AbstractTerminal
         $config_constants = $this->getConfigConstants($args);
         $config_set = '';
         foreach ($config_constants as $config_constant => $constant) {
-            $config_set .= sprintf("wp config set %s %s --raw --type=constant;", $config_constant, $constant);
+            $config_set .= sprintf("wp config set %s %s --raw --type=constant;
+            ", $config_constant, $constant);
         }
 
-        $wp_lang = !empty($args['language']) ? 'wp language core install ' . $args['language'] . '; wp site switch-language ' . $args['language'] . ';' : '';
+        $wp_lang = !empty($args['language']) ? 'wp language core install ' . $args['language'] . '; 
+        wp site switch-language ' . $args['language'] . ';
+        ' : '';
         $wp_plugins = '';
         //$wp_plugins = "wp plugin install jetpack --version=6.5; wp plugin install jetpack --version=7.0; ";
         if (empty($filesAlreadyDownloaded))
             $wp_plugins = !empty($args['plugins']) ? sprintf('wp plugin install %s', implode(' ', (array)$args['plugins'])) : '';
 
+        //Escape out double quotes to not break bash string
+        $args['title'] = addcslashes(str_replace('\"', '"', $args['title']), '"\\/');
 
-        $commands = "                
-                wp config create --dbname='" . $args['db']['name'] . "' --dbuser='" . $args['db']['username'] . "' --dbpass='" . $args['db']['password'] . "' --dbprefix='" . rtrim($args['prefix'], '_') . "_'" . " --locale=en_AU;         
-                " . $config_set . "
-                wp core install --url='" . $args['url'] . "' --title='" . $args['title'] . "' --admin_user='" . $args['username']
-            . "' --admin_password='" . $args['password'] . "' --admin_email='" . $args['email'] . "' --skip-email; wp post delete 1;"
-            . $wp_lang . '              
-                mv wp-config.php ../                                
-                rm wp-config-sample.php license.txt readme.html            
-                ' . $wp_plugins . '
-                wp plugin activate --all';
+        $commands = ' wp config create --dbname="' . $args['db']['name']
+            . '" --dbuser="' . $args['db']['username']
+            . '" --dbpass="' . $args['db']['password']
+            . '" --dbprefix="' . rtrim($args['prefix'], '_') . '_" 
+            --locale=en_AU'
+            . $config_set
+            . 'wp core install --url="' . $args['url'] . '" --title="' . $args['title'] . '" --admin_user="' . $args['username']
+            . '" --admin_password="' . $args['password'] . '" --admin_email="' . $args['email'] . '" --skip-email; 
+            wp post delete 1;
+            ' . $wp_lang
+            . 'mv wp-config.php ../                                
+            rm wp-config-sample.php license.txt readme.html            
+            ' . $wp_plugins . '
+            wp plugin activate --all';
+
+        /*
+                $commands = "
+                        wp config create --dbname='" . $args['db']['name'] . "' --dbuser='" . $args['db']['username'] . "' --dbpass='" . $args['db']['password'] . "' --dbprefix='"
+                    . rtrim($args['prefix'], '_') . "_'" . " --locale=en_AU;"
+                    . $config_set .
+                    "wp core install --url='" . $args['url'] . "' --title=\"" . str_replace('"', '\"', $args['title']) . "\" --admin_user='" . $args['username']
+                    . "' --admin_password='" . $args['password'] . "' --admin_email='" . $args['email'] . "' --skip-email; wp post delete 1;"
+                    . $wp_lang . '
+                        mv wp-config.php ../
+                        rm wp-config-sample.php license.txt readme.html
+                        ' . $wp_plugins . '
+                        wp plugin activate --all';
+        */
         $output .= $this->exec($commands, $args['directory']);
 
         $widgets = $this->exec("wp widget list sidebar-1 --format=ids", $args['directory']);
@@ -355,8 +380,8 @@ class WP extends AbstractTerminal
         if ($caller != 'uninstall' && !$this->is_dir($args['directory'])) {
             return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $args['directory']));
         }
-        if (!$this->client->WPCLI()->install_if_missing())
-            return $this->logError("WP CLI missing and install failed.");
+        if (!$this->client->WPCLI()->check())
+            return $this->logError("WP CLI missing.");
 
         if ($caller == 'install') {
             if (!isset($args['db']['name'], $args['db']['username'], $args['db']['password']))

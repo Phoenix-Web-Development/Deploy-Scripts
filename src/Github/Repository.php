@@ -26,7 +26,7 @@ class Repository extends AbstractGithub
 
         $url = !empty($url) && strpos($url, 'https://') !== 0 && strpos($url, 'http://') !== 0 ? 'https://' . $url : $url;
         $created_repo = $this->client->client->repo()->create($repo_name, 'Website of ' . $repo_name, $url,
-            true, //false for private
+            false, //false for private
             null, false, false, false, null, true
         );
 

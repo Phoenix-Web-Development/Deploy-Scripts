@@ -168,6 +168,10 @@ class Git extends AbstractTerminal
     }
 
 
+    /**
+     * @param array $args
+     * @return bool|null
+     */
     public function setGitUser(array $args = [])
     {
         $this->mainStr($args);
@@ -341,6 +345,10 @@ class Git extends AbstractTerminal
     }
 
 
+    /**
+     * @param array $args
+     * @return string
+     */
     protected
     function mainStr(array $args = [])
     {

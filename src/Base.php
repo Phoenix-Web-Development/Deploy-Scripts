@@ -133,6 +133,11 @@ class Base
             'past' => 'removed',
             'action' => 'remove'
         ),
+        'replaceURLs' => array(
+            'present' => 'replacing URLs',
+            'past' => 'replaced URLs',
+            'action' => 'replace URLs'
+        ),
         'reset' => array(
             'present' => 'resetting',
             'past' => 'reset',

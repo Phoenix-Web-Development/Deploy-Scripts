@@ -300,9 +300,11 @@ class EnvironVersionControl extends AbstractDeployer
             $args['key']['passphrase'] = '';
             $args['key']['title'] = ucfirst($environ) . ' cPanel';
 
-            $args['webhook']['url'] = 'https://' . $args['cPanel_account']['domain'] . '/github-webhook.php?github=yes';
-            $args['webhook']['endpoint_config_dir'] = ph_d()->get_environ_dir($environ, 'github_webhook_endpoint_config') . '/' . $args['repo']['name'] . '.json';
-            $args['webhook']['secret'] = ph_d()->config->version_control->github->webhook->secret ?? '';
+            if ($environ == 'staging') {
+                $args['webhook']['url'] = 'https://' . $args['cPanel_account']['domain'] . '/github-webhook.php?github=yes';
+                $args['webhook']['endpoint_config_dir'] = ph_d()->get_environ_dir($environ, 'github_webhook_endpoint_config') . '/' . $args['repo']['name'] . '.json';
+                $args['webhook']['secret'] = ph_d()->config->version_control->github->webhook->secret ?? '';
+            }
         } else {
             $args['project'] = [
                 'dir' => ph_d()->get_environ_dir('local', 'project') ?? '',

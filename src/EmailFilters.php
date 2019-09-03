@@ -143,8 +143,8 @@ class EmailFilters extends AbstractDeployer
 
         $placeholders['root_email_folder'] = ph_d()->config->project->root_email_folder ?? '';
         $placeholders['project_name'] = ucwords(ph_d()->config->project->name) ?? '';
-        $placeholders['staging_domain'] = ph_d()->get_environ_url('staging', false) ?? '';
-        $placeholders['live_domain'] = ph_d()->get_environ_url('live', false) ?? '';
+        $placeholders['staging_domain'] = ph_d()->get_environ_url('staging') ?? '';
+        $placeholders['live_domain'] = ph_d()->get_environ_url('live') ?? '';
         $placeholders['live_cpanel_username'] = ph_d()->config->environ->live->cpanel->account->username ?? '';
 
         foreach ($placeholders as $placeholder => $actualValue) {

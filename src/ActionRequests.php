@@ -4,11 +4,14 @@ namespace Phoenix;
 
 /**
  * Class ActionRequests
+ *
  * @package Phoenix
  */
 class ActionRequests
 {
-
+    /**
+     * @var array
+     */
     public $permissions = array(
         'create' => array('label' => 'Create'),
         'create_version_control' => array('label' => 'Create main version control repository',
@@ -24,11 +27,18 @@ class ActionRequests
             'condition' => array('create', 'create_live_stuff')),
         'create_live_version_control' => array('label' => 'Setup version control',
             'condition' => array('create', 'create_live_stuff')),
-        'create_live_wp' => array('label' => 'Install WordPress & WP CLI',
+
+
+        'create_live_wp' => array('label' => 'WordPress & WP CLI Setup',
             'condition' => array('create', 'create_live_stuff')),
+        'create_live_wp_install' => array('label' => 'Install WordPress & WP CLI',
+            'condition' => array('create', 'create_live_stuff', 'create_live_wp')),
+        'create_live_wp_htaccess' => array('label' => 'Add custom WP .htaccess rules',
+            'condition' => array('create', 'create_live_stuff', 'create_live_wp')),
+
+
         'create_live_initial_git_commit' => array('label' => 'Initial Git commit',
             'condition' => array('create', 'create_live_stuff')),
-
         'create_staging_stuff' => array('label' => 'Staging stuff',
             'condition' => array('create')),
         'create_staging_subdomain' => array('label' => 'Staging cPanel subdomain',
@@ -39,8 +49,16 @@ class ActionRequests
             'condition' => array('create', 'create_staging_stuff')),
         'create_staging_version_control' => array('label' => 'Setup version control',
             'condition' => array('create', 'create_staging_stuff')),
-        'create_staging_wp' => array('label' => 'Install WordPress & WP CLI',
+
+
+        'create_staging_wp' => array('label' => 'WordPress & WP CLI Setup',
             'condition' => array('create', 'create_staging_stuff')),
+        'create_staging_wp_install' => array('label' => 'Install WordPress & WP CLI',
+            'condition' => array('create', 'create_staging_stuff', 'create_staging_wp')),
+        'create_staging_wp_htaccess' => array('label' => 'Add custom WP .htaccess rules',
+            'condition' => array('create', 'create_staging_stuff', 'create_staging_wp')),
+
+
         'create_staging_initial_git_commit' => array('label' => 'Initial Git commit',
             'condition' => array('create', 'create_staging_stuff')),
 
@@ -52,8 +70,13 @@ class ActionRequests
             'condition' => array('create', 'create_local_stuff')),
         'create_local_database_components' => array('label' => 'Database & DB User',
             'condition' => array('create', 'create_local_stuff')),
+
         'create_local_wp' => array('label' => 'Install WordPress & WP CLI',
             'condition' => array('create', 'create_local_stuff')),
+        'create_local_wp_install' => array('label' => 'Install WordPress & WP CLI',
+            'condition' => array('create', 'create_local_stuff', 'create_local_wp')),
+        'create_local_wp_htaccess' => array('label' => 'Add custom WP .htaccess rules',
+            'condition' => array('create', 'create_local_stuff', 'create_local_wp')),
         'create_local_initial_git_commit' => array('label' => 'Initial Git commit',
             'condition' => array('create', 'create_local_stuff')),
 
@@ -137,6 +160,9 @@ class ActionRequests
             'condition' => array('transfer', 'transfer_wp_db_from_local', 'transfer_wp_db')),
     );
 
+    /**
+     * ActionRequests constructor.
+     */
     function __construct()
     {
         foreach ($this->permissions as &$action) {

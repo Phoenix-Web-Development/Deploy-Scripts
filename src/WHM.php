@@ -1350,7 +1350,7 @@ class WHM extends Base
             $key_name, $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
         $this->log(ucfirst($this->actions[$action]['present']) . ' ' . $finish_message_append, 'info');
         $error_string_append = "Can't " . $action . $finish_message_append;
-        $key = $this->listkeys($key_name);
+        $key = $this->listkeys($key_name, 1, $cpanel_account[$cpanel_parameter_type]);
         if (empty($key)) {
             $this->log(sprintf("%s Key doesn't exist.",
                 $error_string_append), 'error');
@@ -1644,7 +1644,7 @@ class WHM extends Base
             if (!empty($curl_result['result'][0]['statusmsg']) || !empty($curl_result['metadata']['reason']))
                 return 'WHM';
         }
-        if (!empty($function)) {
+        if (!empty($function) && key_exists($function, $this->cpanel_api_functions)) {
             switch ($this->cpanel_api_functions[$function]['cpanel_jsonapi_apiversion']) {
                 case 2:
                     return 'cPanel API 2';

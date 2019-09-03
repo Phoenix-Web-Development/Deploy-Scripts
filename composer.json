@@ -1,4 +1,6 @@
 {
+  "name": "phoenixweb/DeployThingy",
+  "description": "Thing For Deploying cPanel instance, WordPress, Version Control etc",
   "require": {
     "ext-json": "*",
     "twbs/bootstrap": "^4.1",

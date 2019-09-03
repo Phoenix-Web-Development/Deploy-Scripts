@@ -39,32 +39,45 @@ class TransferWPDB extends AbstractDeployer
         TerminalClient $destTerminal = null
     )
     {
-        $this->mainStr($fromEnviron, $destEnviron);
-        $this->logStart();
-        if (!$this->validate())
-            return false;
+
         $args = $this->getArgs($fromEnviron, $destEnviron);
+        $this->mainStr($fromEnviron, $destEnviron, $args['from']['url'], $args['dest']['url']);
+        $this->logStart();
+        if (!$this->validate($fromTerminal, $destTerminal))
+            return false;
         if (empty($args))
             return false;
-
+        $success = [];
         $fromFilepath = $this->getFilePath($fromEnviron, $args['from']['db_name']);
 
         if (!$fromTerminal->wp_db()->export($args['from']['dir'], $fromFilepath))
             return $this->logError("Export failed.");
-        if (!$this->backup($destEnviron, $destTerminal))
+
+        $success['backup'] = $this->backup($destEnviron, $destTerminal);
+        if (!$success['backup'])
             return $this->logError("Backup failed.");
 
-        if (!$destTerminal->wp_db()->import(
-            $args['dest']['dir'], $fromFilepath . '.gz', $args['from']['url'], $args['dest']['url']
-        ))
+        $success['import'] = $destTerminal->wp_db()->import($args['dest']['dir'], $fromFilepath . '.gz');
+        if (!$success['import'])
             return $this->logError("Import failed.");
 
+        $success['replaceURLs'] = $destTerminal->wp_db()->replaceURLs($args['dest']['dir'], $args['from']['url'], $args['dest']['url']);
+
+        $wpOption = array(
+            'directory' => $args['dest']['dir'],
+            'option' => array(
+                'name' => 'blog_public',
+                'value' => $destEnviron == 'live' ? 1 : 0
+            )
+        );
+        /*
         $wpOption['directory'] = $args['dest']['dir'];
         $wpOption['option']['name'] = 'blog_public';
         $wpOption['option']['value'] = $destEnviron == 'live' ? 1 : 0;
-        $updateSearchVisibility = $destTerminal->wp()->setOption($wpOption);
+        */
+        $success['search_visibility_option'] = $destTerminal->wp()->setOption($wpOption);
 
-        $success = !empty($updateSearchVisibility) ? true : false;
+        $success = !in_array(false, $success) ? true : false;
         return $this->logFinish($success);
     }
 
@@ -95,6 +108,11 @@ class TransferWPDB extends AbstractDeployer
         return true;
     }
 
+    /**
+     * @param string $environ
+     * @param string $db_name
+     * @return string
+     */
     protected
     function getFilePath(string $environ = '', string $db_name = '')
     {
@@ -120,12 +138,11 @@ class TransferWPDB extends AbstractDeployer
             $this->logError(" DB name missing from config");
 
         if ($this->getCaller() == 'transfer') {
-            $args['from']['url'] = ph_d()->get_environ_url($fromEnviron);
+            $args['from']['url'] = ph_d()->get_environ_url($fromEnviron, true, true);
             $args['dest']['environ'] = $destEnviron;
             $args['dest']['dir'] = ph_d()->get_environ_dir($destEnviron, 'web');
-            $args['dest']['url'] = ph_d()->get_environ_url($destEnviron);
+            $args['dest']['url'] = ph_d()->get_environ_url($destEnviron, true, true);
         }
-
         return $args;
     }
 
@@ -149,21 +166,30 @@ class TransferWPDB extends AbstractDeployer
         return $this->terminals[$environ];
     }
 */
+
     /**
      * @param string $fromEnviron
      * @param string $destEnviron
+     * @param string $fromURL
+     * @param string $destURL
      * @return string
      */
     protected
-    function mainStr(string $fromEnviron = '', string $destEnviron = '')
+    function mainStr(string $fromEnviron = '', string $destEnviron = '', string $fromURL = '', string $destURL = '')
     {
         $action = $this->getCaller();
         if (func_num_args() == 0) {
             if (!empty($this->_mainStr[$action]))
                 return $this->_mainStr[$action];
         }
+
+
         $fromString = !empty($fromEnviron) ? ' ' . $fromEnviron . ' environ' : '';
+        if (!empty($fromString) && !empty($fromURL))
+            $fromString .= ' at ' . $fromURL;
         $destString = !empty($destEnviron) ? ' to ' . $destEnviron . ' environ' : '';
+        if (!empty($destString) && !empty($fromURL))
+            $destString .= ' at ' . $destURL;
         return $this->_mainStr[$action] = sprintf('%s WordPress DB%s', $fromString, $destString);
     }
 }

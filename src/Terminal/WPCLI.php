@@ -87,15 +87,34 @@ class WPCLI extends AbstractTerminal
     /**
      * @return bool
      */
-    public function install_if_missing()
+    public function installOrUpdate()
     {
-        if ($this->check())
-            return true;
-        $this->log(sprintf("WPCLI missing from %s environment so let's install it.", $this->environment), 'info');
-        if ($this->install())
-            return true;
-        return false;
+        if ($this->check()) {
+            return $this->update();
+        }
+        //$this->log(sprintf("WPCLI missing from %s environment so let's install it.", $this->environment), 'info');
+        return $this->install();
 
+    }
+
+    /**
+     * @return bool|null
+     */
+    public function update()
+    {
+        $this->logStart();
+        if (!$this->check())
+            return $this->logError('WP CLI not installed');
+        //if (!$this->validate())
+        //return false;
+        $output = $this->exec('wp cli check-update', $this->filepath());
+        if (strpos($output, 'WP-CLI is at the latest version') !== false)
+            return $this->logFinish(true, $output);
+
+        $output = $this->exec('wp cli update --stable --yes', $this->filepath());
+        $success = strpos($output, 'Updated WP-CLI to the latest stable release') !== false ? true : false;
+
+        return $this->logFinish($success, $output);
     }
 
     /**

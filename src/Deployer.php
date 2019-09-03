@@ -101,7 +101,8 @@ final class Deployer extends Base
         $this->actionRequests = new ActionRequests();
         $this->configControl = new ConfigControl();
         $this->template = new Template();
-
+        if (!empty($this->config->environ->local->wp_cli_cache_dir))
+            putenv('WP_CLI_CACHE_DIR=' . $this->config->environ->local->wp_cli_cache_dir);
         return true;
     }
 
@@ -155,6 +156,7 @@ final class Deployer extends Base
                         $this->updateWP('local');
                     break;
                 case 'transfer':
+
                     $wpdb = new TransferWPDB();
                     //transfer_wp_db_live_to_local
                     if ($this->actionRequests->can_do('transfer_wp_db_live_to_staging'))
@@ -463,8 +465,8 @@ final class Deployer extends Base
         if ($actions['version_control'])
             $setupVersionControl = $versionControl->$action();
 
-        if ($actions['wp']) {
-            $wp = new WordPress($environment, $this->terminal($environment), $this->whm);
+        if ($this->actionRequests->can_do($action . '_' . $environment . '_wp')) {
+            $wp = new WordPress($environment, $this->terminal($environment), $this->actionRequests, $this->whm);
             $wp = $wp->$action();
         }
 
@@ -654,7 +656,7 @@ final class Deployer extends Base
         }
 
         if ($this->actionRequests->can_do($action . "_local_wp")) {
-            $wp = new WordPress('local', $this->terminal('local'));
+            $wp = new WordPress('local', $this->terminal('local'), $this->actionRequests);
             $wp->$action;
         }
 
@@ -907,9 +909,10 @@ final class Deployer extends Base
     /**
      * @param string $environ
      * @param bool $scheme
+     * @param bool $prefix
      * @return bool|string
      */
-    function get_environ_url(string $environ = 'live', bool $scheme = true)
+    function get_environ_url(string $environ = 'live', bool $scheme = false, bool $prefix = false)
     {
         $error_string = sprintf("Can't get %s environment url.", $environ);
         switch ($environ) {
@@ -934,7 +937,9 @@ final class Deployer extends Base
                 }
                 $url = $this->config->environ->$environ->domain;
                 break;
-                break;
+        }
+        if ($prefix && !empty($this->config->environ->$environ->www)) {
+            $url = 'www.' . $url;
         }
         if ($scheme) {
             //$protocol = $environ == 'local' ? 'http://' : 'https://';
@@ -976,6 +981,10 @@ final class Deployer extends Base
                     case 'git':
                         $dir = $this->config->environ->$environ->version_control->repo_dir ?? '/git/website';
                         break;
+                    default:
+                        $this->log($error_string . " Type <strong>" . $type . "</strong> in <strong>" . $environ . "</strong> environ not accounted for.");
+                        return false;
+                        break;
                 }
                 break;
             case 'staging':
@@ -1002,6 +1011,10 @@ final class Deployer extends Base
                     case 'github_webhook_endpoint_config':
                         $dir = '/.github_webhook_configs';
                         break;
+                    default:
+                        $this->log($error_string . " Type <strong>" . $type . "</strong> in <strong>" . $environ . "</strong> environ not accounted for.");
+                        return false;
+                        break;
                 }
                 break;
             case 'local':
@@ -1010,12 +1023,14 @@ final class Deployer extends Base
                     $this->log($error_string . ' Root web dir missing from config.');
                     return false;
                 }
-                $projectName = $this->config->project->name ?? '';
-                if (empty($projectName)) {
+
+                $projectDirName = $this->config->environ->$environ->dirs->project->name ?? $this->config->project->name ?? '';
+
+                if (empty($projectDirName)) {
                     $this->log($error_string . ' Project name missing from config.');
                     return false;
                 }
-                $dir = $rootWebDir . $projectName;
+                $dir = $rootWebDir . $projectDirName;
 
                 $public_html = 'public';
                 switch ($type) {
@@ -1032,6 +1047,10 @@ final class Deployer extends Base
                         $dir .= $this->config->environ->$environ->dirs->log->path ?? '/Project/';
                         break;
                     case 'project':
+                        break;
+                    default:
+                        $this->log($error_string . " Type <strong>" . $type . "</strong> in <strong>" . $environ . "</strong> environ not accounted for.");
+                        return false;
                         break;
                 }
                 break;
@@ -1079,10 +1098,15 @@ final class Deployer extends Base
             $this->log($errorString . " Couldn't get web directory.");
             return false;
         }
+        $WPCLI = $this->terminal->wp_cli()->installOrUpdate();
+        if (!$WPCLI) {
+            $this->log(sprintf('Failed to update WordPress in %s environment.', $environment));
+            return false;
+        }
         $backupDB = new TransferWPDB();
         $backup = $backupDB->backup($environment, $this->terminal($environment));
         if ($backup) {
-            $gitPull = $this->terminal($environment)->git()->pull(['worktree' => $directory, 'branch' => 'dev']);
+            $gitPull = $this->terminal($environment)->gitBranch()->pull(['worktree' => $directory, 'branch' => 'dev']);
             if ($gitPull) {
                 $wp_update = $this->terminal($environment)->wp()->update(['directory' => $directory]);
                 if ($wp_update)
