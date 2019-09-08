@@ -111,9 +111,7 @@ class WordPress extends AbstractDeployer
 
 
         if ($this->actionRequests->can_do('create_' . $this->environ . '_wp_htaccess')) {
-            $www = ($this->environ == 'live' && !empty($args['www'])) ? true : false;
-            $htaccess = $this->terminal->htaccess()->prepend($args['directory'], $www, $args['live_url']);
-            $success['htaccess'] = $htaccess;
+            $success['htaccess'] = $this->terminal->htaccess()->prepend($args);
         }
 
         $success = !in_array(false, $success) ? true : false;

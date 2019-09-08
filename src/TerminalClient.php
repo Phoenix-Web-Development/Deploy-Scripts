@@ -265,7 +265,6 @@ class TerminalClient extends BaseClient
             }
         }
         $root = trim($this->exec('echo ~')) ?? false;
-        d('TerminalClient ' . $root);
         if (!empty($root) && $root != '~')
             return $this->_root = $root;
         return false;
