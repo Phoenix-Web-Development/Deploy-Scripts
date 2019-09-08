@@ -97,6 +97,10 @@ class ConfigControl extends Base
         }
 
         $config = array_replace_recursive($base_config, $site_config);
+
+        //Just overwrite plugins array, don't merge
+        $config['wordpress']['plugins'] = $site_config['wordpress']['plugins'] ?? $site_config['wordpress']['plugins'] ?? $config['wordpress']['plugins'] ?? [];
         return $this->config = array_to_object($config);
+        //return $this->config = new \ArrayObject($config);
     }
 }

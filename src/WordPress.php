@@ -68,14 +68,20 @@ class WordPress extends AbstractDeployer
         if (empty($args))
             return false;
         $success = [];
+        $success['wp_cli'] = $this->terminal->wp_cli()->installOrUpdate();
 
+        $wp = $this->terminal->wp();
+        $success['download'] = $wp->download($args);
+
+        if ($this->actionRequests->can_do('create_' . $this->environ . '_wp_config')) {
+            $success['config'] = $wp->setupConfig($args);
+        }
 
         if ($this->actionRequests->can_do('create_' . $this->environ . '_wp_install')) {
-            $WPCLI = $this->terminal->wp_cli()->installOrUpdate();
-            $wp = $this->terminal->wp();
-            $installed = $wp->install($args);
 
-            if ($installed) {
+            $success['install'] = $wp->install($args);
+
+            if ($success['install']) {
                 $wp_blog_public = $this->environment == 'live' ? 1 : 0;
                 $setOptions = array(
                     array('name' => 'default_comment_status', 'value' => 'closed'),
@@ -85,26 +91,22 @@ class WordPress extends AbstractDeployer
                 if (!empty($args['timezone']))
                     $setOptions[] = array('name' => 'timezone_string', 'value' => $args['timezone']);
 
-                $setOptionSuccess = [];
+
+                $success['setOptions'] = [];
                 foreach ($setOptions as $option) {
                     $args['option'] = $option;
-                    $setOptionSuccess[] = $wp->setOption($args);
+                    $success['setOptions'][] = $wp->setOption($args);
                 }
+                $success['setOptions'] = !in_array(false, $success['setOptions']) ? true : false;
 
-                $setRewriteRules = $wp->setRewriteRules($args);
+                $success['setRewriteRules'] = $wp->setRewriteRules($args);
 
-                $installedLatestTheme = $wp->installLatestDefaultTheme($args);
-                $permissions = $wp->setPermissions($args);
-                $updated = $wp->update($args);
+                $success['installedLatestTheme'] = $wp->installLatestDefaultTheme($args);
+                $success['permissions'] = $wp->setPermissions($args);
+                $success['updated'] = $wp->update($args);
             }
 
-            $success['install'] = !empty($WPCLI)
-            && !empty($installed)
-            && !empty($setRewriteRules)
-            && !empty($permissions)
-            && !in_array(false, $setOptionSuccess)
-            && !empty($installedLatestTheme)
-            && !empty($updated) ? true : false;
+            //$success = !in_array(false, $setOptionSuccess) ? true : false;
         }
 
 

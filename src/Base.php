@@ -68,6 +68,11 @@ class Base
             'past' => 'deployed',
             'action' => 'deploy'
         ),
+        'download' => array(
+            'present' => 'downloading',
+            'past' => 'downloaded',
+            'action' => 'download'
+        ),
         'export' => array(
             'present' => 'exporting',
             'past' => 'exported',
@@ -167,6 +172,11 @@ class Base
             'present' => 'setting rewrite rules for',
             'past' => 'set rewrite rules for',
             'action' => 'set rewrite rules for'
+        ),
+        'setupConfig' => array(
+            'present' => 'setting up wp-config.php for',
+            'past' => 'set up wp-config.php for',
+            'action' => 'set up wp-config.php for'
         ),
         'sync' => array(
             'present' => 'syncing',

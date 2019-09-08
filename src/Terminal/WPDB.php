@@ -40,9 +40,10 @@ class WPDB extends AbstractTerminal
 
         if ($this->file_exists($dest_paths['path']['uncompressed']) || $this->file_exists($dest_paths['path']['compressed']))
             return $this->logError("Backup file already exists in WordPress directory.");
-        $exec_commands = "wp db export --add-drop-table " . $dest_paths['name']['uncompressed'] . ";
+        $exec_commands = "wp db export --add-drop-table " . $dest_paths['name']['uncompressed'] . " --exclude_tables=bbi_parts,suzuki_parts;
         tar -vczf " . $dest_paths['name']['compressed'] . " " . $dest_paths['name']['uncompressed'] . ";";
         $output = $this->exec($exec_commands, $wp_dir);
+
 
         $success = false;
         if (stripos($output, 'success') === false || stripos($output, 'error') !== false)
@@ -189,7 +190,6 @@ class WPDB extends AbstractTerminal
         //return false;
         return $exec_commands;
     }
-
     /**
      * @param $args
      * @return bool

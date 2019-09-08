@@ -70,11 +70,6 @@ class TransferWPDB extends AbstractDeployer
                 'value' => $destEnviron == 'live' ? 1 : 0
             )
         );
-        /*
-        $wpOption['directory'] = $args['dest']['dir'];
-        $wpOption['option']['name'] = 'blog_public';
-        $wpOption['option']['value'] = $destEnviron == 'live' ? 1 : 0;
-        */
         $success['search_visibility_option'] = $destTerminal->wp()->setOption($wpOption);
 
         $success = !in_array(false, $success) ? true : false;

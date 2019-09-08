@@ -46,7 +46,9 @@ class Htaccess extends AbstractTerminal
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule ^wp-content/uploads/[^/]+/ " . $liveURL . "%{REQUEST_URI} [R,QSA,L]" : '';
 
-        $htaccessRules = "### Phoenix Web Custom Rules start ###
+        $customRulesHeading = 'Phoenix Web Custom Rules';
+
+        $htaccessRules = "### " . $customRulesHeading . " start ###
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /
@@ -57,7 +59,7 @@ class Htaccess extends AbstractTerminal
     RewriteCond %{HTTPS} !on [NC]
     RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]" . $missingImageProxy . "         
 </IfModule>
-### Phoenix Web Custom Rules end ###
+### " . $customRulesHeading . " end ###
 
 ";
 

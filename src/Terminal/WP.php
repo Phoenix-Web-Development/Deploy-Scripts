@@ -88,7 +88,6 @@ class WP extends AbstractTerminal
     protected function check(array $args = [])
     {
         $output = $this->exec("wp core is-installed; echo $?", $args['directory']);
-        d($output);
         $potential_errors = array(
             "This does not seem to be a WordPress install",
             "'wp-config.php' not found",
@@ -117,6 +116,34 @@ class WP extends AbstractTerminal
 
     /**
      * @param array $args
+     * @return bool|null
+     */
+    public function download(array $args = [])
+    {
+        $this->mainStr($args);
+        $this->logStart();
+        if (!$this->validate($args))
+            return false;
+        if ($this->check($args))
+            return $this->logFinish(true, 'No need as WordPress is already installed');
+
+        $command = "wp core download --skip-content;
+        wp core verify-checksums";
+        if (!empty($args['language']))
+            $command .= " --locale=" . $args['language'];
+
+        $output = $this->exec($command, $args['directory']);
+        if (stripos($output, 'success') !== false) {
+            $success = true;
+        } else {
+            $success = strpos($output, 'WordPress files seem to already be present here') === false ? true : false;
+        }
+
+        return $this->logFinish($success, $output, $command);
+    }
+
+    /**
+     * @param array $args
      * @return bool
      */
     public function install(array $args = [])
@@ -126,70 +153,40 @@ class WP extends AbstractTerminal
         if (!$this->validate($args))
             return false;
 
-        if ($this->check($args))
-            return $this->logFinish(true, sprintf('WordPress already installed at <strong>%s</strong>.', $args['directory']));
-        $output = $this->exec("wp core download --skip-content", $args['directory']);
-        d($output);
-        if (stripos($output, 'success') === false) {
-            if (strpos($output, 'WordPress files seem to already be present here') === false)
-                return $this->logError("WordPress download failed." . $output);
-            $filesAlreadyDownloaded = true;
+        if (!$this->check($args)) {
+            //Escape out double quotes to not break bash string
+            $args['title'] = addcslashes(str_replace('\"', '"', $args['title']), '"\\/');
+            $commands = 'wp core install --url="' . $args['url'] . '" --title="' . $args['title'] . '" --admin_user="' . $args['username']
+                . '" --admin_password="' . $args['password'] . '" --admin_email="' . $args['email'] . '" --skip-email;
+                wp post delete 1;
+                ';
+            $pluginsToInstall = (array)$args['plugins'];
+            $widgetCommands = $this->getWidgetCommands($args);
+        } else {
+            $commands = '';
+            foreach ($args['plugins'] as $plugin) {
+                if ($this->exec('wp plugin is-installed ' . $plugin . '; echo $?', $args['directory']) == '0')
+                    $pluginsToInstall[] = $plugin;
+            }
+            $widgetCommands = '';
         }
 
-        $config_constants = $this->getConfigConstants($args);
-        $config_set = '';
-        foreach ($config_constants as $config_constant => $constant) {
-            $config_set .= sprintf("wp config set %s %s --raw --type=constant;
-            ", $config_constant, $constant);
-        }
-
-        $wp_lang = !empty($args['language']) ? 'wp language core install ' . $args['language'] . '; 
+        $commands .= !empty($pluginsToInstall) ? sprintf('wp plugin install %s --activate', implode(' ', $pluginsToInstall)) . ';
+        ' : '';
+        $commands .= !empty($args['language']) ? 'wp language core install ' . $args['language'] . '; 
         wp site switch-language ' . $args['language'] . ';
         ' : '';
-        $wp_plugins = '';
-        //$wp_plugins = "wp plugin install jetpack --version=6.5; wp plugin install jetpack --version=7.0; ";
-        if (empty($filesAlreadyDownloaded))
-            $wp_plugins = !empty($args['plugins']) ? sprintf('wp plugin install %s', implode(' ', (array)$args['plugins'])) : '';
+        $commands .= $widgetCommands;
 
-        //Escape out double quotes to not break bash string
-        $args['title'] = addcslashes(str_replace('\"', '"', $args['title']), '"\\/');
+        $output = $this->exec($commands, $args['directory']);
 
-        $commands = ' wp config create --dbname="' . $args['db']['name']
-            . '" --dbuser="' . $args['db']['username']
-            . '" --dbpass="' . $args['db']['password']
-            . '" --dbprefix="' . rtrim($args['prefix'], '_') . '_" 
-            --locale=en_AU'
-            . $config_set
-            . 'wp core install --url="' . $args['url'] . '" --title="' . $args['title'] . '" --admin_user="' . $args['username']
-            . '" --admin_password="' . $args['password'] . '" --admin_email="' . $args['email'] . '" --skip-email; 
-            wp post delete 1;
-            ' . $wp_lang
-            . 'mv wp-config.php ../                                
-            rm wp-config-sample.php license.txt readme.html            
-            ' . $wp_plugins . '
-            wp plugin activate --all';
-
-        /*
-                $commands = "
-                        wp config create --dbname='" . $args['db']['name'] . "' --dbuser='" . $args['db']['username'] . "' --dbpass='" . $args['db']['password'] . "' --dbprefix='"
-                    . rtrim($args['prefix'], '_') . "_'" . " --locale=en_AU;"
-                    . $config_set .
-                    "wp core install --url='" . $args['url'] . "' --title=\"" . str_replace('"', '\"', $args['title']) . "\" --admin_user='" . $args['username']
-                    . "' --admin_password='" . $args['password'] . "' --admin_email='" . $args['email'] . "' --skip-email; wp post delete 1;"
-                    . $wp_lang . '
-                        mv wp-config.php ../
-                        rm wp-config-sample.php license.txt readme.html
-                        ' . $wp_plugins . '
-                        wp plugin activate --all';
-        */
-        $output .= $this->exec($commands, $args['directory']);
-
-        $widgets = $this->exec("wp widget list sidebar-1 --format=ids", $args['directory']);
-        if (!empty($widgets)) {
-            foreach (array('search-1', 'search-2', 'search') as $search) {
-                $widgets = str_replace($widgets, $search, '');
-            }
-            $output .= $this->exec("wp widget delete " . trim($widgets), $args['directory']);
+        $filesToDelete = array(
+            'wp-config-sample.php',
+            'license.txt',
+            'readme.html'
+        );
+        foreach ($filesToDelete as $fileToDelete) {
+            $this->deleteFile(self::trailing_slash($args['directory']) . $fileToDelete, false);
         }
         return $this->logFinish($this->check($args), $output, $commands);
     }
@@ -251,23 +248,44 @@ class WP extends AbstractTerminal
 
     /**
      * @param array $args
-     * @return array
+     * @return bool|null
      */
-    protected function getConfigConstants(array $args = [])
+    public function setupConfig(array $args = [])
     {
-        $config_constants = array(
-            'AUTOSAVE_INTERVAL' => 300,
-            'WP_POST_REVISIONS' => 6,
-            'EMPTY_TRASH_DAYS' => 7,
-            'DISALLOW_FILE_EDIT' => 'true',
-        );
-        if ($this->environment == 'live') {
-            $config_constants['AUTOMATIC_UPDATER_DISABLED'] = 'true';
-            $config_constants['DISALLOW_FILE_MODS'] = 'true';
-        }
-        $config_constants['WP_DEBUG'] = $this->environment == 'local' ? 'true' : 'false';
+        $this->mainStr($args);
+        $this->logStart();
+        if (!$this->validate($args))
+            return false;
 
-        return $config_constants;
+        $command = '';
+        $exists = $this->exec('wp config path', $args['directory']);
+        if (strpos("'wp-config.php' not found", $exists) !== false) {
+            $command .= 'wp config create --dbname="' . $args['db']['name']
+                . '" --dbuser="' . $args['db']['username']
+                . '" --dbpass="' . $args['db']['password']
+                . '" --dbprefix="' . rtrim($args['prefix'], '_') . '_"';
+
+            if (!empty($args['language']))
+                $command .= ' --locale="' . $args['language'] . '";';
+            $command .= ';
+        ';
+        }
+
+        $wpConfig = (array)$args['config'];
+        $wpConfigConstants = (array)$wpConfig['all'] ?? [];
+        if (!empty($wpConfig[$this->environment]))
+            $wpConfigConstants = array_replace_recursive($wpConfigConstants, (array)$wpConfig[$this->environment]);
+        foreach ($wpConfigConstants as $configConstant => $constant) {
+            $command .= sprintf("wp config set %s %s --raw --type=constant;
+            ", $configConstant, $constant);
+        }
+
+        if ($this->exec('wp config path', $args['directory']) == self::trailing_slash($args['directory']) . 'wp-config.php')
+            $command .= 'mv wp-config.php ../';
+
+        $output = $this->exec($command, $args['directory']);
+        $success = (stripos($output, "Success:") !== false) && (stripos($output, "Error:") === false) ? true : false;
+        return $this->logFinish($success, $output, $command);
     }
 
     /**
@@ -461,9 +479,45 @@ class WP extends AbstractTerminal
 
     /**
      * @param array $args
+     * @return string
+     */
+    protected function getWidgetCommands(array $args = [])
+    {
+        $sidebars = $this->exec('wp sidebar list --format=ids', $args['directory']);
+        if (empty($sidebars))
+            return '';
+        $sidebars = explode(' ', trim($sidebars));
+        foreach ($sidebars as $sidebar) {
+            $widgetLists[$sidebar] = $this->exec("wp widget list " . $sidebar . " --format=ids", $args['directory']);
+        }
+
+        if (empty($widgetLists))
+            return '';
+
+        $uselessWidgets = array('meta', 'recent-comments');
+        $maxIterators = 3;
+
+        foreach ($widgetLists as $widgetList) {
+            foreach ($uselessWidgets as $uselessWidget) {
+
+                for ($i = 1; $i <= $maxIterators; $i++) {
+                    $widgetToCheck = $uselessWidget . '-' . $i;
+                    if (strpos($widgetList, $widgetToCheck) !== false)
+                        $widgetsToDelete[] = $widgetToCheck;
+                }
+            }
+        }
+        if (empty($widgetsToDelete))
+            return '';
+        return "wp widget delete " . implode(' ', $widgetsToDelete);
+    }
+
+    /**
+     * @param array $args
      * @return bool|mixed
      */
-    public function installLatestDefaultTheme(array $args = [])
+    public
+    function installLatestDefaultTheme(array $args = [])
     {
         $this->mainStr($args);
         $this->logStart();

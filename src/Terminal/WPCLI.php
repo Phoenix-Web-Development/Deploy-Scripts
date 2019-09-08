@@ -68,9 +68,11 @@ class WPCLI extends AbstractTerminal
         if (!$this->validate())
             return false;
 
-        $this->mkdir(dirname($this->filepath()));
-        if (!is_dir($this->filepath()))
-            return $this->logError("Couldn't create directory <strong>" . $this->filepath() . "</strong>.");
+        if (!is_dir($this->dirpath())) {
+            $this->mkdir(dirname($this->dirpath()));
+            if (!is_dir($this->dirpath()))
+                return $this->logError("Couldn't create directory <strong>" . $this->dirpath() . "</strong>.");
+        }
         $output = $this->exec(
             'curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar; 
         chmod +x wp-cli.phar;
@@ -80,7 +82,6 @@ class WPCLI extends AbstractTerminal
 
 
         $success = $this->check() ? true : false;
-
         return $this->logFinish($success, $output);
     }
 
@@ -107,11 +108,11 @@ class WPCLI extends AbstractTerminal
             return $this->logError('WP CLI not installed');
         //if (!$this->validate())
         //return false;
-        $output = $this->exec('wp cli check-update', $this->filepath());
+        $output = $this->exec('wp cli check-update', $this->dirpath());
         if (strpos($output, 'WP-CLI is at the latest version') !== false)
             return $this->logFinish(true, $output);
 
-        $output = $this->exec('wp cli update --stable --yes', $this->filepath());
+        $output = $this->exec('wp cli update --stable --yes', $this->dirpath());
         $success = strpos($output, 'Updated WP-CLI to the latest stable release') !== false ? true : false;
 
         return $this->logFinish($success, $output);
@@ -133,8 +134,18 @@ class WPCLI extends AbstractTerminal
      */
     protected function mainStr()
     {
-        $dirStr = !empty($this->filepath) ? sprintf(" at path <strong>%s</strong>", $this->filepath) : '';
+        $dirStr = !empty($this->filepath()) ? sprintf(" at path <strong>%s</strong>", $this->filepath()) : '';
         return sprintf("WP CLI in %s environment%s", $this->environment, $dirStr);
+    }
+
+    /**
+     * @return string
+     */
+    protected function dirpath()
+    {
+        if ($this->root != false)
+            return self::trailing_slash($this->root) . 'bin/';
+        return false;
     }
 
     /**
