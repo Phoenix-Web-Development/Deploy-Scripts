@@ -1,4 +1,5 @@
-#!/usr/bin/env bash
+#!/bin/bash
+
 passphrase=$1
 key_name=$2
 rootDir=$3

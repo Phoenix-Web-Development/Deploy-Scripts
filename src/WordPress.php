@@ -99,6 +99,11 @@ class WordPress extends AbstractDeployer
                 }
                 $success['setOptions'] = !in_array(false, $success['setOptions']) ? true : false;
 
+                if!empty($args['options']['fresh_install']) {
+
+                }
+
+
                 $success['setRewriteRules'] = $wp->setRewriteRules($args);
 
                 $success['installedLatestTheme'] = $wp->installLatestDefaultTheme($args);
@@ -173,10 +178,10 @@ class WordPress extends AbstractDeployer
 
         $args = (array)ph_d()->config->wordpress;
         $args['www'] = ph_d()->config->environ->$environ->www ?? false;
-        $args['directory'] = ph_d()->get_environ_dir($environ, 'web');
+        $args['directory'] = ph_d()->getEnvironDir($environ, 'web');
 
         $args['title'] = ph_d()->config->project->title ?? 'Insert Site Title Here';
-        $args['url'] = ph_d()->get_environ_url($environ, true, true);
+        $args['url'] = ph_d()->getEnvironURL($environ, true, true);
 
         $args['db'] = (array)ph_d()->config->environ->$environ->db ?? '';
         if (empty($args['db']['name']))
@@ -189,14 +194,15 @@ class WordPress extends AbstractDeployer
         $args['cli']['config']['path'] = ph_d()->config->environ->$environ->dirs->web_root->path ?? '';
 
         if ($environ != 'local') {
-            $cpanel = ph_d()->find_environ_cpanel($environ);
+            $cpanel = ph_d()->findEnvironcPanel($environ);
             if (empty($cpanel['user']))
                 return $this->logError(sprintf("Couldn't work out %s cPanel username.", $environ));
             $args['db']['name'] = $this->whm->db_prefix_check($args['db']['name'], $cpanel['user']);
             $args['db']['username'] = $this->whm->db_prefix_check($args['db']['username'], $cpanel['user']);
         }
 
-        $args['live_url'] = $environ != 'live' ? ph_d()->get_environ_url('live', true, true) : '';
+
+        $args['live_url'] = $environ != 'live' ? ph_d()->getEnvironURL('live', true, true) : '';
 
         return $args;
     }

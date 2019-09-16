@@ -103,25 +103,29 @@ class BaseAbstract extends Base
 
     /**
      * @param bool $success
+     * @param string $message
      * @return bool|null
      */
-    protected function logFinish($success = false)
+    protected function logFinish(bool $success = false, string $message = '')
     {
-        $action = $this->getCaller();
-        if (!empty($action)) {
-            if (!empty($success)) {
-                $string = sprintf('Successfully %s %s.', $this->actions[$this->getCaller()]['past'], $this->mainStr());
-                $messageType = 'success';
-                $return = true;
-            } else {
-                $string = sprintf('Failed to %s %s.', $this->getCaller(), $this->mainStr());
-                $messageType = 'error';
-                $return = false;
-            }
-            $string = $this->elementWrap($string);
+        if (!empty($this->getCaller())) {
+            $string = $this->getFinishStr($success);
+            $string .= !empty($message) ? '<p>' . $message . '</p>' : '';
+            $messageType = $success ? 'success' : 'error';
             $this->log($string, $messageType);
-            return $return;
+            return $success;
         }
         return null;
     }
+
+    /**
+     * @param $success
+     * @return string
+     */
+    protected function getFinishStr(bool $success = false)
+    {
+        $string = $success ? 'Successfully' : 'Failed to';
+        return $this->elementWrap($string . ' ' . $this->actions[$this->getCaller()]['action'] . ' ' . $this->mainStr());
+    }
+
 }

@@ -283,16 +283,16 @@ class EnvironVersionControl extends AbstractDeployer
         $args['repo']['name'] = ph_d()->config->version_control->repo_name ?? '';
         if (empty($args['repo']['name']))
             return $this->logError("Repository name is missing from config.");
-        $args['repo']['dir'] = ph_d()->get_environ_dir($environ, 'git');
+        $args['repo']['dir'] = ph_d()->getEnvironDir($environ, 'git');
         $args['repo']['downstream_name'] = $args['repo']['name'] . '_website';
-        $args['repo']['worktree'] = ph_d()->get_environ_dir($environ, 'worktree');
+        $args['repo']['worktree'] = ph_d()->getEnvironDir($environ, 'worktree');
 
         $args['repo']['owner'] = ph_d()->config->environ->$environ->dirs->web->owner ?? '';
         $args['repo']['group'] = ph_d()->config->environ->$environ->dirs->web->group ?? '';
 
 
         if ($environ != 'local') {
-            $args['cPanel_account'] = ph_d()->find_environ_cpanel($environ);
+            $args['cPanel_account'] = ph_d()->findEnvironcPanel($environ);
             if (empty($args['cPanel_account']))
                 return $this->logError(sprintf("Couldn't find %s cPanel account.", $environ));
 
@@ -302,12 +302,12 @@ class EnvironVersionControl extends AbstractDeployer
 
             if ($environ == 'staging') {
                 $args['webhook']['url'] = 'https://' . $args['cPanel_account']['domain'] . '/github-webhook.php?github=yes';
-                $args['webhook']['endpoint_config_dir'] = ph_d()->get_environ_dir($environ, 'github_webhook_endpoint_config') . '/' . $args['repo']['name'] . '.json';
+                $args['webhook']['endpoint_config_dir'] = ph_d()->getEnvironDir($environ, 'github_webhook_endpoint_config') . '/' . $args['repo']['name'] . '.json';
                 $args['webhook']['secret'] = ph_d()->config->version_control->github->webhook->secret ?? '';
             }
         } else {
             $args['project'] = [
-                'dir' => ph_d()->get_environ_dir('local', 'project') ?? '',
+                'dir' => ph_d()->getEnvironDir('local', 'project') ?? '',
                 'owner' => ph_d()->config->environ->$environ->dirs->project->owner ?? '',
                 'group' => ph_d()->config->environ->$environ->dirs->project->group ?? '',
             ];

@@ -230,7 +230,27 @@ class WP extends AbstractTerminal
      * @param array $args
      * @return bool|null
      */
-    public function setOption(array $args = [])
+    public function setOptions(array $args = [])
+    {
+        $this->mainStr($args);
+        $this->logStart();
+        if (!$this->validate($args))
+            return false;
+        if (empty($args['option']['name']))
+            return $this->logError("Option name not passed to setOption method");
+        if (!isset($args['option']['value']) || $args['option']['value'] === '')
+            return $this->logError("Option value not passed to setOption method");
+        $command = 'wp option update ' . $args['option']['name'] . ' "' . $args['option']['value'] . '"';
+        $output = $this->exec($command, $args['directory']);
+        $success = (stripos($output, "Success:") !== false) ? true : false;
+        return $this->logFinish($success, $output, $command);
+    }
+
+    /**
+     * @param array $args
+     * @return bool|null
+     */
+    protected function setOption(array $args = [])
     {
         $this->mainStr($args);
         $this->logStart();

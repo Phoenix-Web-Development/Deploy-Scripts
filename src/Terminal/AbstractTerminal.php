@@ -389,25 +389,20 @@ class AbstractTerminal extends BaseAbstract
      * @param string $command
      * @return bool|null
      */
-    protected function logFinish($success = false, string $output = '', string $command = '')
+    protected function logFinish(bool $success = false, string $output = '', string $command = '')
     {
-        $action = $this->getCaller();
-        $output = $this->formatOutput($output);
-        $command = $this->formatOutput($command, 'command');
 
-        if (!empty($action)) {
-            if (!empty($success)) {
-                $string = sprintf('Successfully %s %s.', $this->actions[$this->getCaller()]['past'], $this->mainStr());
-                $messageType = 'success';
-                $return = true;
-            } else {
-                $string = sprintf('Failed to %s %s.', $this->actions[$this->getCaller()]['action'], $this->mainStr());
-                $messageType = 'error';
-                $return = false;
-            }
-            $string = $this->elementWrap($string) . ' ' . $command . $output;
+        if (!empty($this->getCaller())) {
+
+            $output = $this->formatOutput($output);
+            $command = $this->formatOutput($command, 'command');
+
+            $string = $this->getFinishStr($success);
+
+            $string .= $command . $output;
+            $messageType = $success ? 'success' : 'error';
             $this->log($string, $messageType);
-            return $return;
+            return $success;
         }
         return null;
     }

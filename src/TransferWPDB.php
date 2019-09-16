@@ -63,6 +63,13 @@ class TransferWPDB extends AbstractDeployer
 
         $success['replaceURLs'] = $destTerminal->wp_db()->replaceURLs($args['dest']['dir'], $args['from']['url'], $args['dest']['url']);
 
+
+        $wpOptions = array(
+            'option' => array(
+                'name' => 'blog_public',
+                'value' => $destEnviron == 'live' ? 1 : 0
+            )
+        );
         $wpOption = array(
             'directory' => $args['dest']['dir'],
             'option' => array(
@@ -125,7 +132,7 @@ class TransferWPDB extends AbstractDeployer
     {
 
         $args['from']['environ'] = $fromEnviron;
-        $args['from']['dir'] = ph_d()->get_environ_dir($fromEnviron, 'web');
+        $args['from']['dir'] = ph_d()->getEnvironDir($fromEnviron, 'web');
         if (empty($args['from']['dir']))
             return $this->logError("Couldn't get web directory.");
         $args['from']['db_name'] = ph_d()->config->environ->$fromEnviron->db->name ?? '';
@@ -133,10 +140,10 @@ class TransferWPDB extends AbstractDeployer
             $this->logError(" DB name missing from config");
 
         if ($this->getCaller() == 'transfer') {
-            $args['from']['url'] = ph_d()->get_environ_url($fromEnviron, true, true);
+            $args['from']['url'] = ph_d()->getEnvironURL($fromEnviron, true, true);
             $args['dest']['environ'] = $destEnviron;
-            $args['dest']['dir'] = ph_d()->get_environ_dir($destEnviron, 'web');
-            $args['dest']['url'] = ph_d()->get_environ_url($destEnviron, true, true);
+            $args['dest']['dir'] = ph_d()->getEnvironDir($destEnviron, 'web');
+            $args['dest']['url'] = ph_d()->getEnvironURL($destEnviron, true, true);
         }
         return $args;
     }

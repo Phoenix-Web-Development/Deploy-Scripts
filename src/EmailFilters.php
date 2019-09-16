@@ -124,7 +124,7 @@ class EmailFilters extends AbstractDeployer
         $args['filters'] = ph_d()->config->environ->$environ->cpanel->email_filters ?? false;
         if (empty($args['filters']))
             return $this->logError("Filter args missing from config.");
-        $args['filters'] = $this->substitutePlaceholders($args['filters']);
+        //$args['filters'] = $this->substitutePlaceholders($args['filters']);
         if (!$args['filters'])
             return false;
         $args['cpanel_username'] = ph_d()->config->environ->primary->cpanel->username ?? false;
@@ -137,21 +137,21 @@ class EmailFilters extends AbstractDeployer
      * @param $filters
      * @return bool|string
      */
+
+    /*
     private function substitutePlaceholders($filters)
     {
 
 
         $placeholders['root_email_folder'] = ph_d()->config->project->root_email_folder ?? '';
         $placeholders['project_name'] = ucwords(ph_d()->config->project->name) ?? '';
-        $placeholders['staging_domain'] = ph_d()->get_environ_url('staging') ?? '';
-        $placeholders['live_domain'] = ph_d()->get_environ_url('live') ?? '';
+        $placeholders['staging_domain'] = ph_d()->getEnvironURL('staging') ?? '';
+        $placeholders['live_domain'] = ph_d()->getEnvironURL('live') ?? '';
         $placeholders['live_cpanel_username'] = ph_d()->config->environ->live->cpanel->account->username ?? '';
 
         foreach ($placeholders as $placeholder => $actualValue) {
             $find = '%' . $placeholder . '%';
 
-            //if (empty($actualValue))
-            //  return $this->logError(sprintf("Couldn't obtain value for <strong>%s</strong> placeholder.", $placeholder));
             foreach ($filters as $filterName => $filter) {
                 if (strpos($filterName, $find) !== false) {
                     //d($placeholder . ' ' .$actualValue);
@@ -178,13 +178,14 @@ class EmailFilters extends AbstractDeployer
                         ksort($arg_values);
                         $email_filter->args->val = array_to_object($arg_values);
                         */
+    /*
                     }
                 }
             }
         }
         return $filters;
     }
-
+*/
     /**
      * @param int $problems
      * @param int $number_of_filters

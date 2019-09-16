@@ -14,6 +14,7 @@ use Github\Client;
  * @property \stdClass $config
  * @property Bitbucket $bitbucket
  * @property GithubClient $github
+ * @property cPanelSubdomain $cPanelSubdomain
  * @property TerminalClient $terminal
  *
  * Class Deployer
@@ -36,6 +37,11 @@ final class Deployer extends Base
      * @var
      */
     private $_github;
+
+    /**
+     * @var
+     */
+    private $_cPanelSubdomain;
 
     /**
      * @var
@@ -63,10 +69,6 @@ final class Deployer extends Base
     public $staging_cpanel_key;
 
     /**
-     * @var
-     */
-    public $staging_cpanel_account;
-    /**
      * @var array
      */
 
@@ -90,7 +92,7 @@ final class Deployer extends Base
     /**
      * Deployer constructor.
      */
-    function __construct()
+    public function __construct()
     {
         parent::__construct();
         if (!defined('BASE_DIR')) define('BASE_DIR', dirname(__FILE__));
@@ -101,6 +103,7 @@ final class Deployer extends Base
         $this->actionRequests = new ActionRequests();
         $this->configControl = new ConfigControl();
         $this->template = new Template();
+
         if (!empty($this->config->environ->local->wp_cli_cache_dir))
             putenv('WP_CLI_CACHE_DIR=' . $this->config->environ->local->wp_cli_cache_dir);
         return true;
@@ -110,7 +113,7 @@ final class Deployer extends Base
      * @return bool
      * @throws \Github\Exception\MissingArgumentException
      */
-    function run()
+    public function run()
     {
 
         $this->template->get('header');
@@ -131,21 +134,21 @@ final class Deployer extends Base
                     if ($this->actionRequests->can_do('delete_version_control'))
                         $this->versionControlMainRepo('delete');
                     if ($this->actionRequests->can_do('delete_live_stuff'))
-                        $this->do_environ_stuff('delete', 'live');
+                        $this->doRemoteEnvironStuff('delete', 'live');
                     if ($this->actionRequests->can_do('delete_staging_stuff'))
-                        $this->do_environ_stuff('delete', 'staging');
+                        $this->doRemoteEnvironStuff('delete', 'staging');
                     if ($this->actionRequests->can_do('delete_local_stuff'))
-                        $this->localStuff('delete');
+                        $this->doLocalStuff('delete');
                     break;
                 case 'deploy':
                     if ($this->actionRequests->can_do('create_version_control'))
                         $this->versionControlMainRepo('create');
                     if ($this->actionRequests->can_do('create_live_stuff'))
-                        $this->do_environ_stuff('create', 'live');
+                        $this->doRemoteEnvironStuff('create', 'live');
                     if ($this->actionRequests->can_do('create_staging_stuff'))
-                        $this->do_environ_stuff('create', 'staging');
+                        $this->doRemoteEnvironStuff('create', 'staging');
                     if ($this->actionRequests->can_do('create_local_stuff'))
-                        $this->localStuff('create');
+                        $this->doLocalStuff('create');
                     break;
                 case 'update':
                     if ($this->actionRequests->can_do('update_live_stuff'))
@@ -179,20 +182,22 @@ final class Deployer extends Base
             template()->get('form');
             $unixUser = posix_getpwuid(posix_geteuid())['name'] ?? 'unknown';
             $unixUser = sprintf('Local server unix user is <strong>%s</strong>.', $unixUser);
-            $root = !empty($this->terminal('local')->root) ? $this->terminal('local')->root : 'unknown';
+            $root = $this->terminal('local')->root ?? 'unknown';
             $root = sprintf(' Local root directory is <strong>%s</strong>.', $root);
             $this->log($unixUser . $root, 'info');
             $diskspace = $this->getWHMDiskSpace();
 
             $plan = $this->config->environ->live->cpanel->create_account_args->plan ?? '';
-            $package_size = $this->whm->get_pkg_info($plan)['data']['pkg']['QUOTA'];
-            if (($diskspace['total'] - $diskspace['allocated']) > $package_size)
-                $disk_message = 'You have';
-            else
-                $disk_message = 'Not enough';
-            $this->log(sprintf('Total disk space - <strong>%s</strong>MB. Disk used - <strong>%s</strong>MB. Allocated disk space - <strong>%s</strong>MB. %s unallocated disk space for a new <strong>%s</strong>MB cPanel account.',
-                $diskspace['total'], $diskspace['used'], $diskspace['allocated'], $disk_message, $package_size), 'info');
-            $this->log('<h3>cPanel Staging Subdomains</h3>' . build_recursive_list((array)ph_d()->get_staging_subdomains()), 'light');
+            if (!empty($this->whm) && !empty($plan)) {
+                $package_size = $this->whm->get_pkg_info($plan)['data']['pkg']['QUOTA'];
+                if (($diskspace['total'] - $diskspace['allocated']) > $package_size)
+                    $disk_message = 'You have';
+                else
+                    $disk_message = 'Not enough';
+                $this->log(sprintf('Total disk space - <strong>%s</strong>MB. Disk used - <strong>%s</strong>MB. Allocated disk space - <strong>%s</strong>MB. %s unallocated disk space for a new <strong>%s</strong>MB cPanel account.',
+                    $diskspace['total'], $diskspace['used'], $diskspace['allocated'], $disk_message, $package_size), 'info');
+                $this->log('<h3>cPanel Staging Subdomains</h3>' . build_recursive_list((array)ph_d()->getStagingSubdomains()), 'light');
+            }
         }
         $this->log('<h3>Input Config Array</h3>' . build_recursive_list((array)ph_d()->config), 'light');
 
@@ -260,6 +265,22 @@ final class Deployer extends Base
     }
 
     /**
+     * @return cPanelSubdomain
+     */
+    protected function cPanelSubdomain()
+    {
+        if (!empty($this->_cPanelSubdomain))
+            return $this->_cPanelSubdomain;
+        return $this->_cPanelSubdomain = new cPanelSubdomain(
+            'staging',
+            $this->config,
+            $this->terminal('staging'),
+            $this->actionRequests,
+            $this->whm
+        );
+    }
+
+    /**
      * @return bool|GithubClient
      */
     protected function github()
@@ -320,7 +341,7 @@ final class Deployer extends Base
         $message = sprintf("%s environment %s connection.", $environment, $protocol);
         //if ($environment != 'local') {
 
-        $ssh_args = $this->get_environ_ssh_args($environment);
+        $ssh_args = $this->getEnvironSSHArgs($environment);
         if (!empty($ssh_args)) {
             switch ($protocol) {
                 case 'ssh':
@@ -331,14 +352,14 @@ final class Deployer extends Base
                     break;
             }
         }
-        //$passphrase = $this->config->environ->local->ssh_keys->live->passphrase ?? '';
-        //$key_name = $this->config->environ->local->ssh_keys->live->key_name ?? '';
+        $passphrase = $this->config->environ->local->ssh_keys->live->passphrase ?? '';
+        $key_name = $this->config->environ->local->ssh_keys->live->key_name ?? '';
         if (!empty($passphrase) && !empty($key_name)) {
             $private_key_location = $this->config->environ->local->directory . $key_name;
 
             if (!file_exists($private_key_location)) {
-                //$this->terminal('local')->localSSHKey('create', $key_name, $passphrase);
-                //$this->terminal('local')->SSHConfig('create', $key_name, $passphrase);
+                $this->terminal('local')->localSSHKey('create', $key_name, $passphrase);
+                $this->terminal('local')->SSHConfig('create', $key_name, $passphrase);
             }
             if (file_exists($private_key_location . '.pub')) {
                 $public_key = file_get_contents($private_key_location . '.pub');
@@ -363,28 +384,28 @@ final class Deployer extends Base
      */
     protected function config()
     {
-        return $this->configControl->getConfig();
+        return $this->configControl->config;
     }
 
     /**
      * @param string $environment
      * @return array|bool
      */
-    function get_environ_ssh_args(string $environment = 'live')
+    public function getEnvironSSHArgs(string $environment = 'live')
     {
         $error_string = sprintf("Can't connect %s environment via SSH.", $environment);
         switch ($environment) {
             case 'live':
                 $live_domain = $this->config->environ->live->domain ?? '';
                 $live_username = $this->config->environ->live->cpanel->account->username ?? '';
-                if (!$this->find_cpanel_account($live_domain, $live_username)) {
+                if (!$this->findcPanelAccount($live_domain, $live_username)) {
                     $this->log($error_string . " Couldn't locate live cPanel account.");
                     return false;
                 }
                 $ssh_args = $this->config->environ->live->cpanel->ssh ?? array();
                 break;
             case 'staging':
-                $subdomain = $this->find_staging_cpanel();
+                $subdomain = $this->cPanelSubdomain->findSubdomaincPanel();
                 if (!$subdomain) {
                     $slug = $this->config->environ->staging->cpanel->subdomain->slug ?? '';
                     $slug = !empty($slug) ? "<strong>" . $slug . "</strong> " : '';
@@ -412,7 +433,7 @@ final class Deployer extends Base
      * @return bool
      * @throws \Github\Exception\MissingArgumentException
      */
-    function do_environ_stuff($action = 'create', $environment = 'live')
+    public function doRemoteEnvironStuff($action = 'create', $environment = 'live')
     {
         if (!$this->validate_action($action, array('create', 'delete'), sprintf("Can't do %s environ stuff.", $environment)))
             return false;
@@ -421,155 +442,65 @@ final class Deployer extends Base
             return false;
         }
         $this->log(sprintf('<h2>%s nominated %s stuff.</h2>', ucfirst($this->actions[$action]['present']), $environment), 'info');
-
-        $actions = array(
-            'live_site' => $this->actionRequests->can_do($action . '_live_site'),
-            'subdomain' => $this->actionRequests->can_do($action . '_staging_subdomain'),
-            'db' => $this->actionRequests->can_do($action . '_' . $environment . '_db'),
-            'email_filters' => $this->actionRequests->can_do($action . '_' . $environment . '_email_filters'),
-            'version_control' => $this->actionRequests->can_do($action . '_' . $environment . '_version_control'),
-            'wp' => $this->actionRequests->can_do($action . '_' . $environment . '_wp'),
-            'initial_commit' => $this->actionRequests->can_do($action . '_' . $environment . '_initial_git_commit')
-        );
+        $success = [];
 
         //actual site environment and db - logic mess
-        if ($environment == 'live' && $actions['live_site']) {
-            //$live_account = $this->$action . '_live_cpanel_account'();
-            $function_name = $action . '_live_cpanel_account';
-            $live_cpanel_account = $this->$function_name();
-            //$live_account = call_user_func(array($this, $action . '_live_cpanel_account'));
-        } elseif ($action == 'create' && $actions['subdomain'] && $environment == 'staging') {
-            $function_name = $action . '_staging_subdomain';
-            $staging_subdomain = $this->$function_name();
-        }
+        if ($environment == 'live' && $this->actionRequests->can_do($action . '_live_site')) {
+            $cPanelAccount = new cPanelAccount('live', $this->config, $this->terminal('staging'), $this->actionRequests, $this->whm);
+            $success['live_cpanel_account'] = $cPanelAccount->$function_name();
+        } elseif ($action == 'create' && $environment == 'staging' && $this->actionRequests->can_do($action . '_staging_subdomain'))
+            $success['staging_subdomain'] = $this->cPanelSubdomain->$action();
 
-        if ($actions['db'] && ($action == 'create' || $environment == 'staging' || ($action == 'delete' && !$actions['live_site']))) {
+        if ($this->actionRequests->can_do($action . '_' . $environment . '_db')
+            && ($action == 'create' || $environment == 'staging' || ($action == 'delete' && !$this->actionRequests->can_do($action . '_live_site')))) {
             $databaseComponents = new DatabaseComponents($environment, $this->whm);
-            $db = $databaseComponents->$action();
+            $success['db'] = $databaseComponents->$action();
         }
 
         //shared actions
-        if ($actions['email_filters']) {
+        if ($this->actionRequests->can_do($action . '_' . $environment . '_email_filters')) {
             $email_filters = new EmailFilters($environment, $this->whm);
-            $email_filters = $email_filters->$action;
+            $success['email_filters'] = $email_filters->$action();
         }
 
-        if (($action == 'create' && $actions['initial_commit']) || $actions['version_control'])
+        if (($action == 'create' && $this->actionRequests->can_do($action . '_' . $environment . '_initial_git_commit'))
+            || $this->actionRequests->can_do($action . '_' . $environment . '_version_control')) {
             $versionControl = new EnvironVersionControl(
                 $environment,
                 $this->terminal($environment),
                 $this->github,
                 $this->whm
             );
+            if ($this->actionRequests->can_do($action . '_' . $environment . '_version_control'))
+                $success['setup_version_control'] = $versionControl->$action();
+        }
 
-        if ($actions['version_control'])
-            $setupVersionControl = $versionControl->$action();
 
         if ($this->actionRequests->can_do($action . '_' . $environment . '_wp')) {
             $wp = new WordPress($environment, $this->terminal($environment), $this->actionRequests, $this->whm);
-            $wp = $wp->$action();
+            $success['wp'] = $wp->$action();
         }
 
-        if ($action == 'create' && $actions['initial_commit']) {
-            $synced = $versionControl->sync();
-        }
+        if ($action == 'create' && $this->actionRequests->can_do($action . '_' . $environment . '_initial_git_commit'))
+            $success['synced'] = $versionControl->sync();
 
-        if ($action == 'delete' && $actions['subdomain'] && $environment == 'staging') {
-            $function_name = $action . '_staging_subdomain';
-            $staging_subdomain = $this->$function_name();
-        }
+        if ($action == 'delete' && && $environment == 'staging' && $this->actionRequests->can_do($action . '_staging_subdomain'))
+            $success['staging_subdomain'] = $this->cPanelSubdomain->$action();
 
-        if (((!$actions['live_site'] || !empty($live_cpanel_account)) || (!$actions['subdomain'] || !empty($staging_subdomain)))
-            && (!$actions['db'] || !empty($db) || ($action == 'delete' && !empty($live_cpanel_account)))
-            && (!$actions['email_filters'] || !empty($email_filters))
-            && (!$actions['version_control'] || !empty($setupVersionControl))
-            && (!$actions['wp'] || !empty($wp))
-            && (!$actions['initial_commit'] || !empty($synced))
-        ) {
+        $success = !in_array(false, $success) ? true : false;
+
+        if ($success) {
             $this->log(sprintf('Successfully %s nominated %s stuff.', $this->actions[$action]['past'], $environment), 'success');
             return true;
         }
         $this->log(sprintf('Something may have gone wrong while %s nominated %s stuff.', $this->actions[$action]['present'], $environment), 'error');
         return false;
-
-    }
-
-    /**
-     * @return bool
-     */
-    function create_live_cpanel_account()
-    {
-        $this->log("<h4>Creating live cPanel account<h4>", 'info');
-        if (!isset($this->config->environ->live->domain, $this->config->environ->live->cpanel->account->username)) {
-            $this->log("Can't create live cPanel account. Domain and/or cPanel username config missing.", 'error');
-            return false;
-        }
-        $domain = $this->config->environ->live->domain;
-        $username = $this->config->environ->live->cpanel->account->username;
-
-        $this->log(sprintf('First we check if a cPanel account with domain <strong>%s</strong> or username <strong>%s</strong> already exists.',
-            $domain, $username), 'info');
-        if (!empty($this->whm->get_cpanel_account($username))) {
-            $this->log(sprintf("Can't create live cPanel account. cPanel account with user <strong>%s</strong> already exists.", $username), 'error');
-            return false;
-        }
-        if (!empty($this->whm->get_cpanel_account($domain, 'domain'))) {
-            $this->log(sprintf("Can't create live cPanel account. cPanel account with domain <strong>%s</strong> already exists.", $domain), 'error');
-            return false;
-        }
-        $this->log("No pre-existing live cPanel account so let's create a new one.", 'info');
-        $create_account_args = $this->config->environ->live->cpanel->create_account_args ?? array();
-        if ($this->whm->create_cpanel_account($username, $domain, (array)$create_account_args))
-            return true;
-        return false;
-    }
-
-
-    /**
-     * @return bool
-     */
-    private function create_staging_subdomain()
-    {
-        $this->log("<h4>Creating staging subdomain.</h4>", 'info');
-
-        $config = $this->config->environ->staging->cpanel ?? null;
-        $error_string = "Can't create staging cPanel subdomain. ";
-        if (!isset($config->subdomain->slug, $config->accounts)) {
-            $this->log($error_string . "Staging accounts and/or subdomain slug missing.", 'error');
-            return false;
-        }
-        if (empty($config->subdomain->directory)) {
-            $this->log($error_string . "Directory input missing.", 'error');
-            return false;
-        }
-        $staging_cpanel_account = $this->find_staging_cpanel();
-        if ($staging_cpanel_account) {
-            $this->log(sprintf("%sSubdomain with slug <strong>%s</strong> already exists in cPanel account with user <strong>%s</strong>. ",
-                $error_string, $config->subdomain->slug, $staging_cpanel_account['user']), 'warning');
-            return false;
-        }
-        //search for the lowest # staging cPanel account with enough available space and inodes
-        $staging_cpanel_key = $this->decide_subdomain_cpanel_account($config->accounts);
-
-        if (empty($staging_cpanel_key)) {
-            $this->log(sprintf("%s Couldn't find staging cPanel account to use.", $error_string), 'error');
-            return false;
-        }
-        $this->log(sprintf("Subdomain with slug <strong>%s</strong> doesn't exist so attempt to create a new subdomain.", $config->subdomain->slug), 'success');
-
-        if ($this->whm->create_subdomain($config->subdomain->slug, $config->accounts->$staging_cpanel_key->domain, $config->subdomain->directory)) {
-            $this->log('', 'success');
-            return true;
-        }
-        $this->log('Something went wrong creating staging subdomain.');
-        return false;
-
     }
 
     /**
      * @param string $action
      */
-    function localStuff($action = 'create')
+    public function doLocalStuff($action = 'create')
     {
         if ($this->actionRequests->can_do($action . "_local_version_control") ||
             ($action == 'create' && $this->actionRequests->can_do("create_local_initial_git_commit")))
@@ -588,15 +519,15 @@ final class Deployer extends Base
             $domain = $this->config->environ->local->domain ?? '';
             $sitesAvailable = $this->config->environ->local->dirs->sites_available->path ?? '';
 
-            $webDir = $this->get_environ_dir('local', 'web');
+            $webDir = $this->getEnvironDir('local', 'web');
             $webOwner = $this->config->environ->local->dirs->web->owner ?? '';
             $webGroup = $this->config->environ->local->dirs->web->group ?? '';
 
-            $logDir = $this->get_environ_dir('local', 'log');
+            $logDir = $this->getEnvironDir('local', 'log');
 
             $localDirSetup = $this->terminal('local')->LocalProjectDirSetup();
             $localDirSetup->setProjectArgs([
-                'dir' => $this->get_environ_dir('local', 'project') ?? '',
+                'dir' => $this->getEnvironDir('local', 'project') ?? '',
                 'owner' => $this->config->environ->local->dirs->project->owner ?? '',
                 'group' => $this->config->environ->local->dirs->project->group ?? '',
             ]);
@@ -665,46 +596,11 @@ final class Deployer extends Base
         }
     }
 
-
-    /**
-     * @param string $subdomain_slug
-     * @param $cpanel_accounts
-     * @return bool
-     */
-    function find_staging_cpanel(string $subdomain_slug = '', array $cpanel_accounts = array())
-    {
-        $error_string = "Can't find staging cPanel subdomain.";
-        if (!empty($this->staging_cpanel_account))
-            return $this->staging_cpanel_account;
-        if (empty($subdomain_slug)) {
-            if (empty($this->config->environ->staging->cpanel->subdomain->slug)) {
-                $this->log($error_string . " cPanel subdomain slug missing.");
-                return false;
-            }
-            $subdomain_slug = $this->config->environ->staging->cpanel->subdomain->slug;
-        }
-        if (empty($cpanel_accounts)) {
-            if (empty($this->config->environ->staging->cpanel->accounts)) {
-                $this->log($error_string . " cPanel accounts to search missing.");
-                return false;
-            }
-            $cpanel_accounts = $this->config->environ->staging->cpanel->accounts;
-        }
-        foreach ($cpanel_accounts as $key => $cpanel_account) {
-            $subdomain = $this->whm->get_subdomain($subdomain_slug, $cpanel_account->username);
-            if ($subdomain) {
-                $cpanel_account = $this->whm->get_cpanel_account($subdomain['user']);
-                return $this->staging_cpanel_account = $cpanel_account;
-            }
-        }
-        return false;
-    }
-
     /**
      * @param string $environment
      * @return bool
      */
-    function find_environ_cpanel(string $environment = 'live')
+    function findEnvironcPanel(string $environment = 'live')
     {
         $error_string = sprintf("Can't find %s environment cPanel.", $environment);
         switch ($environment) {
@@ -715,7 +611,7 @@ final class Deployer extends Base
                     $this->log($error_string . " Domain and/or cPanel username are missing from config.", 'error');
                     return false;
                 }
-                $cPanel_account = $this->find_cpanel_account($cpanel_domain, $cpanel_username);
+                $cPanel_account = $this->findcPanelAccount($cpanel_domain, $cpanel_username);
                 break;
             case 'staging':
                 $slug = $this->config->environ->staging->cpanel->subdomain->slug ?? '';
@@ -723,165 +619,14 @@ final class Deployer extends Base
                     $this->log($error_string . " Staging cPanel subdomain slug missing from config.", 'error');
                     return false;
                 }
-                $cPanel_account = $this->find_staging_cpanel();
+                $cPanel_account = $this->cPanelSubdomain->findSubdomaincPanel();
                 break;
         }
         return $cPanel_account ?? false;
     }
 
-    /**
-     * @param $cpanel_accounts
-     * @return bool|int|string
-     */
-    function decide_subdomain_cpanel_account($cpanel_accounts)
-    {
-        if (empty($cpanel_accounts))
-            return false;
-        $min_inodes = $this->config->environ->staging->cpanel->subdomain->min_inodes ?? 25000;
-        $min_megabytes = $this->config->environ->staging->cpanel->subdomain->min_megabytes ?? 2500;
 
-        foreach ($cpanel_accounts as $key => $account) {
-            $quota = $this->whm->get_quota_info($account->username);
 
-            $log_chunk = sprintf(' add the staging subdomain to the cPanel account with domain <strong>%s</strong> and username <strong>%s</strong>.',
-                $account->domain, $account->username);
-
-            if (empty($quota['inodes_remain']) || empty($quota['megabytes_remain'])) {
-                $this->log("Can't" . $log_chunk . " Couldn't find out its quotas.");
-                continue;
-            }
-            $log_criteria = '<li>It has <strong>%s</strong>%s available which is <span style="text-decoration:underline;">%s</span> than the minimum of <strong>%s</strong>.</li>';
-            $inodes_operator = $quota['inodes_remain'] >= $min_inodes ? 'more' : 'less';
-            //if ( $quota[ 'inodes_remain' ] >= $min_inodes ) $inodes_operator = 'more';
-            //else $inodes_operator = 'less';
-            $MB_operator = $quota['megabytes_remain'] >= $min_megabytes ? 'more' : 'less';
-            //if ( $quota[ 'megabytes_remain' ] >= $min_megabytes ) $MB_operator = 'more';
-            //else $MB_operator = 'less';
-            $log = '<ul>' . sprintf($log_criteria, $quota['inodes_remain'], ' inodes', $inodes_operator, $min_inodes) .
-                sprintf($log_criteria, $quota['megabytes_remain'], 'MB', $MB_operator, $min_megabytes) . '</ul>';
-
-            if (strpos($log, 'less') === false) {
-                $this->log("Can" . $log_chunk . $log, 'success');
-                return $this->staging_cpanel_key = $key;
-            } else {
-                $this->log("Can't" . $log_chunk . $log);
-            }
-        }
-        return false;
-    }
-
-    /**
-     * @return bool
-     */
-    private function delete_live_cpanel_account()
-    {
-        //find cPanel account
-        $error_string = "Can't delete live cPanel account. ";
-        if (!isset($this->config->environ->live->domain, $this->config->environ->live->cpanel->account->username)) {
-            $this->log($error_string . "Live cPanel domain and/or username missing.", 'error');
-            return false;
-        }
-
-        $domain = $this->config->environ->live->domain;
-        $username = $this->config->environ->live->cpanel->account->username;
-        $this->log(sprintf('<h4>Deleting live cPanel account.</h4>First we check for existence of the live site cPanel account with domain <strong>%s</strong> and/or username <strong>%s</strong>.', $domain, $username), 'info');
-
-        $cPanel_account = $this->find_cpanel_account($domain, $username);
-        if (!$cPanel_account) {
-            $this->log(sprintf($error_string . "Apparently account with domain <strong>%s</strong> and username <strong>%s</strong> doesn't exist.", $domain, $username), 'warning');
-            return false;
-        }
-        if (!empty($this->whm->protected_accounts)) {
-            foreach ($this->whm->protected_accounts as $protected_account) {
-                if ($protected_account['username'] == $cPanel_account['username'] || $protected_account['domain'] == $cPanel_account['domain']) {
-                    $this->log($error_string . "It was flagged as protected.", 'error');
-                    return false;
-                }
-            }
-        }
-        if ($this->whm->delete_cpanel_account($cPanel_account['domain'], 'domain')) {
-            $this->log('Successfully deleted live site cPanel account.', 'success');
-            return true;
-        }
-        $this->log('Failed to delete live site cPanel account.', 'error');
-        return false;
-    }
-
-    /**
-     * @param $domain
-     * @param $username
-     * @param string $operator
-     * @return bool
-     */
-    function find_cpanel_account($domain, $username, $operator = 'AND')
-    {
-        if (!isset($domain, $username)) {
-            $this->log("Can't find cPanel account. Domain and/or username input missing. If you only have one or the other just use WHM get_cpanel_account method. ");
-            return false;
-        }
-        $cPanel_account = $this->whm->get_cpanel_account($username);
-        if (empty($cPanel_account))
-            $cPanel_account = $this->whm->get_cpanel_account($domain, 'domain');
-        if (empty($cPanel_account)) {
-            $this->log(sprintf("Can't find existing cPanel with domain <strong>%s</strong> and/or username <strong>%s</strong>.", $domain, $username), 'info');
-            return false;
-        }
-        if ($cPanel_account['domain'] != $domain) {
-            if ($operator == 'AND') {
-                $this->log(sprintf("Found cPanel account with matching username <strong>%s</strong> but different domain name. Domain is <strong>%s</strong>, searched for <strong>%s</strong>.",
-                    $username, $cPanel_account['domain'], $domain), 'error');
-                return false;
-            }
-            return $cPanel_account;
-        }
-        if ($cPanel_account['user'] != $username) {
-            if ($operator == 'AND') {
-                $this->log(sprintf("Found cPanel account with matching domain <strong>%s</strong> but different username. Username is <strong>%s</strong>, searched for <strong>%s</strong>.",
-                    $domain, $cPanel_account['user'], $username), 'error');
-                return false;
-            }
-            return $cPanel_account;
-        }
-        return $cPanel_account;
-    }
-
-    /**
-     * @return bool
-     */
-    function delete_staging_subdomain()
-    {
-        $this->log("<h4>Deleting cPanel subdomain for staging site.</h4>", 'info');
-        if (empty($this->config->environ->staging->cpanel->subdomain->slug)) {
-            $this->log("Can't delete staging site cPanel subdomain. Subdomain slug missing.", 'error');
-            return false;
-        }
-        $slug = $this->config->environ->staging->cpanel->subdomain->slug;
-        $error_string = "Can't delete staging site cPanel subdomain <strong>" . $slug . "</strong>. ";
-
-        //check subdomain exists to delete.
-        $staging_cpanel_account = $this->find_staging_cpanel();
-
-        if (empty($staging_cpanel_account)) {
-            $this->log($error_string . sprintf("Apparently subdomain <strong>%s</strong> doesn't exist in your staging cPanel accounts.", $slug), 'error');
-            return false;
-        }
-
-        $this->log(sprintf("Deleting staging site subdomain <strong>%s</strong> in cPanel account with username <strong>%s</strong>.",
-            $slug, $staging_cpanel_account['user']), 'info');
-        $deleted_subdomain = $this->whm->delete_subdomain($slug);
-
-        $directory = $this->get_environ_dir('staging', 'web');
-        if (!empty($directory)) {
-            $deletedSubdomainDirectory = $this->terminal('staging')->ssh->delete($directory);
-            $prunedSubdomainDirectoryTree = $this->terminal('staging')->dir()->prune(dirname($directory));
-        }
-        if (!empty($deleted_subdomain) && !empty($deletedSubdomainDirectory) && !empty($prunedSubdomainDirectoryTree)) {
-            return true;
-        }
-        $this->log(sprintf("Something went wrong deleting subdomain in account with user <strong>%s</strong>.", $staging_cpanel_account['user']), 'error');
-        return false;
-
-    }
 
     /**
      * @param string $action
@@ -912,12 +657,13 @@ final class Deployer extends Base
      * @param bool $prefix
      * @return bool|string
      */
-    function get_environ_url(string $environ = 'live', bool $scheme = false, bool $prefix = false)
+    public function getEnvironURL(string $environ = 'live', bool $scheme = false, bool $prefix = false)
     {
+
         $error_string = sprintf("Can't get %s environment url.", $environ);
         switch ($environ) {
             case 'staging':
-                $staging_cpanel = $this->find_staging_cpanel();
+                $staging_cpanel = $this->cPanelSubdomain->findSubdomaincPanel();
                 if (!$staging_cpanel)
                     return false;
                 $slug = $this->config->environ->staging->cpanel->subdomain->slug ?? '';
@@ -938,6 +684,7 @@ final class Deployer extends Base
                 $url = $this->config->environ->$environ->domain;
                 break;
         }
+
         if ($prefix && !empty($this->config->environ->$environ->www)) {
             $url = 'www.' . $url;
         }
@@ -955,7 +702,7 @@ final class Deployer extends Base
      * @param string $type
      * @return bool|string
      */
-    function get_environ_dir(string $environ = 'live', $type = 'web')
+    public function getEnvironDir(string $environ = 'live', $type = 'web')
     {
         if (empty($environ))
             return false;
@@ -1066,8 +813,10 @@ final class Deployer extends Base
     /**
      * @return array
      */
-    function getWHMDiskSpace()
+    public function getWHMDiskSpace()
     {
+        if (empty($this->whm))
+            return false;
         $accounts = $this->whm->get_cpanel_accounts();
         $diskused = 0;
         $disklimit = 0;
@@ -1088,11 +837,11 @@ final class Deployer extends Base
      * @param string $environment
      * @return bool
      */
-    function updateWP($environment = 'live')
+    public function updateWP($environment = 'live')
     {
         $mainStr = sprintf(" WordPress in %s environment. ", $environment);
         $this->log('<h2>Updating ' . $mainStr . '</h2>', 'info');
-        $directory = $this->get_environ_dir($environment, 'web');
+        $directory = $this->getEnvironDir($environment, 'web');
         $errorString = "Can't update " . $mainStr;
         if (empty($directory)) {
             $this->log($errorString . " Couldn't get web directory.");
@@ -1119,21 +868,6 @@ final class Deployer extends Base
         }
         $this->log(sprintf('Failed to update WordPress in %s environment.', $environment));
         return false;
-    }
-
-    /**
-     * @return array
-     */
-    function get_staging_subdomains()
-    {
-        $domains = array();
-        if (!empty($this->config->environ->staging->cpanel->accounts)) {
-            foreach ($this->config->environ->staging->cpanel->accounts as $account) {
-                if (isset($account->domain, $account->username))
-                    $domains[$account->domain] = $this->whm->list_domains($account->username)['sub_domains'];
-            }
-        }
-        return $domains;
     }
 }
 

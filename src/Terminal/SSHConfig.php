@@ -14,6 +14,8 @@ class SSHConfig extends AbstractTerminal
     protected $logElement = 'h4';
 
     /**
+     * Adds an entry to the SSH config file
+     *
      * @param string $host
      * @param string $hostname
      * @param string $key_name

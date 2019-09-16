@@ -103,7 +103,7 @@ class DatabaseComponents extends AbstractDeployer
 
         if ($environ != 'local') {
 
-            $args['cpanel_account'] = ph_d()->find_environ_cpanel($environ);
+            $args['cpanel_account'] = ph_d()->findEnvironcPanel($environ);
             if (!$args['cpanel_account'])
                 return $this->logError(sprintf("Couldn't find %s cPanel account.", $environ));
         }
