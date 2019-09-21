@@ -5,6 +5,7 @@ namespace Phoenix;
 
 /**
  * Class EnvironVersionControl
+ *
  * @package Phoenix\Terminal
  */
 class EnvironVersionControl extends AbstractDeployer
@@ -14,6 +15,11 @@ class EnvironVersionControl extends AbstractDeployer
      * @var string
      */
     public $environ;
+
+    /**
+     * @var
+     */
+    private $config;
 
     /**
      * @var string
@@ -37,15 +43,17 @@ class EnvironVersionControl extends AbstractDeployer
 
     /**
      * EnvironVersionControl constructor.
-     * @param TerminalClient $terminal
-     * @param GithubClient $github
+     *
+     * @param Environ|cPanelAccount|cPanelSubdomain $environ
+     * @param $config
+     * @param TerminalClient|null $terminal
+     * @param GithubClient|null $github
      * @param WHM|null $whm
-     * @param string $environ
      */
-    function __construct($environ = 'live', TerminalClient $terminal = null, GithubClient $github = null, WHM $whm = null)
+    public function __construct($environ, $config, TerminalClient $terminal = null, GithubClient $github = null, WHM $whm = null)
     {
         $this->environ = $environ;
-        $this->logElement = 'h3';
+        $this->config = $config;
         $this->terminal = $terminal;
         $this->github = $github;
         $this->whm = $whm;
@@ -56,7 +64,7 @@ class EnvironVersionControl extends AbstractDeployer
      * @return bool|null
      * @throws \Github\Exception\MissingArgumentException
      */
-    function create()
+    public function create(): ?bool
     {
         $this->mainStr();
         $this->logStart();
@@ -69,28 +77,29 @@ class EnvironVersionControl extends AbstractDeployer
 
         $upstream_repository = $this->github->repo()->get($args['repo']['name']);
         if (!$upstream_repository)
-            return $this->logError("Upstream repository not found.");
-        if ($this->environ != 'local') {
+            return $this->logError('Upstream repository not found.');
+        if ($this->environ->name !== 'local') {
             $sshKey = $this->whm->genkey($args['key']['name'], $args['key']['passphrase'], 2048, $args['cPanel_account']['user']);
-            if (!empty($sshKey)) {
-                $authorisedKey = $this->whm->authkey($args['key']['name'], 'authorize', $args['cPanel_account']['user']);
-                $addedSSHConfig = $this->terminal->ssh_config()->create($args['key']['name'], 'github.com', $args['key']['name'], 'git');
+            $success['sshKey'] = !empty($sshKey) ? true : false;
+            if ($success['sshKey']) {
+                $success['authorisedKey'] = $this->whm->authkey($args['key']['name'], 'authorize', $args['cPanel_account']['user']);
+                $success['addedSSHConfig'] = $this->terminal->ssh_config()->create($args['key']['name'], 'github.com', $args['key']['name'], 'git');
             }
 
-            $uploadedDeployKey = $this->github->deploy_key()->upload($args['repo']['name'], $args['key']['title'], $sshKey['key']);
+            $success['uploadedDeployKey'] = $this->github->deploy_key()->upload($args['repo']['name'], $args['key']['title'], $sshKey['key']);
             $sourceRepository = json_encode((object)[
                 'url' => str_replace('git@github.com', $args['key']['name'], $upstream_repository['ssh_url']),
-                'remote_name' => "origin"
+                'remote_name' => 'origin'
             ]);
 
-            $clonedRepository = $this->whm->version_control('clone',
+            $success['clonedRepository'] = $this->whm->version_control('clone',
                 $args['repo']['dir'],
                 $args['repo']['downstream_name'],
                 $sourceRepository,
                 $args['cPanel_account']['user']
             );
-            if (!$clonedRepository)
-                $clonedRepository = $this->whm->version_control('get', $args['repo']['dir'], $args['cPanel_account']['user']);
+            if (!$success['clonedRepository'])
+                $success['clonedRepository'] = $this->whm->version_control('get', $args['repo']['dir'], $args['cPanel_account']['user']);
 
         } else {
             $localDirSetup = $this->terminal->localProjectDirSetup();
@@ -105,7 +114,7 @@ class EnvironVersionControl extends AbstractDeployer
 
             if ($localDirSetup->create($webDirArgs)) {
 
-                $clonedRepository = $this->terminal->git()->clone([
+                $success['clonedRepository'] = $this->terminal->git()->clone([
                     //'url' => str_replace('git@github.com', 'github', $upstream_repository['ssh_url']),
                     'url' => $upstream_repository['ssh_url'],
                     'worktree_path' => $args['repo']['worktree'],
@@ -116,65 +125,46 @@ class EnvironVersionControl extends AbstractDeployer
 
         }
 
+        if (!empty($success['clonedRepository']) && $this->terminal->git()->waitForUnlock($args['repo']['dir'])) {
+            if ($args['repo']['worktree'] !== $args['repo']['dir'])
+                $success['createdDotGit'] = $this->terminal->dotGitFile()->create($args['repo']['worktree'], $args['repo']['dir']);
 
-        if (!empty($clonedRepository) && $this->terminal->git()->waitForUnlock($args['repo']['dir'])) {
-            if ($args['repo']['worktree'] != $args['repo']['dir'])
-                $createdDotGit = $this->terminal->dotGitFile()->create($args['repo']['worktree'], $args['repo']['dir']);
-            else
-                $createdDotGit = true;
-            if ($this->environ != 'local')
-                $purgedGit = $this->terminal->git()->purge($args['repo']['dir']);
-            $createdGitignore = $this->terminal->gitignore()->create($args['repo']['worktree']);
-            if ($this->environ != 'local')
-                $resetGit = $this->terminal->gitBranch()->reset(['worktree' => $args['repo']['worktree'], 'branch' => 'master']);
+            if ($this->environ->name !== 'local')
+                $success['purgedGit'] = $this->terminal->git()->purge($args['repo']['dir']);
+            $success['createdGitignore'] = $this->terminal->gitignore()->create($args['repo']['worktree']);
+            if ($this->environ->name !== 'local')
+                $success['resetGit'] = $this->terminal->gitBranch()->reset(['worktree' => $args['repo']['worktree'], 'branch' => 'master']);
 
         }
 
-
-        if ($this->environ == 'staging') { //webhook
-            $webhook_config = $this->terminal->githubWebhookEndpointConfig()->create(
+        if ($this->environ->name === 'staging') { //webhook
+            $success['webhook_config'] = $this->terminal->githubWebhookEndpointConfig()->create(
                 $args['webhook']['endpoint_config_dir'],
                 $args['repo']['worktree'],
                 $args['webhook']['secret']
             );
-            $webhook = $this->github->webhook()->create(
+            $success['webhook'] = $this->github->webhook()->create(
                 $args['repo']['name'],
                 $args['webhook']['url'],
                 $args['webhook']['secret']
             );
         }
 
-        $setGitUserConfig = $this->terminal->git()->setGitUser([
+        $success['setGitUserConfig'] = $this->terminal->git()->setGitUser([
             'worktree_path' => $args['repo']['worktree'],
             'repo_path' => $args['repo']['dir'],
             'config_user' => $args['config']['user'],
             'config_email' => $args['config']['email']
         ]);
 
-        $success = (
-            ($this->environ == 'local' || (
-                    !empty($sshKey)
-                    && !empty($authorisedKey)
-                    && !empty($addedSSHConfig)
-                    && !empty($uploadedDeployKey)
-                    && !empty($purgedGit)
-                    && !empty($resetGit)
-                ))
-            && !empty($clonedRepository)
-            && !empty($createdDotGit)
-            && !empty($createdGitignore)
-            && !empty($setGitUserConfig)
-            && ($this->environ != 'staging' || (!empty($webhook) && !empty($webhook_config)))
-        ) ? true : false;
-
-
+        $success = !in_array(false, $success, true) ? true : false;
         return $this->logFinish($success);
     }
 
     /**
      * @return bool|null
      */
-    function delete()
+    public function delete(): ?bool
     {
         $this->mainStr();
         $this->logStart();
@@ -185,50 +175,34 @@ class EnvironVersionControl extends AbstractDeployer
             return $this->logError("Couldn't get args");
 
 
-        if ($this->environ != 'local') {
-            $downstream_repository = $this->whm->version_control('delete', $args['repo']['dir'], '', '', $args['cPanel_account']['user']);
-            $sshKey = $this->whm->delkey($args['key']['name'], $args['cPanel_account']['user']);
-            $deployKey = $this->github->deploy_key()->remove($args['repo']['name'], $args['key']['title']);
-            $sshConfig = $this->terminal->ssh_config()->delete('github_' . $args['repo']['name']);
+        if ($this->environ->name !== 'local') {
+            $success['downstream_repository'] = $this->whm->version_control('delete', $args['repo']['dir'], '', '', $args['cPanel_account']['user']);
+            $success['sshKey'] = $this->whm->delkey($args['key']['name'], $args['cPanel_account']['user']);
+            $success['deployKey'] = $this->github->deploy_key()->remove($args['repo']['name'], $args['key']['title']);
+            $success['sshConfig'] = $this->terminal->ssh_config()->delete('github_' . $args['repo']['name']);
         }
 
-        $gitignore = $this->terminal->gitignore()->delete($args['repo']['worktree']);
+        $success['gitignore'] = $this->terminal->gitignore()->delete($args['repo']['worktree']);
 
-        $deleted_git_folder = $this->terminal->git()->delete($args['repo']['dir']);
+        $success['deleted_git_folder'] = $this->terminal->git()->delete($args['repo']['dir']);
 
 
-        if ($this->environ == 'staging') { //webhook
-            $webhook = $this->github->webhook()->remove($args['repo']['name'], $args['webhook']['url']);
-            $webhook_config = $this->terminal->githubWebhookEndpointConfig()->delete($args['webhook']['endpoint_config_dir']);
+        if ($this->environ->name === 'staging') { //webhook
+            $success['webhook'] = $this->github->webhook()->remove($args['repo']['name'], $args['webhook']['url']);
+            $success['webhook_config'] = $this->terminal->githubWebhookEndpointConfig()->delete($args['webhook']['endpoint_config_dir']);
         }
 
-        if ($args['repo']['worktree'] != $args['repo']['dir'])
-            $dotGit = $this->terminal->dotGitFile()->delete($args['repo']['worktree']);
-        else
-            $dotGit = true;
-        $success = (
-            ($this->environ == 'local' || (
-                    !empty($downstream_repository)
-                    && !empty($sshKey)
-                    && !empty($deployKey)
-                    && !empty($sshConfig)
-                ))
-            && !empty($gitignore)
-            && !empty($deleted_git_folder)
-            && ($this->environ != 'staging' || (
-                    !empty($webhook)
-                    && !empty($webhook_config))
-            )
-            && !empty($dotGit)
-        ) ? true : false;
+        if ($args['repo']['worktree'] !== $args['repo']['dir'])
+            $success['dotGit'] = $this->terminal->dotGitFile()->delete($args['repo']['worktree']);
 
+        $success = !in_array(false, $success, true) ? true : false;
         return $this->logFinish($success);
     }
 
     /**
      * @return bool|null
      */
-    function sync()
+    public function sync(): ?bool
     {
         $this->mainStr();
         $this->logStart();
@@ -237,34 +211,33 @@ class EnvironVersionControl extends AbstractDeployer
         $args = $this->getArgs();
         if (!$args)
             return false;
-        $environ = $this->environ;
 
         $gitBranch = $this->terminal->gitBranch();
 
         $args['repo']['branch'] = 'master';
-        $args['repo']['message'] = 'initial Deployer auto commit from ' . $environ . ' environment';
-        $committedCurrent = $gitBranch->commit($args['repo']);
-        $pulledCurrent = $gitBranch->pull($args['repo']);
+        $args['repo']['message'] = 'initial Deployer auto commit from ' . $this->environ->name . ' environment';
+        $success['committedCurrent'] = $gitBranch->commit($args['repo']);
+        $success['pulledCurrent'] = $gitBranch->pull($args['repo']);
 
-        if ($environ != 'live') {
+        if ($this->environ->name !== 'live') {
             $args['repo']['branch'] = 'dev';
             $gitBranch->checkout($args['repo']);
             $args['repo']['stream'] = 'up';
             $args['repo']['message'] = 'create dev branch';
             if ($gitBranch->check($args['repo']))
-                $syncDevBranch = $gitBranch->pull($args['repo']);
+                $success['syncDevBranch'] = $gitBranch->pull($args['repo']);
             else
-                $syncDevBranch = $gitBranch->commit($args['repo']);
+                $success['syncDevBranch'] = $gitBranch->commit($args['repo']);
         }
 
-        $success = !empty($committedCurrent) && !empty($pulledCurrent) && ($environ != 'live' || !empty($syncDevBranch)) ? true : false;
+        $success = !in_array(false, $success, true) ? true : false;
         return $this->logFinish($success);
     }
 
     /**
      * @return bool
      */
-    function validate()
+    private function validate(): bool
     {
         return true;
     }
@@ -272,49 +245,49 @@ class EnvironVersionControl extends AbstractDeployer
     /**
      * @return bool
      */
-    protected function getArgs()
+    protected function getArgs(): bool
     {
-        $environ = $this->environ;
+        $environName = $this->environ->name;
         /*
         $root = $this->terminal->root;
         if (empty($root))
-            return $this->logError(sprintf("Couldn't get %s environment root directory.", $environ));
+            return $this->logError(sprintf("Couldn't get %s environment root directory.", $environName));
 */
-        $args['repo']['name'] = ph_d()->config->version_control->repo_name ?? '';
+        $args['repo']['name'] = $this->config->version_control->repo_name ?? '';
         if (empty($args['repo']['name']))
-            return $this->logError("Repository name is missing from config.");
-        $args['repo']['dir'] = ph_d()->getEnvironDir($environ, 'git');
+            return $this->logError('Repository name is missing from config.');
+        $args['repo']['dir'] = $this->environ->getEnvironDir('git');
         $args['repo']['downstream_name'] = $args['repo']['name'] . '_website';
-        $args['repo']['worktree'] = ph_d()->getEnvironDir($environ, 'worktree');
+        $args['repo']['worktree'] = $this->environ->getEnvironDir('worktree');
 
-        $args['repo']['owner'] = ph_d()->config->environ->$environ->dirs->web->owner ?? '';
-        $args['repo']['group'] = ph_d()->config->environ->$environ->dirs->web->group ?? '';
+        $args['repo']['owner'] = $this->config->environ->$environName->dirs->web->owner ?? '';
+        $args['repo']['group'] = $this->config->environ->$environName->dirs->web->group ?? '';
 
 
-        if ($environ != 'local') {
-            $args['cPanel_account'] = ph_d()->findEnvironcPanel($environ);
+        if ($this->environ->name !== 'local') {
+            $args['cPanel_account'] = $this->environ->findcPanel();
             if (empty($args['cPanel_account']))
-                return $this->logError(sprintf("Couldn't find %s cPanel account.", $environ));
+                return $this->logError(sprintf("Couldn't find %s cPanel account.", $this->environ->name));
 
-            $args['key']['name'] = ph_d()->config->environ->$environ->ssh_keys->version_control_deploy_key->key_name ?? '';
+            $args['key']['name'] = $this->config->environ->$environName->ssh_keys->version_control_deploy_key->key_name ?? '';
             $args['key']['passphrase'] = '';
-            $args['key']['title'] = ucfirst($environ) . ' cPanel';
+            $args['key']['title'] = ucfirst($environName) . ' cPanel';
 
-            if ($environ == 'staging') {
+            if ($this->environ->name === 'staging') {
                 $args['webhook']['url'] = 'https://' . $args['cPanel_account']['domain'] . '/github-webhook.php?github=yes';
-                $args['webhook']['endpoint_config_dir'] = ph_d()->getEnvironDir($environ, 'github_webhook_endpoint_config') . '/' . $args['repo']['name'] . '.json';
-                $args['webhook']['secret'] = ph_d()->config->version_control->github->webhook->secret ?? '';
+                $args['webhook']['endpoint_config_dir'] = $this->environ->getEnvironDir('github_webhook_endpoint_config') . '/' . $args['repo']['name'] . '.json';
+                $args['webhook']['secret'] = $this->config->version_control->github->webhook->secret ?? '';
             }
         } else {
             $args['project'] = [
-                'dir' => ph_d()->getEnvironDir('local', 'project') ?? '',
-                'owner' => ph_d()->config->environ->$environ->dirs->project->owner ?? '',
-                'group' => ph_d()->config->environ->$environ->dirs->project->group ?? '',
+                'dir' => $this->environ->getEnvironDir('project') ?? '',
+                'owner' => $this->config->environ->$environName->dirs->project->owner ?? '',
+                'group' => $this->config->environ->$environName->dirs->project->group ?? '',
             ];
         }
 
-        $args['config']['user'] = ph_d()->config->environ->$environ->version_control->config->user ?? ph_d()->config->version_control->config->user ?? '';
-        $args['config']['email'] = ph_d()->config->environ->$environ->version_control->config->email ?? ph_d()->config->version_control->config->email ?? '';
+        $args['config']['user'] = $this->config->environ->$environName->version_control->config->user ?? $this->config->version_control->config->user ?? '';
+        $args['config']['email'] = $this->config->environ->$environName->version_control->config->email ?? $this->config->version_control->config->email ?? '';
 
         return $args;
     }
@@ -324,13 +297,11 @@ class EnvironVersionControl extends AbstractDeployer
     /**
      * @return string
      */
-    protected function mainStr()
+    protected function mainStr(): string
     {
         $action = $this->getCaller();
-        if (func_num_args() == 0) {
-            if (!empty($this->_mainStr[$action]))
-                return $this->_mainStr[$action];
-        }
-        return $this->_mainStr[$action] = sprintf('%s version control components', $this->environ);
+        if (!empty($this->_mainStr[$action]) && func_num_args() === 0)
+            return $this->_mainStr[$action];
+        return $this->_mainStr[$action] = sprintf('%s version control components', $this->environ->name);
     }
 }

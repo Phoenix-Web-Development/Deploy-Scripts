@@ -24,8 +24,8 @@ class AbstractGithub extends BaseAbstract
      */
     public function __construct(GithubClient $client)
     {
-        parent::__construct();
         $this->client = $client;
+        parent::__construct();
     }
 
     /**
@@ -34,7 +34,7 @@ class AbstractGithub extends BaseAbstract
      */
     protected function client(GithubClient $client = null)
     {
-        if (func_num_args() == 0) {
+        if (func_num_args() === 0) {
             if (!empty($this->_client))
                 return $this->_client;
             return false;

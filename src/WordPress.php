@@ -4,6 +4,7 @@ namespace Phoenix;
 
 /**
  * Class WordPress
+ *
  * @package Phoenix
  */
 class WordPress extends AbstractDeployer
@@ -14,9 +15,19 @@ class WordPress extends AbstractDeployer
     private $actionRequests;
 
     /**
+     * @var
+     */
+    private $config;
+
+    /**
+     * @var cPanelAccount|cPanelSubdomain|Environ
+     */
+    private $environ;
+
+    /**
      * @var string
      */
-    public $environ;
+    private $liveURL;
 
     /**
      * @var string
@@ -36,21 +47,36 @@ class WordPress extends AbstractDeployer
     /**
      * WordPress constructor.
      *
-     * @param string $environ
+     * @param cPanelAccount|cPanelSubdomain|Environ $environ
+     * @param $config
      * @param TerminalClient|null $terminal
-     * @param WHM|null $whm
      * @param ActionRequests|null $actionRequests
+     * @param WHM|null $whm
+     * @param string $liveURL
      */
-    function __construct($environ = 'live', TerminalClient $terminal = null, ActionRequests $actionRequests = null, WHM $whm = null)
+    public function __construct(
+        $environ,
+        $config,
+        TerminalClient $terminal = null,
+        ActionRequests $actionRequests = null,
+        string $liveURL = '',
+        WHM $whm = null
+    )
     {
         $this->environ = $environ;
+        $this->config = $config;
         $this->terminal = $terminal;
-        $this->whm = $whm;
         $this->actionRequests = $actionRequests;
+        $this->whm = $whm;
+
+        $this->liveURL = $liveURL;
         parent::__construct();
     }
 
-    function create()
+    /**
+     *
+     */
+    public function create(): void
     {
         $this->install();
     }
@@ -58,7 +84,7 @@ class WordPress extends AbstractDeployer
     /**
      * @return bool|null
      */
-    function install()
+    public function install(): ?bool
     {
         $this->mainStr();
         $this->logStart();
@@ -73,16 +99,16 @@ class WordPress extends AbstractDeployer
         $wp = $this->terminal->wp();
         $success['download'] = $wp->download($args);
 
-        if ($this->actionRequests->can_do('create_' . $this->environ . '_wp_config')) {
+        if ($this->actionRequests->canDo('create_' . $this->environ->name . '_wp_config')) {
             $success['config'] = $wp->setupConfig($args);
         }
 
-        if ($this->actionRequests->can_do('create_' . $this->environ . '_wp_install')) {
+        if ($this->actionRequests->canDo('create_' . $this->environ->name . '_wp_install')) {
 
             $success['install'] = $wp->install($args);
 
             if ($success['install']) {
-                $wp_blog_public = $this->environment == 'live' ? 1 : 0;
+                $wp_blog_public = $this->environ->name === 'live' ? 1 : 0;
                 $setOptions = array(
                     array('name' => 'default_comment_status', 'value' => 'closed'),
                     array('name' => 'blog_public', 'value' => $wp_blog_public),
@@ -97,11 +123,10 @@ class WordPress extends AbstractDeployer
                     $args['option'] = $option;
                     $success['setOptions'][] = $wp->setOption($args);
                 }
-                $success['setOptions'] = !in_array(false, $success['setOptions']) ? true : false;
+                $success['setOptions'] = !in_array(false, $success['setOptions'], true) ? true : false;
 
-                if!empty($args['options']['fresh_install']) {
 
-                }
+                //if (!empty($args['options']['fresh_install'])) {}
 
 
                 $success['setRewriteRules'] = $wp->setRewriteRules($args);
@@ -115,18 +140,18 @@ class WordPress extends AbstractDeployer
         }
 
 
-        if ($this->actionRequests->can_do('create_' . $this->environ . '_wp_htaccess')) {
+        if ($this->actionRequests->canDo('create_' . $this->environ->name . '_wp_htaccess')) {
             $success['htaccess'] = $this->terminal->htaccess()->prepend($args);
         }
 
-        $success = !in_array(false, $success) ? true : false;
+        $success = !in_array(false, $success, true) ? true : false;
         return $this->logFinish($success);
     }
 
     /**
      * @return bool|null
      */
-    function delete()
+    public function delete(): ?bool
     {
         $this->mainStr();
         $this->logStart();
@@ -138,7 +163,7 @@ class WordPress extends AbstractDeployer
 
         $success = $this->terminal->wp()->delete($args);
 
-        if ($success && $this->environ == 'live') {
+        if ($success && $this->environ->name === 'live') {
             $success = $this->terminal->wp_cli()->delete();
             if ($success) {
                 $WPCLIConfig = $this->terminal->wp_cli_config();
@@ -151,19 +176,17 @@ class WordPress extends AbstractDeployer
 
     }
 
-    /**
-     *
-     */
-    function htaccess()
+    /*
+    public function htaccess(): void
     {
 
     }
-
+    */
 
     /**
      * @return bool
      */
-    function validate()
+    private function validate(): bool
     {
         return true;
     }
@@ -174,36 +197,34 @@ class WordPress extends AbstractDeployer
     protected
     function getArgs()
     {
-        $environ = $this->environ;
+        $environName = $this->environ->name;
+        $args = (array)$this->config->wordpress;
+        $args['www'] = $this->config->environ->$environName->www ?? false;
+        $args['directory'] = $this->environ->getEnvironDir('web');
 
-        $args = (array)ph_d()->config->wordpress;
-        $args['www'] = ph_d()->config->environ->$environ->www ?? false;
-        $args['directory'] = ph_d()->getEnvironDir($environ, 'web');
+        $args['title'] = $this->config->project->title ?? 'Insert Site Title Here';
+        $args['url'] = $this->environ->getEnvironURL(true, true);
 
-        $args['title'] = ph_d()->config->project->title ?? 'Insert Site Title Here';
-        $args['url'] = ph_d()->getEnvironURL($environ, true, true);
-
-        $args['db'] = (array)ph_d()->config->environ->$environ->db ?? '';
+        $args['db'] = !empty($this->config->environ->$environName->db) ? (array)$this->config->environ->$environName->db : [];
         if (empty($args['db']['name']))
-            return $this->logError(ucfirst($environ) . " environ DB name missing from config.");
+            return $this->logError(ucfirst($environName) . ' environ DB name missing from config.');
         if (empty($args['db']['username']))
-            return $this->logError(ucfirst($environ) . " environ DB username missing from config.");
-        if (empty($args['db']['username']))
-            return $this->logError(ucfirst($environ) . " environ DB password missing from config.");
+            return $this->logError(ucfirst($environName) . ' environ DB username missing from config.');
+        if (empty($args['db']['password']))
+            return $this->logError(ucfirst($environName) . ' environ DB password missing from config.');
 
-        $args['cli']['config']['path'] = ph_d()->config->environ->$environ->dirs->web_root->path ?? '';
+        $args['cli']['config']['path'] = $this->config->environ->$environName->dirs->web_root->path ?? '';
 
-        if ($environ != 'local') {
-            $cpanel = ph_d()->findEnvironcPanel($environ);
+        if ($environName !== 'local') {
+            $cpanel = $this->environ->findcPanel();
             if (empty($cpanel['user']))
-                return $this->logError(sprintf("Couldn't work out %s cPanel username.", $environ));
+                return $this->logError(sprintf("Couldn't work out %s cPanel username.", $environName));
             $args['db']['name'] = $this->whm->db_prefix_check($args['db']['name'], $cpanel['user']);
             $args['db']['username'] = $this->whm->db_prefix_check($args['db']['username'], $cpanel['user']);
         }
 
-
-        $args['live_url'] = $environ != 'live' ? ph_d()->getEnvironURL('live', true, true) : '';
-
+        //$args['live_url'] = $environName !== 'live' ? ph_d()->environ('live')->getEnvironURL(true, true) : '';
+        $args['live_url'] = $this->liveURL;
         return $args;
     }
 
@@ -211,13 +232,11 @@ class WordPress extends AbstractDeployer
      * @return string
      */
     protected
-    function mainStr()
+    function mainStr(): string
     {
         $action = $this->getCaller();
-        if (func_num_args() == 0) {
-            if (!empty($this->_mainStr[$action]))
-                return $this->_mainStr[$action];
-        }
-        return $this->_mainStr[$action] = sprintf('%s WordPress and WP CLI', $this->environ);
+        if (!empty($this->_mainStr[$action]) && func_num_args() === 0)
+            return $this->_mainStr[$action];
+        return $this->_mainStr[$action] = sprintf('%s WordPress and WP CLI', $this->environ->name);
     }
 }

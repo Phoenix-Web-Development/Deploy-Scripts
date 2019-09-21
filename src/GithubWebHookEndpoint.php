@@ -56,13 +56,13 @@ class GithubWebhookEndpoint
     /**
      * @throws Exception
      */
-    private function getHeaders()
+    private function getHeaders(): bool
     {
         if (!function_exists('getallheaders'))
-            $this->throwException("function getallheaders() unavailable.");
+            $this->throwException('function getallheaders() unavailable.');
         $this->headers = apache_request_headers();
         if (empty($this->headers)) {
-            $this->throwException("No headers returned.");
+            $this->throwException('No headers returned.');
         }
         if (empty($this->headers['Content-Type'])) {
             $this->throwException("Missing HTTP 'Content-Type' header. " . print_r($this->headers, true));
@@ -76,7 +76,7 @@ class GithubWebhookEndpoint
     /**
      * @throws Exception
      */
-    private function getConfig()
+    private function getConfig(): void
     {
         $repo_name = $this->getPayload()['repository']['name'];
 
@@ -115,7 +115,7 @@ class GithubWebhookEndpoint
                 $this->throwException("Unsupported content type: $this->headers['Content-Type']");
         }
         if (empty($json)) {
-            $this->throwException("Payload is empty");
+            $this->throwException('Payload is empty');
             return false;
         }
         return $this->payload = json_decode($json, true);
@@ -125,7 +125,7 @@ class GithubWebhookEndpoint
     /**
      * @param $msg
      */
-    public function sendMail($msg)
+    public function sendMail($msg): void
     {
         $msg = "This is a message from your GitHub webhook endpoint: \n\n" . $msg;
         mail($this->errorMail, 'Github Webhook Endpoint Message', $msg);
@@ -135,7 +135,7 @@ class GithubWebhookEndpoint
     /**
      * @throws Exception
      */
-    public function run()
+    public function run(): bool
     {
         if (!$this->getHeaders())
             return false;
@@ -161,7 +161,7 @@ class GithubWebhookEndpoint
             // for debug
             default:
                 header('HTTP/1.0 404 Not Found');
-                echo "Event: " . $this->headers['X-GitHub-Event'] . "\nPayload: \n";
+                echo 'Event: ' . $this->headers['X-GitHub-Event'] . "\nPayload: \n";
                 print_r($payload);
                 die();
         }
@@ -172,9 +172,9 @@ class GithubWebhookEndpoint
     /**
      * @throws Exception
      */
-    private function githubEvent_push()
+    private function githubEvent_push(): void
     {
-        $output_git_diff = $this->exec("git status --porcelain", $this->worktree);
+        $output_git_diff = $this->exec('git status --porcelain', $this->worktree);
         if (!empty($output_git_diff))
             $this->throwException('Uncommitted changes in Git repo: ' . $output_git_diff);
 
@@ -184,9 +184,9 @@ class GithubWebhookEndpoint
         $branch = end($branch);
         $currentBranch = $this->getCurrentGitBranch();
         if ($branch == $currentBranch) {
-            $last_commit_message = $this->exec("git log -1 --pretty=%B", $this->worktree);
+            $last_commit_message = $this->exec('git log -1 --pretty=%B', $this->worktree);
             if ($payload['head_commit']['message'] == $last_commit_message)
-                $this->writeLog("Skipping git pull. As payload and last log git message are identical, commit was probably made from this machine.");
+                $this->writeLog('Skipping git pull. As payload and last log git message are identical, commit was probably made from this machine.');
             else
                 $command = 'git pull';
         } else {
@@ -209,12 +209,12 @@ class GithubWebhookEndpoint
      * @param string $branch
      * @return bool|null
      */
-    public function isGitBranch(string $branch = '')
+    public function isGitBranch(string $branch = ''): ?bool
     {
-        $exists = $this->exec("git show-ref --verify refs/heads/" . $branch, $this->worktree);
+        $exists = $this->exec('git show-ref --verify refs/heads/' . $branch, $this->worktree);
         if (strpos($exists, 'not a valid ref') !== false)
             return false;
-        if (strpos($exists, "refs/heads/" . $branch) !== false)
+        if (strpos($exists, 'refs/heads/' . $branch) !== false)
             return true;
         return null;
     }
@@ -224,7 +224,7 @@ class GithubWebhookEndpoint
      */
     public function getCurrentGitBranch()
     {
-        $currentBranch = $this->exec("git symbolic-ref --short HEAD", $this->worktree);
+        $currentBranch = $this->exec('git symbolic-ref --short HEAD', $this->worktree);
         if (strlen($currentBranch) > 0)
             return $currentBranch;
         return false;
@@ -235,9 +235,9 @@ class GithubWebhookEndpoint
      * @param string $dir
      * @return string
      */
-    public function exec(string $command = '', string $dir = '')
+    public function exec(string $command = '', string $dir = ''): string
     {
-        $cd = !empty($dir) ? "cd " . $dir . '; ' : '';
+        $cd = !empty($dir) ? 'cd ' . $dir . '; ' : '';
         exec($cd . $command, $output);
         $filtered_output = array();
         foreach ($output as $string) {
@@ -252,7 +252,7 @@ class GithubWebhookEndpoint
     /**
      * @throws Exception
      */
-    private function checkHookSecret()
+    private function checkHookSecret(): void
     {
         if (empty($this->headers['X-Hub-Signature'])) {
             $this->throwException("HTTP header 'X-Hub-Signature' is missing. " . print_r($this->headers, true));
@@ -275,11 +275,11 @@ class GithubWebhookEndpoint
      * @param $msg
      * @return bool
      */
-    public function writeLog($msg = '')
+    public function writeLog($msg = ''): bool
     {
         if (!empty($this->logfile) && !empty($msg)) {
             $repo_name = !empty($this->repo_name) ? ucfirst($this->repo_name) . ' - ' : '';
-            $logtext = date(DATE_ATOM) . "  " . $_SERVER['REMOTE_ADDR'] . "  " . $repo_name . $msg;
+            $logtext = date(DATE_ATOM) . '  ' . $_SERVER['REMOTE_ADDR'] . '  ' . $repo_name . $msg;
             echo $msg . "\r\n";
             error_log($logtext . "\r\n", 3, $this->logfile);
             return true;
@@ -291,7 +291,7 @@ class GithubWebhookEndpoint
      * @param string $exception
      * @throws Exception
      */
-    public function throwException($exception = '')
+    public function throwException($exception = ''): void
     {
         $repo_name = !empty($this->repo_name) ? ucfirst($this->repo_name) . ' - ' : '';
         throw new \Exception($repo_name . $exception);
@@ -311,6 +311,6 @@ try {
     header('HTTP/1.1 500 Internal Server Error');
     $errorMsg = "Error on line {$e->getLine()}: " . htmlSpecialChars($e->getMessage());
     echo $errorMsg;
-    $endpoint->writeLog(str_replace("\n", ". ", $errorMsg));
+    $endpoint->writeLog(str_replace("\n", '. ', $errorMsg));
     die();
 }

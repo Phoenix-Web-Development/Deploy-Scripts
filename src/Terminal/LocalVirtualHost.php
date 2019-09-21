@@ -4,6 +4,7 @@ namespace Phoenix\Terminal;
 
 /**
  * Class LocalVirtualHost
+ *
  * @package Phoenix\Terminal
  */
 class LocalVirtualHost extends AbstractTerminal
@@ -19,7 +20,7 @@ class LocalVirtualHost extends AbstractTerminal
      * @param array $args
      * @return bool|null
      */
-    public function create(array $args = [])
+    public function create(array $args = []): ?bool
     {
         $this->mainStr($args);
         $this->logStart();
@@ -33,7 +34,7 @@ class LocalVirtualHost extends AbstractTerminal
         //Fill out virtual host template
 
         foreach ($args as $key => $arg) {
-            if (in_array($key, ["admin_email", "domain", "web_dir", "log_dir"])) {
+            if (in_array($key, ['admin_email', 'domain', 'web_dir', 'log_dir'])) {
                 $needles[] = '%' . $key . '%';
                 $replaces[] = $arg;
             }
@@ -60,7 +61,7 @@ class LocalVirtualHost extends AbstractTerminal
      * @param array $wp_args
      * @return bool
      */
-    public function install($args)
+    public function install($args): bool
     {
         return $this->create($args);
     }
@@ -69,7 +70,7 @@ class LocalVirtualHost extends AbstractTerminal
      * @param array $args
      * @return bool|null
      */
-    public function delete(array $args = [])
+    public function delete(array $args = []): ?bool
     {
 
         $this->mainStr($args);
@@ -96,7 +97,7 @@ class LocalVirtualHost extends AbstractTerminal
      * @param array $args
      * @return bool|null
      */
-    public function uninstall(array $args = [])
+    public function uninstall(array $args = []): ?bool
     {
         return $this->delete($args);
     }
@@ -105,10 +106,10 @@ class LocalVirtualHost extends AbstractTerminal
      * @param array $args
      * @return bool
      */
-    protected function validate(array $args = [])
+    protected function validate(array $args = []): bool
     {
         if (empty($args))
-            return $this->logError("No args inputted to method.");
+            return $this->logError('No args inputted to method.');
 
         $argKeys = [
             'domain',
@@ -118,7 +119,7 @@ class LocalVirtualHost extends AbstractTerminal
 
         foreach ($argKeys as $argKey) {
             if (empty($args[$argKey]))
-                return $this->logError("Argument <strong>" . $argKey . "</strong> missing from input");
+                return $this->logError('Argument <strong>' . $argKey . '</strong> missing from input');
         }
 
         return true;
@@ -129,17 +130,15 @@ class LocalVirtualHost extends AbstractTerminal
      * @return string
      */
     protected
-    function mainStr(array $args = [])
+    function mainStr(array $args = []): string
     {
-        if (func_num_args() == 0) {
-            if (!empty($this->_mainStr))
-                return $this->_mainStr;
-        }
+        if (!empty($this->_mainStr) && func_num_args() === 0)
+            return $this->_mainStr;
 
         $domain = !empty($args['domain']) ? sprintf(' for domain <strong>%s</strong>', $args['domain']) : '';
         $vhostFilePath = !empty($args['conf_path']) ? sprintf(' in virtual host config file <strong>%s</strong>', $args['conf_path']) : '';
         $webDir = !empty($args['web_dir']) ? sprintf(' for web directory <strong>%s</strong>', $args['web_dir']) : '';
 
-        return $this->_mainStr = sprintf("%s virtual host%s%s%s", $this->environment, $domain, $vhostFilePath, $webDir);
+        return $this->_mainStr = sprintf('%s virtual host%s%s%s', $this->environment, $domain, $vhostFilePath, $webDir);
     }
 }

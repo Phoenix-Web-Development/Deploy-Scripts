@@ -33,7 +33,7 @@ class Logging
     /**
      * @return null|Logging
      */
-    public static function instance()
+    public static function instance(): ?Logging
     {
         if (is_null(self::$_instance)) {
             self::$_instance = new self();
@@ -44,17 +44,13 @@ class Logging
     /**
      * Logging constructor.
      */
-    function __construct()
+    public function __construct()
     {
-        return true;
     }
 
-    /**
-     * @param bool $message_prepend
-     * @param bool $email_args
-     * @return bool
-     */
-    function init($message_prepend = false, $email_args = false)
+
+    /*
+    function init($message_prepend = false, $email_args = false): bool
     {
         if (!empty($message_prepend))
             $this->message_prepend = $message_prepend;
@@ -73,13 +69,14 @@ class Logging
         }
         return true;
     }
+*/
 
     /**
      * @param string $message_string
      * @param string $message_type
      * @return bool
      */
-    function add(string $message_string = '', string $message_type = 'error')
+    public function add(string $message_string = '', string $message_type = 'error'): bool
     {
         if (!in_array($message_type, array('info', 'success', 'warning', 'light', 'error')))
             return false;
@@ -101,7 +98,7 @@ class Logging
      * @param string $message_type
      * @return bool
      */
-    function add_list($list_array = array(), $title = 'Array List', $heading_tag = 'h3', $message_type = 'info')
+    function add_list($list_array = array(), $title = 'Array List', $heading_tag = 'h3', $message_type = 'info'): bool
     {
         if (!empty($list_array)) {
             $str = '<' . $heading_tag . '>' . $title . '</' . $heading_tag . '>' . build_recursive_list($list_array);
@@ -111,25 +108,23 @@ class Logging
         return false;
     }
 
-    /**
-     * @return bool
-     */
-    function email_log()
+    /*
+    function email_log(): bool
     {
         if (empty($this->email_args['from']) || empty($this->email_args['to']) || empty($this->email_args['subject']))
             return false;
-        $headers = "From: Mabarrack CRM <" . $this->email_args['from'] . ">" . "\r\n";
-        $headers .= "Mime-Version: 1.0" . "\r\n";
-        $headers .= "Content-type: text/html; charset=UTF-8" . "\r\n";
+        $headers = 'From: Mabarrack CRM <' . $this->email_args['from'] . '>' . "\r\n";
+        $headers .= 'Mime-Version: 1.0' . "\r\n";
+        $headers .= 'Content-type: text/html; charset=UTF-8' . "\r\n";
         if (mail($this->email_args['to'], $this->email_args['subject'], '<h1>Results</h1>' . $this->email_message, $headers))
             return true;
         return false;
     }
-
+*/
     /**
      * @return bool
      */
-    function display()
+    public function display(): ?bool
     {
         if (empty($this->messages))
             return false;
@@ -138,7 +133,7 @@ class Logging
         foreach ($this->messages as $message) {
             if (!empty($message['string'])) {
                 $message_type = !empty($message['type']) ? $message['type'] : 'error';
-                switch ($message_type) {
+                switch($message_type) {
                     case 'info':
                         $css_class = 'primary';
                         break;
@@ -207,6 +202,7 @@ class Logging
             }
         }
         echo $message_html; //nl2br( $message_html );
+        return true;
     }
 }
 

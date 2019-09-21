@@ -15,7 +15,7 @@ class Dir extends AbstractTerminal
      * @return bool
      */
     public
-    function prune(string $dir = '')
+    function prune(string $dir = ''): bool
     {
         $this->mainStr($dir);
         $this->logStart();
@@ -32,10 +32,10 @@ class Dir extends AbstractTerminal
                 $deleted_upstream = $this->deleteFile($upstream_dir, true);
                 if ($deleted_upstream) {
                     $actuallyDeletedSomething = true;
-                    $message .= sprintf("<br>Deleted empty directory <strong>%s</strong>. ", $upstream_dir);
+                    $message .= sprintf('<br>Deleted empty directory <strong>%s</strong>. ', $upstream_dir);
                     $upstream_dir = dirname($upstream_dir);
                 } else {
-                    $message .= sprintf("<br>Failed to delete <strong>%s</strong> even though it is empty.", $upstream_dir);
+                    $message .= sprintf('<br>Failed to delete <strong>%s</strong> even though it is empty.', $upstream_dir);
                     $continue = false;
                     $success = false;
                 }
@@ -56,16 +56,16 @@ class Dir extends AbstractTerminal
      * @param string $dir
      * @return bool|null
      */
-    protected function validate(string $dir = '')
+    protected function validate(string $dir = ''): ?bool
     {
         if (isset($this->_validated))
             return $this->_validated;
 
         if (empty($dir))
-            return $this->logError("No directory supplied to function.");
+            return $this->logError('No directory supplied to function.');
 
         if (!$this->is_dir($dir))
-            return $this->logError(sprintf("<strong>%s</strong> is not a directory.", $dir));
+            return $this->logError(sprintf('<strong>%s</strong> is not a directory.', $dir));
 
         if ($this->inSanityList($dir))
             return $this->logError("Shouldn't be pruning directory in sanity list.");
@@ -78,14 +78,12 @@ class Dir extends AbstractTerminal
     function mainStr(string $dir = '')
     {
         $action = $this->getCaller();
-        if (func_num_args() == 0) {
-            if (!empty($this->_mainStr[$action]))
-                return $this->_mainStr[$action];
-        }
-        $dirStr = !empty($dir) ? " starting with <strong>" . $dir . "</strong>" : '';
-        $envStr = !empty($this->environment) ? " in " . $dir . " environ" : '';
+        if (!empty($this->_mainStr[$action]) && func_num_args() === 0)
+            return $this->_mainStr[$action];
+        $dirStr = !empty($dir) ? ' starting with <strong>' . $dir . '</strong>' : '';
+        $envStr = !empty($this->environment) ? ' in ' . $dir . ' environ' : '';
 
-        return $this->_mainStr[$action] = sprintf("empty directories%s%s", $envStr, $dirStr);
+        return $this->_mainStr[$action] = sprintf('empty directories%s%s', $envStr, $dirStr);
     }
 
 
@@ -97,27 +95,27 @@ class Dir extends AbstractTerminal
      * @return bool
      */
     public
-    function move_files($origin_dir = '', $dest_dir = '')
+    function move_files($origin_dir = '', $dest_dir = ''): bool
     {
-        $mainStr = sprintf(" files from <strong>%s</strong> directory to <strong>%s</strong> directory in %s environment.",
+        $mainStr = sprintf(' files from <strong>%s</strong> directory to <strong>%s</strong> directory in %s environment.',
             $origin_dir, $dest_dir, $this->environment);
-        $error_string = sprintf("Can't move " . $mainStr . ".", $this->environment);
+        $error_string = sprintf("Can't move " . $mainStr . '.', $this->environment);
         if (empty($origin_dir)) {
-            $this->log(sprintf("%s Origin directory not supplied to function.", $error_string));
+            $this->log(sprintf('%s Origin directory not supplied to function.', $error_string));
             return false;
         }
         if (empty($dest_dir)) {
-            $this->log(sprintf("%s Destination directory not supplied to function.", $error_string));
+            $this->log(sprintf('%s Destination directory not supplied to function.', $error_string));
             return false;
         }
-        $this->log("Moving " . $mainStr, 'info');
+        $this->log('Moving ' . $mainStr, 'info');
         if (!$this->is_dir($origin_dir)) {
             $this->log(sprintf("%s Origin directory <strong>%s</strong> doesn't exist.",
                 $error_string, $origin_dir));
             return false;
         }
         if (!$this->is_dir($dest_dir) && !$this->mkdir($dest_dir)) {
-            $this->log(sprintf("%s Failed to create directory at <strong>%s</strong> in %s environment.", $error_string, $dest_dir, $this->environment));
+            $this->log(sprintf('%s Failed to create directory at <strong>%s</strong> in %s environment.', $error_string, $dest_dir, $this->environment));
             return false;
         }
         //$origin_dir = self::trailing_slash($origin_dir) . '*';
@@ -135,14 +133,14 @@ class Dir extends AbstractTerminal
         $output = $this->exec('(cd ' . $origin_dir . ' && tar c .) | (cd ' . $dest_dir . ' && tar xf -); echo $? status');
 
         $deleted_origin_contents = '';
-        if (strpos($output, "0 status") !== false) {
-            $deleted_origin_contents = $this->exec("shopt -s dotglob; rm -r " . $origin_dir . "*; echo $? status");
-            if (strpos($deleted_origin_contents, "0 status") !== false) {
-                $this->log("Successfully moved " . $mainStr . $this->formatOutput($output . $deleted_origin_contents), 'success');
+        if (strpos($output, '0 status') !== false) {
+            $deleted_origin_contents = $this->exec('shopt -s dotglob; rm -r ' . $origin_dir . '*; echo $? status');
+            if (strpos($deleted_origin_contents, '0 status') !== false) {
+                $this->log('Successfully moved ' . $mainStr . $this->formatOutput($output . $deleted_origin_contents), 'success');
                 return true;
             }
         }
-        $this->log("Failed to move " . $mainStr . $this->formatOutput($output . $deleted_origin_contents));
+        $this->log('Failed to move ' . $mainStr . $this->formatOutput($output . $deleted_origin_contents));
         return false;
     }
 }

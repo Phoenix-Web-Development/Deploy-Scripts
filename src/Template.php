@@ -16,7 +16,7 @@ class Template
 
     /**
      */
-    public static function instance($stuff)
+    public static function instance($stuff): ?Template
     {
         if (is_null(self::$_instance)) {
             self::$_instance = new self($stuff);
@@ -29,17 +29,16 @@ class Template
      */
     public function __construct()
     {
-        return true;
     }
 
     /**
      * @param $template_name
      * @param array $args
      */
-    function get($template_name, $args = array())
+    public function get($template_name, $args = array()): void
     {
         if (!empty($args) && is_array($args)) {
-            extract($args);
+            extract($args, null);
         }
         $path = '../templates/' . $template_name . '.php';
         if (!file_exists($path)) {
@@ -52,7 +51,7 @@ class Template
     /**
      * @return bool
      */
-    public function radios()
+    public function radios(): bool
     {
         $actions = array(
             'action_create' => array('label' => 'Create'),
@@ -74,7 +73,7 @@ class Template
      * @param string $type
      * @return bool
      */
-    public function checkboxes($type = 'create')
+    public function checkboxes($type = 'create'): bool
     {
         $actions = ph_d()->actionRequests->permissions;
         $filtered_actions = [];
@@ -92,10 +91,9 @@ class Template
                                 break;
                             }
                         }
-                    else
-                        if (strpos($action['condition'], $type) !== false) {
-                            $filtered_actions[$key] = $action;
-                        }
+                    elseif (strpos($action['condition'], $type) !== false) {
+                        $filtered_actions[$key] = $action;
+                    }
             }
         }
         $sorted_actions = sort_recursive_actions($filtered_actions);
@@ -103,7 +101,7 @@ class Template
         return true;
     }
 
-    public function configRadios()
+    public function configRadios(): void
     {
         $file_list = ph_d()->configControl->getConfigFileList();
         $config_selected = ph_d()->configControl->getConfigSelected();
@@ -119,7 +117,7 @@ class Template
         <?php endforeach;
     }
 
-    public function configRadioHidden()
+    public function configRadioHidden(): void
     {
 
     }

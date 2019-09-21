@@ -5,6 +5,7 @@ namespace Phoenix;
 
 /**
  * Class EmailFilters
+ *
  * @package Phoenix\Terminal
  */
 class EmailFilters extends AbstractDeployer
@@ -27,10 +28,11 @@ class EmailFilters extends AbstractDeployer
 
     /**
      * EnvironVersionControl constructor.
+     *
      * @param WHM|null $whm
      * @param string $environ
      */
-    function __construct($environ = 'live', WHM $whm = null)
+    public function __construct($environ = 'live', WHM $whm = null)
     {
         $this->environ = $environ;
         $this->whm = $whm;
@@ -40,7 +42,7 @@ class EmailFilters extends AbstractDeployer
     /**
      * @return bool|null
      */
-    function create()
+    public function create(): ?bool
     {
         $this->mainStr();
         $this->logStart();
@@ -75,7 +77,7 @@ class EmailFilters extends AbstractDeployer
     /**
      * @return bool|null
      */
-    function delete()
+    public function delete(): ?bool
     {
         $this->mainStr();
         $this->logStart();
@@ -109,7 +111,7 @@ class EmailFilters extends AbstractDeployer
     /**
      * @return bool
      */
-    function validate()
+    private function validate(): bool
     {
         return true;
     }
@@ -117,19 +119,19 @@ class EmailFilters extends AbstractDeployer
     /**
      * @return bool
      */
-    protected function getArgs()
+    protected function getArgs(): bool
     {
         $environ = $this->environ;
 
         $args['filters'] = ph_d()->config->environ->$environ->cpanel->email_filters ?? false;
         if (empty($args['filters']))
-            return $this->logError("Filter args missing from config.");
+            return $this->logError('Filter args missing from config.');
         //$args['filters'] = $this->substitutePlaceholders($args['filters']);
         if (!$args['filters'])
             return false;
         $args['cpanel_username'] = ph_d()->config->environ->primary->cpanel->username ?? false;
         if (empty($args['cpanel_username']))
-            return $this->logError("Primary cPanel account username missing from config.");
+            return $this->logError('Primary cPanel account username missing from config.');
         return $args;
     }
 
@@ -192,14 +194,12 @@ class EmailFilters extends AbstractDeployer
      * @return string
      */
     protected
-    function mainStr(int $problems = 0, int $number_of_filters = 0)
+    function mainStr(int $problems = 0, int $number_of_filters = 0): string
     {
         $action = $this->getCaller();
-        if (func_num_args() == 0) {
-            if (!empty($this->_mainStr[$action]))
-                return $this->_mainStr[$action];
-        }
-        $finishStr = $number_of_filters > 0 ? sprintf("%d out of %d ", $problems, $number_of_filters) : '';
+        if (!empty($this->_mainStr[$action]) && func_num_args() === 0)
+            return $this->_mainStr[$action];
+        $finishStr = $number_of_filters > 0 ? sprintf('%d out of %d ', $problems, $number_of_filters) : '';
         return $this->_mainStr[$action] = sprintf('%s%s cPanel email filters', $finishStr, $this->environ);
     }
 }

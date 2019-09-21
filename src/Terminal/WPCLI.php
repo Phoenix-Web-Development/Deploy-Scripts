@@ -19,7 +19,7 @@ class WPCLI extends AbstractTerminal
     /**
      * @return bool
      */
-    public function check()
+    public function check(): bool
     {
         $output = $this->exec('wp --info;');
         if (strpos($output, 'WP-CLI version:	2') !== false) //big space between : and 2
@@ -30,7 +30,7 @@ class WPCLI extends AbstractTerminal
     /**
      * @return bool
      */
-    public function delete()
+    public function delete(): bool
     {
         return $this->uninstall();
     }
@@ -38,7 +38,7 @@ class WPCLI extends AbstractTerminal
     /**
      * @return bool
      */
-    public function uninstall()
+    public function uninstall(): bool
     {
         $this->logStart();
         if (!$this->check())
@@ -52,7 +52,7 @@ class WPCLI extends AbstractTerminal
     /**
      * @return bool
      */
-    public function create()
+    public function create(): bool
     {
         return $this->install();
     }
@@ -60,7 +60,7 @@ class WPCLI extends AbstractTerminal
     /**
      * @return bool
      */
-    public function install()
+    public function install(): bool
     {
         $this->logStart();
         if ($this->check())
@@ -71,7 +71,7 @@ class WPCLI extends AbstractTerminal
         if (!is_dir($this->dirpath())) {
             $this->mkdir(dirname($this->dirpath()));
             if (!is_dir($this->dirpath()))
-                return $this->logError("Couldn't create directory <strong>" . $this->dirpath() . "</strong>.");
+                return $this->logError("Couldn't create directory <strong>" . $this->dirpath() . '</strong>.');
         }
         $output = $this->exec(
             'curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar; 
@@ -88,7 +88,7 @@ class WPCLI extends AbstractTerminal
     /**
      * @return bool
      */
-    public function installOrUpdate()
+    public function installOrUpdate(): bool
     {
         if ($this->check()) {
             return $this->update();
@@ -101,7 +101,7 @@ class WPCLI extends AbstractTerminal
     /**
      * @return bool|null
      */
-    public function update()
+    public function update(): ?bool
     {
         $this->logStart();
         if (!$this->check())
@@ -121,7 +121,7 @@ class WPCLI extends AbstractTerminal
     /**
      * @return string
      */
-    protected function validate()
+    protected function validate(): string
     {
         if (empty($this->filepath()))
             return $this->logError(sprintf("Couldn't get %s environ home directory.", $this->environment));
@@ -132,16 +132,16 @@ class WPCLI extends AbstractTerminal
     /**
      * @return string
      */
-    protected function mainStr()
+    protected function mainStr(): string
     {
-        $dirStr = !empty($this->filepath()) ? sprintf(" at path <strong>%s</strong>", $this->filepath()) : '';
-        return sprintf("WP CLI in %s environment%s", $this->environment, $dirStr);
+        $dirStr = !empty($this->filepath()) ? sprintf(' at path <strong>%s</strong>', $this->filepath()) : '';
+        return sprintf('WP CLI in %s environment%s', $this->environment, $dirStr);
     }
 
     /**
      * @return string
      */
-    protected function dirpath()
+    protected function dirpath(): string
     {
         if ($this->root != false)
             return self::trailing_slash($this->root) . 'bin/';
@@ -151,7 +151,7 @@ class WPCLI extends AbstractTerminal
     /**
      * @return string
      */
-    protected function filepath()
+    protected function filepath(): string
     {
         if ($this->root != false)
             return self::trailing_slash($this->root) . 'bin/wp';

@@ -168,20 +168,19 @@ class ActionRequests
     /**
      * ActionRequests constructor.
      */
-    function __construct()
+    public function __construct()
     {
         foreach ($this->permissions as &$action) {
             if (!empty($action['condition']) && !is_array($action['condition']))
                 $action['condition'] = array($action['condition']);
         }
-        $this->process_request();
-        return true;
+        $this->processRequest();
     }
 
     /**
      * @return array|bool
      */
-    function process_request()
+    private function processRequest()
     {
         if (empty($_POST))
             return false;
@@ -208,7 +207,7 @@ class ActionRequests
      * @param string $operator
      * @return bool
      */
-    function can_do($actions = '', $operator = 'AND')
+    public function canDo($actions = '', $operator = 'AND'): bool
     {
         if (empty($actions) || empty($this->permissions))
             return false;
@@ -218,7 +217,7 @@ class ActionRequests
             if ($operator = 'AND') {
                 if (empty($this->permissions[$action]['can_do']))
                     return false;
-            } else if ($operator = 'OR') {
+            } elseif ($operator = 'OR') {
                 if (!empty($this->permissions[$action]['can_do']))
                     return true;
             }

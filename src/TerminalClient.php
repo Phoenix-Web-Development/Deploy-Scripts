@@ -3,6 +3,7 @@
 namespace Phoenix;
 
 use phpseclib\Net\SFTP;
+use phpseclib\Net\SSH2;
 
 /**
  *
@@ -50,7 +51,7 @@ class TerminalClient extends BaseClient
     /**
      * @var string
      */
-    public $environment;
+    public $environ;
 
     /**
      * @var
@@ -64,13 +65,13 @@ class TerminalClient extends BaseClient
 
     /**
      * Terminal constructor.
-     * @param string $environment
+     *
+     * @param string $environ
      */
-    public function __construct(string $environment = 'live')
+    public function __construct(string $environ = 'live')
     {
         parent::__construct();
-        $this->environment = $environment;
-        return true;
+        $this->environ = $environ;
     }
 
     /**
@@ -80,14 +81,14 @@ class TerminalClient extends BaseClient
     public function api($name = '')
     {
         $error_string = sprintf("Can't execute <code>%s</code> terminal method in %s environment.",
-            $name, $this->environment);
-        if ($this->environment != 'local' && (!$this->ssh || !method_exists($this->ssh, 'isConnected') || !$this->ssh->isConnected())) {
-            $this->log($error_string . " No SSH connection was established.");
+            $name, $this->environ);
+        if ($this->environ !== 'local' && (!$this->ssh || !method_exists($this->ssh, 'isConnected') || !$this->ssh->isConnected())) {
+            $this->log($error_string . ' No SSH connection was established.');
             return new ErrorAbstract();
         }
 
         $name = strtolower($name);
-        switch ($name) {
+        switch($name) {
             case 'dir':
             case 'directory':
                 $api = new Terminal\Dir($this);
@@ -159,7 +160,7 @@ class TerminalClient extends BaseClient
                 $api = new Terminal\AbstractTerminal($this);
                 break;
         }
-        if (empty($api))
+        if ($api === null)
             return false;
         return $api;
     }
@@ -170,7 +171,7 @@ class TerminalClient extends BaseClient
      */
     protected function ssh(SFTP $ssh = null)
     {
-        if (func_num_args() == 0) {
+        if (func_num_args() === 0) {
             if (!empty($this->_ssh))
                 return $this->_ssh;
             return false;
@@ -189,15 +190,15 @@ class TerminalClient extends BaseClient
     public function exec(string $command = '', string $startDir = '')
     {
         $error_string = sprintf('<code>exec()</code> failed to execute command in %s environment terminal. <pre><strong>Commands</strong>:%s</pre>',
-            $this->environment, $command);
+            $this->environ, $command);
 
         if (!empty($startDir)) {
             if (!$this->is_dir($startDir)) {
-                $this->log($error_string . "Directory " . $startDir . " doesn't exist.");
+                $this->log($error_string . 'Directory ' . $startDir . " doesn't exist.");
                 return false;
             }
             if (!$this->is_readable($startDir)) {
-                $this->log($error_string . "Directory " . $startDir . " inaccessible.");
+                $this->log($error_string . 'Directory ' . $startDir . ' inaccessible.');
                 return false;
             }
 
@@ -205,19 +206,19 @@ class TerminalClient extends BaseClient
             $command = 'cd ' . $startDir . '; ' . $command;
         }
 
-        if ($this->environment == 'local') {
-            exec($command . " 2>&1", $raw_outputs);
+        if ($this->environ === 'local') {
+            exec($command . ' 2>&1', $raw_outputs);
             return trim(implode('<br>', $raw_outputs));
         }
 
         if ($this->ssh && method_exists($this->ssh, 'isConnected')) {
             if (!$this->ssh->isConnected()) {
-                $this->log($error_string . "SSH is not connected.");
+                $this->log($error_string . 'SSH is not connected.');
                 return false;
             }
             if (!$this->ssh->isAuthenticated() && !empty(debug_backtrace()[1]['function'])) {
                 $this->log(sprintf("%s environment SSH exec() failed as you aren't authenticated. Exec() called by <code>%s()</code> function.",
-                    ucfirst($this->environment), debug_backtrace()[1]['function']), 'error');
+                    ucfirst($this->environ), debug_backtrace()[1]['function']), 'error');
                 return false;
             }
             $this->ssh->setTimeout(240); //downloading WP can take a while
@@ -225,12 +226,12 @@ class TerminalClient extends BaseClient
             $this->ssh->enablePTY();
             $this->ssh->exec($command);
             if ($this->ssh->isTimeout()) {
-                $this->log($error_string . "Timeout reached for <code>exec()</code>.");
+                $this->log($error_string . 'Timeout reached for <code>exec()</code>.');
                 return false;
             }
             $output = $this->ssh->read();
             if ($this->ssh->isTimeout()) {
-                $this->log($error_string . "Timeout reached for <code>read()</code>.");
+                $this->log($error_string . 'Timeout reached for <code>read()</code>.');
                 return false;
             }
             $this->ssh->setTimeout(false); //downloading WP can take a while
@@ -256,20 +257,67 @@ class TerminalClient extends BaseClient
         if (!empty($this->_root))
             return $this->_root;
 
-        if ($this->environment == 'local') {
-            if (isset($_SERVER['HOME'])) {
+        if ($this->environ === 'local') {
+            if (isset($_SERVER['HOME']))
                 return $this->_root = $_SERVER['HOME'];
-            } else {
-                if (!empty(getenv("HOME")))
-                    return $this->_root = getenv("HOME");
-            }
+            elseif (!empty(getenv('HOME')))
+                return $this->_root = getenv('HOME');
         }
-        $root = trim($this->exec('echo ~')) ?? false;
-        if (!empty($root) && $root != '~')
+
+        $root = trim($this->exec('echo ~')) ?? '';
+        if (!empty($root) && $root !== '~')
             return $this->_root = $root;
         return false;
     }
+    /*
+        private function get_phpseclib($protocol = 'ssh', string $environ = 'live'): void
+        {
+            $message = sprintf('%s environment %s connection.', $environ, $protocol);
+            //if ($environ !== 'local') {
 
+            //$ssh_args = $this->getEnvironSSHArgs($environ);
+            $ssh_args = $this->getSSHArgs($environ);
+            if (!empty($ssh_args)) {
+                switch ($protocol) {
+                    case 'ssh':
+                        $ssh = new SSH2($ssh_args->hostname, $ssh_args->port);
+                        break;
+                    case 'sftp':
+                        $ssh = new SFTP($ssh_args->hostname, $ssh_args->port);
+                        break;
+                }
+            }
+            $passphrase = $this->config->environ->local->ssh_keys->live->passphrase ?? '';
+            $key_name = $this->config->environ->local->ssh_keys->live->key_name ?? '';
+            if (!empty($passphrase) && !empty($key_name)) {
+                $private_key_location = $this->config->environ->local->directory . $key_name;
+
+                if (!file_exists($private_key_location)) {
+                    $this->terminal('local')->localSSHKey('create', $key_name, $passphrase);
+                    $this->terminal('local')->SSHConfig('create', $key_name, $passphrase);
+                }
+                if (file_exists($private_key_location . '.pub')) {
+                    $public_key = file_get_contents($private_key_location . '.pub');
+                    $this->whm->import_key($public_key, $key_name);
+                    $this->whm->authkey($key_name);
+                    $key = new RSA();
+                    $key->setPassword($passphrase);
+                    $key->loadKey(file_get_contents($private_key_location));
+                }
+            }
+
+            $this->ssh = $ssh;
+    */
+    /*
+    if (!empty($ssh) && $ssh->login($ssh_args->username, $ssh_args->password)) {
+        $this->log("Successfully authenticated " . $message, 'success');
+        return $ssh;
+    }
+    //}
+    $this->log("Couldn't authenticate " . $message);
+    return false;
+    */
+    //}
 
     /*
     public

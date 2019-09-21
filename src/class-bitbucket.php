@@ -58,7 +58,7 @@ class Bitbucket extends Base
     /**
      * @return null|Bitbucket
      */
-    public static function instance($stuff)
+    public static function instance($stuff): ?Bitbucket
     {
         if (is_null(self::$_instance)) {
             self::$_instance = new self($stuff);
@@ -73,17 +73,14 @@ class Bitbucket extends Base
      */
     public function __construct(string $password = '', string $team = '')
     {
-        if (!isset($password, $team))
-            return false;
         $this->team_name = $team;
         $this->auth($password);
-        return true;
     }
 
     /**
      * @return bool
      */
-    private function auth($password = '')
+    private function auth($password = ''): bool
     {
         if (empty($password))
             return false;
@@ -104,7 +101,7 @@ class Bitbucket extends Base
         return false;
     }
 
-    public function delete_project($project_key = '')
+    public function delete_project($project_key = ''): bool
     {
         return $this->project('delete', $project_key);
     }
@@ -115,7 +112,7 @@ class Bitbucket extends Base
      * @param string $project_name
      * @return bool
      */
-    public function project(string $action = 'create', string $project_key = '', string $project_name = '')
+    public function project(string $action = 'create', string $project_key = '', string $project_name = ''): bool
     {
         if (!in_array($action, array('create', 'delete'))) {
             //action is something else.
@@ -125,15 +122,15 @@ class Bitbucket extends Base
         $error_string = sprintf("Can't %s Bitbucket project. ", $this->action_type[$action]['action']);
 
         if (empty($project_name) && $action != 'delete') {
-            $this->log($error_string . "Project name missing.");
+            $this->log($error_string . 'Project name missing.');
             return false;
         }
         if (empty($project_key)) {
-            $this->log($error_string . "Project key missing.");
+            $this->log($error_string . 'Project key missing.');
             return false;
         }
-        $project_name_string = !empty($project_name) ? "named <strong>" . $project_name . "</strong> " : '';
-        $this->log(sprintf("%s Bitbucket project %swith project key <strong>%s</strong>.", ucfirst($this->action_type[$action]['present']), $project_name_string, $project_key), 'info');
+        $project_name_string = !empty($project_name) ? 'named <strong>' . $project_name . '</strong> ' : '';
+        $this->log(sprintf('%s Bitbucket project %swith project key <strong>%s</strong>.', ucfirst($this->action_type[$action]['present']), $project_name_string, $project_key), 'info');
         /*make sure we have permissions to create a project.*/
         if (empty($this->token['scopes']) || strpos($this->token['scopes'], 'project:write') === false) {
             $this->log('Insufficient permissions to ' . $this->action_type[$action]['action'] . ' Bitbucket project.');
@@ -165,7 +162,7 @@ class Bitbucket extends Base
      * @param string $action
      * @return bool
      */
-    public function repository(string $action = 'create', string $project_key = '', string $repo_name = '')
+    public function repository(string $action = 'create', string $project_key = '', string $repo_name = ''): bool
     {
         if (!in_array($action, array('create', 'delete'))) {
             //action is something else.
@@ -219,7 +216,7 @@ class Bitbucket extends Base
         $error_string = '<code>Bitbucket message: ' . $result['error']['message'];
         if (!empty($result['error']['detail']))
             $error_string .= $result['error']['detail'];
-        else if (!empty($result['error']['fields'])) {
+        elseif (!empty($result['error']['fields'])) {
             foreach ($result['error']['fields'] as $field => $error) {
                 $error_string .= $field . ' ' . $error[0] . ',';
             }
@@ -228,7 +225,7 @@ class Bitbucket extends Base
     }
 
     public
-    function access_key($repo_name = '', $project_key = 'TP', $action = 'create')
+    function access_key($repo_name = '', $project_key = 'TP', $action = 'create'): bool
     {
         /*
         if ( !in_array( $action, array( 'create', 'delete' ) ) ) {

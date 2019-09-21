@@ -4,6 +4,7 @@ namespace Phoenix\Terminal;
 
 /**
  * Class WP
+ *
  * @package Phoenix\Terminal
  */
 class WP extends AbstractTerminal
@@ -17,7 +18,7 @@ class WP extends AbstractTerminal
     /**
      *
      */
-    const WP_FILES = array(
+    private const WP_FILES = array(
         'wp-admin/',
         'wp-content/',
         'wp-includes/',
@@ -58,7 +59,7 @@ class WP extends AbstractTerminal
     /**
      *
      */
-    const WP_PERMISSIONS = array(
+    private const WP_PERMISSIONS = array(
         'local' => array(
             'directories' => 0770,
             'files' => 0660,
@@ -85,14 +86,14 @@ class WP extends AbstractTerminal
      * @param array $args
      * @return bool
      */
-    protected function check(array $args = [])
+    protected function check(array $args = []): bool
     {
-        $output = $this->exec("wp core is-installed; echo $?", $args['directory']);
+        $output = $this->exec('wp core is-installed; echo $?', $args['directory']);
         $potential_errors = array(
-            "This does not seem to be a WordPress install",
+            'This does not seem to be a WordPress install',
             "'wp-config.php' not found",
-            "Error establishing a database connection",
-            "The site you have requested is not installed"
+            'Error establishing a database connection',
+            'The site you have requested is not installed'
         );
         foreach ($potential_errors as $potential_error) {
             if (stripos($output, $potential_error) !== false)
@@ -109,7 +110,7 @@ class WP extends AbstractTerminal
      * @param array $args
      * @return bool
      */
-    public function create($args = array())
+    public function create($args = array()): bool
     {
         return $this->install($args);
     }
@@ -118,7 +119,7 @@ class WP extends AbstractTerminal
      * @param array $args
      * @return bool|null
      */
-    public function download(array $args = [])
+    public function download(array $args = []): ?bool
     {
         $this->mainStr($args);
         $this->logStart();
@@ -127,10 +128,10 @@ class WP extends AbstractTerminal
         if ($this->check($args))
             return $this->logFinish(true, 'No need as WordPress is already installed');
 
-        $command = "wp core download --skip-content;
-        wp core verify-checksums";
+        $command = 'wp core download --skip-content;
+        wp core verify-checksums';
         if (!empty($args['language']))
-            $command .= " --locale=" . $args['language'];
+            $command .= ' --locale=' . $args['language'];
 
         $output = $this->exec($command, $args['directory']);
         if (stripos($output, 'success') !== false) {
@@ -146,7 +147,7 @@ class WP extends AbstractTerminal
      * @param array $args
      * @return bool
      */
-    public function install(array $args = [])
+    public function install(array $args = []): bool
     {
         $this->mainStr($args);
         $this->logStart();
@@ -195,7 +196,7 @@ class WP extends AbstractTerminal
      * @param array $args
      * @return bool|null
      */
-    public function setPermissions(array $args = [])
+    public function setPermissions(array $args = []): ?bool
     {
         $this->mainStr($args);
         $this->logStart();
@@ -230,19 +231,19 @@ class WP extends AbstractTerminal
      * @param array $args
      * @return bool|null
      */
-    public function setOptions(array $args = [])
+    public function setOptions(array $args = []): ?bool
     {
         $this->mainStr($args);
         $this->logStart();
         if (!$this->validate($args))
             return false;
         if (empty($args['option']['name']))
-            return $this->logError("Option name not passed to setOption method");
+            return $this->logError('Option name not passed to setOption method');
         if (!isset($args['option']['value']) || $args['option']['value'] === '')
-            return $this->logError("Option value not passed to setOption method");
+            return $this->logError('Option value not passed to setOption method');
         $command = 'wp option update ' . $args['option']['name'] . ' "' . $args['option']['value'] . '"';
         $output = $this->exec($command, $args['directory']);
-        $success = (stripos($output, "Success:") !== false) ? true : false;
+        $success = (stripos($output, 'Success:') !== false) ? true : false;
         return $this->logFinish($success, $output, $command);
     }
 
@@ -250,19 +251,19 @@ class WP extends AbstractTerminal
      * @param array $args
      * @return bool|null
      */
-    protected function setOption(array $args = [])
+    public function setOption(array $args = []): ?bool
     {
         $this->mainStr($args);
         $this->logStart();
         if (!$this->validate($args))
             return false;
         if (empty($args['option']['name']))
-            return $this->logError("Option name not passed to setOption method");
+            return $this->logError('Option name not passed to setOption method');
         if (!isset($args['option']['value']) || $args['option']['value'] === '')
-            return $this->logError("Option value not passed to setOption method");
+            return $this->logError('Option value not passed to setOption method');
         $command = 'wp option update ' . $args['option']['name'] . ' "' . $args['option']['value'] . '"';
         $output = $this->exec($command, $args['directory']);
-        $success = (stripos($output, "Success:") !== false) ? true : false;
+        $success = (stripos($output, 'Success:') !== false) ? true : false;
         return $this->logFinish($success, $output, $command);
     }
 
@@ -270,7 +271,7 @@ class WP extends AbstractTerminal
      * @param array $args
      * @return bool|null
      */
-    public function setupConfig(array $args = [])
+    public function setupConfig(array $args = []): ?bool
     {
         $this->mainStr($args);
         $this->logStart();
@@ -296,15 +297,15 @@ class WP extends AbstractTerminal
         if (!empty($wpConfig[$this->environment]))
             $wpConfigConstants = array_replace_recursive($wpConfigConstants, (array)$wpConfig[$this->environment]);
         foreach ($wpConfigConstants as $configConstant => $constant) {
-            $command .= sprintf("wp config set %s %s --raw --type=constant;
-            ", $configConstant, $constant);
+            $command .= sprintf('wp config set %s %s --raw --type=constant;
+            ', $configConstant, $constant);
         }
 
         if ($this->exec('wp config path', $args['directory']) == self::trailing_slash($args['directory']) . 'wp-config.php')
             $command .= 'mv wp-config.php ../';
 
         $output = $this->exec($command, $args['directory']);
-        $success = (stripos($output, "Success:") !== false) && (stripos($output, "Error:") === false) ? true : false;
+        $success = (stripos($output, 'Success:') !== false) && (stripos($output, 'Error:') === false) ? true : false;
         return $this->logFinish($success, $output, $command);
     }
 
@@ -314,7 +315,7 @@ class WP extends AbstractTerminal
      * @param array $args
      * @return bool
      */
-    public function delete(array $args = [])
+    public function delete(array $args = []): bool
     {
         return $this->uninstall($args);
     }
@@ -323,7 +324,7 @@ class WP extends AbstractTerminal
      * @param array $args
      * @return bool
      */
-    public function uninstall(array $args = [])
+    public function uninstall(array $args = []): bool
     {
         $this->mainStr($args);
         $this->logStart();
@@ -336,9 +337,9 @@ class WP extends AbstractTerminal
             $output = $this->exec('wp db clean --yes;', $args['directory']);
             $cleanedDB = (stripos($output, 'Success') !== false && stripos($output, 'Tables dropped') !== false) ? true : false;
             if ($cleanedDB)
-                $output .= " Successfully cleaned DB of all WordPress tables. ";
+                $output .= ' Successfully cleaned DB of all WordPress tables. ';
             else
-                $output .= "Failed to clean DB of WordPress tables. ";
+                $output .= 'Failed to clean DB of WordPress tables. ';
         } else {
             $noNeedCleanDB = true;
             $output .= "Skipped dropping DB tables as apparently WordPress isn't installed. ";
@@ -354,21 +355,21 @@ class WP extends AbstractTerminal
         if (!empty($wp_file_paths)) {
             foreach ($wp_file_paths as $wp_file_path) {
                 if ($this->deleteFile($wp_file_path)) {
-                    $output .= "<br>Deleted <strong>" . $wp_file_path . "</strong>";
+                    $output .= '<br>Deleted <strong>' . $wp_file_path . '</strong>';
                 } else {
                     $succeededDeleting = false;
-                    $output .= "Failed to delete one or more WordPress files. ";
+                    $output .= 'Failed to delete one or more WordPress files. ';
                     break;
                 }
             }
             if ($succeededDeleting)
-                $output .= "<br>Deleted WordPress files. ";
+                $output .= '<br>Deleted WordPress files. ';
         } else {
-            $output = "Apparently no WordPress files were found so no need to delete them. ";
+            $output = 'Apparently no WordPress files were found so no need to delete them. ';
             $noNeedDeleteFiles = true;
         }
         if (!empty($noNeedCleanDB) && !empty($noNeedDeleteFiles))
-            return $this->logFinish(true, "No need to uninstall WordPress. " . $output);
+            return $this->logFinish(true, 'No need to uninstall WordPress. ' . $output);
         $success = (!$this->check($args) && (!empty($cleanedDB) || !empty($noNeedCleanDB)) && $succeededDeleting) ? true : false;
         return $this->logFinish($success, $output);
     }
@@ -377,7 +378,7 @@ class WP extends AbstractTerminal
      * @param array $args
      * @return bool
      */
-    public function update(array $args = [])
+    public function update(array $args = []): bool
     {
         if (!$this->validate($args))
             return false;
@@ -405,11 +406,11 @@ class WP extends AbstractTerminal
      * @param array $args
      * @return bool
      */
-    protected function validate(array $args = [])
+    protected function validate(array $args = []): bool
     {
         $caller = $this->getCaller();
         if (empty($args['directory']))
-            return $this->logError("File directory missing from <code>" . $caller . "</code> method input.");
+            return $this->logError('File directory missing from <code>' . $caller . '</code> method input.');
 
         $args['directory'] = self::trailing_slash($args['directory']);
         if ($this->inSanityList($args['directory']))
@@ -419,20 +420,18 @@ class WP extends AbstractTerminal
             return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $args['directory']));
         }
         if (!$this->client->WPCLI()->check())
-            return $this->logError("WP CLI missing.");
+            return $this->logError('WP CLI missing.');
 
         if ($caller == 'install') {
             if (!isset($args['db']['name'], $args['db']['username'], $args['db']['password']))
-                return $this->logError("DB name, username and/or password are missing from config.");
+                return $this->logError('DB name, username and/or password are missing from config.');
             if (!isset($args['username'], $args['password'], $args['email'], $args['url'], $args['title'], $args['prefix']))
-                return $this->logError("WordPress username, password, email, url, title and/or prefix are missing from config.");
+                return $this->logError('WordPress username, password, email, url, title and/or prefix are missing from config.');
             if (!$this->is_writable($args['directory']))
-                return $this->logError("Nominated WordPress directory is not writable.");
+                return $this->logError('Nominated WordPress directory is not writable.');
         }
-        if ($caller != 'install' && $caller != 'uninstall') {
-            if (!$this->check($args))
-                return $this->logError(sprintf('WordPress not installed at <strong>%s</strong>.', $args['directory']));
-        }
+        if ($caller != 'install' && $caller != 'uninstall' && !$this->check($args))
+            return $this->logError(sprintf('WordPress not installed at <strong>%s</strong>.', $args['directory']));
         return true;
     }
 
@@ -440,7 +439,7 @@ class WP extends AbstractTerminal
      * @param array $args
      * @return bool|null
      */
-    public function setRewriteRules(array $args = [])
+    public function setRewriteRules(array $args = []): ?bool
     {
         $this->mainStr($args);
         $this->logStart();
@@ -486,9 +485,9 @@ class WP extends AbstractTerminal
      * @param array $args
      * @return bool
      */
-    protected function canRewriteFlushHard(array $args = [])
+    protected function canRewriteFlushHard(array $args = []): bool
     {
-        $WPCLIparams = $this->exec("wp cli param-dump --with-values", $args['directory']);
+        $WPCLIparams = $this->exec('wp cli param-dump --with-values', $args['directory']);
         $WPCLIparams = json_decode($WPCLIparams, true);
         d($WPCLIparams);
         $apacheModules = $WPCLIparams['apache_modules']['current'] ?? [];
@@ -501,14 +500,14 @@ class WP extends AbstractTerminal
      * @param array $args
      * @return string
      */
-    protected function getWidgetCommands(array $args = [])
+    protected function getWidgetCommands(array $args = []): string
     {
         $sidebars = $this->exec('wp sidebar list --format=ids', $args['directory']);
         if (empty($sidebars))
             return '';
         $sidebars = explode(' ', trim($sidebars));
         foreach ($sidebars as $sidebar) {
-            $widgetLists[$sidebar] = $this->exec("wp widget list " . $sidebar . " --format=ids", $args['directory']);
+            $widgetLists[$sidebar] = $this->exec('wp widget list ' . $sidebar . ' --format=ids', $args['directory']);
         }
 
         if (empty($widgetLists))
@@ -529,7 +528,7 @@ class WP extends AbstractTerminal
         }
         if (empty($widgetsToDelete))
             return '';
-        return "wp widget delete " . implode(' ', $widgetsToDelete);
+        return 'wp widget delete ' . implode(' ', $widgetsToDelete);
     }
 
     /**
@@ -544,7 +543,7 @@ class WP extends AbstractTerminal
         if (!$this->validate($args))
             return false;
 
-        $output = $this->exec("wp theme search --per-page=30 --fields=name,author,slug --format=json Twenty", $args['directory']);
+        $output = $this->exec('wp theme search --per-page=30 --fields=name,author,slug --format=json Twenty', $args['directory']);
         $themes = json_decode($output, true);
         if (empty($themes))
             return $this->logError("Couldn't find any themes in theme search.");
@@ -592,18 +591,16 @@ class WP extends AbstractTerminal
      * @return string
      */
     protected
-    function mainStr(array $args = [])
+    function mainStr(array $args = []): string
     {
-        if (func_num_args() == 0) {
-            if (!empty($this->_mainStr))
-                return $this->_mainStr;
-        }
+        if (!empty($this->_mainStr) && func_num_args() === 0)
+            return $this->_mainStr;
 
         $dirStr = !empty($args['directory']) ? sprintf(' in directory <strong>%s</strong>', $args['directory']) : '';
         $optionStr = !empty($args['option']['name']) && !empty($args['option']['value']) ?
             sprintf(' with option "<strong>%s</strong>" and value "<strong>%s</strong>"',
                 $args['option']['name'], $args['option']['value']) : '';
 
-        return $this->_mainStr = sprintf("%s environment WordPress%s%s", $this->environment, $dirStr, $optionStr);
+        return $this->_mainStr = sprintf('%s environment WordPress%s%s', $this->environment, $dirStr, $optionStr);
     }
 }

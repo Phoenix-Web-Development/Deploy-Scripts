@@ -11,22 +11,22 @@ namespace Phoenix\WHM\CPanel;
 
 class VersionControl
 {
-    public function clone()
+    public function clone(): void
     {
 
     }
 
-    public function delete()
+    public function delete(): void
     {
 
     }
 
-    public function get()
+    public function get(): void
     {
 
     }
 
-    public function update()
+    public function update(): void
     {
 
     }

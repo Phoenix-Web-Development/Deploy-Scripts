@@ -82,12 +82,10 @@ function sort_recursive_actions(array $actions = array())
                         $sorted_actions[$condition]['children'][$key] = $action;
                     }
                 }
-            else {
-                if (in_array($action['condition'], $sorted_actions_keys)) {
-                    $dummy = $action;
-                    unset($dummy['condition']);
-                    $sorted_actions[$action['condition']]['children'][$key] = $dummy;
-                }
+            elseif (in_array($action['condition'], $sorted_actions_keys)) {
+                $dummy = $action;
+                unset($dummy['condition']);
+                $sorted_actions[$action['condition']]['children'][$key] = $dummy;
             }
         }
     }

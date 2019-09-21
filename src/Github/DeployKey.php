@@ -6,6 +6,7 @@ use \Github\Exception\MissingArgumentException;
 
 /**
  * Class DeployKey
+ *
  * @package Phoenix\Github
  */
 class DeployKey extends AbstractGithub
@@ -16,7 +17,7 @@ class DeployKey extends AbstractGithub
      * @param string $public_key
      * @throws MissingArgumentException
      */
-    public function create(string $repo_name = '', string $key_title = '', string $public_key = '')
+    public function create(string $repo_name = '', string $key_title = '', string $public_key = ''): void
     {
         $this->upload($repo_name, $key_title, $public_key);
     }
@@ -28,17 +29,17 @@ class DeployKey extends AbstractGithub
      * @return bool|null
      * @throws MissingArgumentException
      */
-    public function upload(string $repo_name = '', string $key_title = '', string $public_key = '')
+    public function upload(string $repo_name = '', string $key_title = '', string $public_key = ''): ?bool
     {
         $this->mainStr($repo_name, $key_title);
         $this->logStart();
         if (!$this->validate($repo_name, $key_title))
             return false;
         if (empty($public_key))
-            return $this->logError("Public key not supplied to method.");
+            return $this->logError('Public key not supplied to method.');
 
         if ($this->get($repo_name, $key_title))
-            return $this->logError(sprintf("Key with title <strong>%s</strong> already exists.", $key_title), 'warning');
+            return $this->logError(sprintf('Key with title <strong>%s</strong> already exists.', $key_title), 'warning');
 
         $uploaded_key = $this->client->client->repo()->keys()->create($this->client->user, $repo_name,
             array('title' => $key_title, 'key' => $public_key));
@@ -51,7 +52,7 @@ class DeployKey extends AbstractGithub
      * @param string $key_title
      * @return bool|null
      */
-    public function delete(string $repo_name = '', string $key_title = '')
+    public function delete(string $repo_name = '', string $key_title = ''): ?bool
     {
         return $this->remove($repo_name, $key_title);
     }
@@ -61,7 +62,7 @@ class DeployKey extends AbstractGithub
      * @param string $key_title
      * @return bool|null
      */
-    public function remove(string $repo_name = '', string $key_title = '')
+    public function remove(string $repo_name = '', string $key_title = ''): ?bool
     {
         $this->mainStr($repo_name, $key_title);
         $this->logStart();
@@ -80,7 +81,7 @@ class DeployKey extends AbstractGithub
      * @param string $key_title
      * @return bool
      */
-    public function get(string $repo_name = '', string $key_title = '')
+    public function get(string $repo_name = '', string $key_title = ''): bool
     {
         $this->mainStr($repo_name, $key_title);
         if (!$this->validate($repo_name, $key_title))
@@ -101,14 +102,14 @@ class DeployKey extends AbstractGithub
      * @param string $key_title
      * @return bool
      */
-    protected function validate(string $repo_name = '', string $key_title = '')
+    protected function validate(string $repo_name = '', string $key_title = ''): bool
     {
         if (empty($repo_name))
-            return $this->logError("Repository name not supplied to method.");
+            return $this->logError('Repository name not supplied to method.');
         if (!$this->client->repo()->get($repo_name))
             return $this->logError(sprintf("Github repository <strong>%s</strong> doesn't exist.", $repo_name), 'warning');
         if (empty($key_title))
-            return $this->logError("Key title not supplied to method.");
+            return $this->logError('Key title not supplied to method.');
         return true;
     }
 
@@ -118,15 +119,13 @@ class DeployKey extends AbstractGithub
      * @param string $public_key
      * @return string
      */
-    protected function mainStr(string $repo_name = '', string $key_title = '', string $public_key = '')
+    protected function mainStr(string $repo_name = '', string $key_title = '', string $public_key = ''): string
     {
-        if (func_num_args() == 0) {
-            if (!empty($this->_mainStr))
-                return $this->_mainStr;
-        }
+        if (!empty($this->_mainStr) && func_num_args() === 0)
+            return $this->_mainStr;
         $repo_name = !empty($repo_name) ? sprintf(' for repository <strong>%s</strong>', $repo_name) : '';
         $key_title = !empty($key_title) ? sprintf(' with key title <strong>%s</strong>', $key_title) : '';
         $public_key = !empty($public_key) ? sprintf(' and public key <strong>%s</strong>', $public_key) : '';
-        return $this->_mainStr = " GitHub deploy key" . $repo_name . $key_title . $public_key;
+        return $this->_mainStr = ' GitHub deploy key' . $repo_name . $key_title . $public_key;
     }
 }

@@ -233,17 +233,13 @@ class WHM extends Base
      */
     public function __construct(Curl $curl)
     {
-        if (empty($curl)) {
-            return false;
-        }
         $this->curl = $curl;
         $cpanel_accounts = $this->get_cpanel_accounts();
         if (!empty($cpanel_accounts)) {
             $this->log(sprintf('Successfully connected WHM API. WHM contains %s cPanel accounts.',
                 count($this->cpanel_accounts['accounts'])), 'success');
-            return true;
         }
-        return false;
+        parent::__construct();
     }
 
     /*
@@ -289,7 +285,7 @@ class WHM extends Base
     /**
      * @param string $cpanel_parameter
      * @param string $type
-     * @return bool
+     * @return array|bool
      */
     public
     function get_cpanel_account(string $cpanel_parameter = '', string $type = 'user')
@@ -330,7 +326,7 @@ class WHM extends Base
             }
             foreach ($result['result']['data']['acct'] as $cpanel_account) {
                 if ($cpanel_account[$type] == $cpanel_parameter) {
-                    $this->log(sprintf("Found cPanel account %s. %s",
+                    $this->log(sprintf('Found cPanel account %s. %s',
                         $log_append_string, $result['message']), 'info');
                     $found_cpanel_account = $cpanel_account;
                 }
@@ -352,7 +348,7 @@ class WHM extends Base
         if (!empty($result['message']))
             $log_append_string .= '. ' . $result['message'];
         if (!empty($found_cpanel_account)) {
-            $this->log(sprintf("Found cPanel account %s", $log_append_string), 'info');
+            $this->log(sprintf('Found cPanel account %s', $log_append_string), 'info');
             return $found_cpanel_account;
         }
         $this->log(sprintf("cPanel account %s doesn't exist.", $log_append_string), 'info');
@@ -364,6 +360,7 @@ class WHM extends Base
     {
         if (!$result = $this->api_call('getdiskusage', array()))
             return false;
+        d($result);
         if ($result['success']) {
             return $result['result'];
         }
@@ -376,7 +373,7 @@ class WHM extends Base
     {
         $error_str = "Couldn't get package info. ";
         if (empty($package)) {
-            $this->log(sprintf("%s No package name supplied to function.", $error_str));
+            $this->log(sprintf('%s No package name supplied to function.', $error_str));
             return false;
         }
         if (!$result = $this->api_call('getpkginfo', array('pkg' => $package)))
@@ -391,7 +388,7 @@ class WHM extends Base
     /**
      * @param string $cpanel_parameter
      * @param string $cpanel_parameter_type
-     * @return bool
+     * @return array|bool
      */
     public
     function list_domains(string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
@@ -421,24 +418,24 @@ class WHM extends Base
      * @return bool
      */
     public
-    function create_cpanel_account(string $username = '', string $domain = '', array $args = array())
+    function create_cpanel_account(string $username = '', string $domain = '', array $args = array()): bool
     {
         //$this->log( 'Creating cPanel Account', 'info' );
         $error_string = "Can't create cPanel account.";
         if (empty($username)) {
-            $this->log($error_string . " Username to apply is missing.", 'error');
+            $this->log($error_string . ' Username to apply is missing.', 'error');
             return false;
         }
         if (empty($domain)) {
-            $this->log($error_string . " Domain to apply is missing.", 'error');
+            $this->log($error_string . ' Domain to apply is missing.', 'error');
             return false;
         }
         $args_message = !empty($args) ? ' and args: ' . build_recursive_list($args) : '';
 
-        $finish_message_append = sprintf(" cPanel account with domain <strong>%s</strong> and username <strong>%s</strong>.",
+        $finish_message_append = sprintf(' cPanel account with domain <strong>%s</strong> and username <strong>%s</strong>.',
             $domain, $username);
 
-        $this->log(sprintf("Creating %s%s.", $finish_message_append, $args_message), 'info');
+        $this->log(sprintf('Creating %s%s.', $finish_message_append, $args_message), 'info');
         if (!$result = $this->api_call('createacct', array_merge(array(
             'username' => $username,
             'domain' => $domain),
@@ -461,7 +458,7 @@ class WHM extends Base
      * @return bool
      */
     public
-    function delete_cpanel_account(string $cpanel_parameter = '', string $type = 'user')
+    function delete_cpanel_account(string $cpanel_parameter = '', string $type = 'user'): bool
     {
         //$this->log( 'Deleting cPanel account', 'info' );
         //check account exists
@@ -470,7 +467,7 @@ class WHM extends Base
             $this->log(sprintf("Can't delete cPanel account with %s %s. Apparently it doesn't exist.", $type, $cpanel_account[$type]), 'warning');
             return false;
         }
-        $finish_message_append = sprintf(" cPanel account with domain <strong>%s</strong> and username <strong>%s</strong>.",
+        $finish_message_append = sprintf(' cPanel account with domain <strong>%s</strong> and username <strong>%s</strong>.',
             $cpanel_account['domain'], $cpanel_account['user']);
         $this->log('Deleting' . $finish_message_append, 'info');
         if (!$result = $this->api_call('removeacct', array(
@@ -496,7 +493,7 @@ class WHM extends Base
      * @return bool
      */
     public
-    function create_db_user(string $db_user = '', string $db_password = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
+    function create_db_user(string $db_user = '', string $db_password = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user'): bool
     {
         //$this->log( 'Creating DB User', 'info' );
         $error_string_append = "Can't create DB user. ";
@@ -514,7 +511,7 @@ class WHM extends Base
         }
         $db_user = $this->db_prefix_check($db_user, $cpanel_account['user']);
 
-        $finish_message_append = sprintf(" DB user <strong>%s</strong> for cPanel account with %s <strong>%s</strong>.", $db_user, $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
+        $finish_message_append = sprintf(' DB user <strong>%s</strong> for cPanel account with %s <strong>%s</strong>.', $db_user, $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
 
         $this->log('Creating' . $finish_message_append, 'info');
         if (!$result = $this->api_call('cpanel', array_merge($this->cpanel_api_functions['create_user'], array(
@@ -541,7 +538,7 @@ class WHM extends Base
      * @return bool
      */
     public
-    function create_db(string $db_name = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
+    function create_db(string $db_name = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user'): bool
     {
         $error_string_append = "Can't create DB schema. ";
         //$this->log( 'Creating DB schema', 'info' );
@@ -558,7 +555,7 @@ class WHM extends Base
 
         $db_name = $this->db_prefix_check($db_name, $cpanel_account['user']);
 
-        $finish_message_append = sprintf(" DB schema <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.",
+        $finish_message_append = sprintf(' DB schema <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.',
             $db_name, $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
         $this->log('Creating' . $finish_message_append, 'info');
         if (!$result = $this->api_call('cpanel', array_merge($this->cpanel_api_functions['create_database'], array(
@@ -584,18 +581,18 @@ class WHM extends Base
      * @param string $cpanel_parameter_type
      * @return bool
      */
-    function db_user_privileges(string $action = 'get', string $db_user = '', string $db_name = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
+    public function db_user_privileges(string $action = 'get', string $db_user = '', string $db_name = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user'): bool
     {
         if (!$this->validate_action($action, array('get', 'set'), "Can't do DB user privileges stuff."))
             return false;
 
         $error_string_append = sprintf("Can't %s DB user privileges. ", $action);
         if (empty($db_user)) {
-            $this->log($error_string_append . "DB user is blank.");
+            $this->log($error_string_append . 'DB user is blank.');
             return false;
         }
         if (empty($db_name)) {
-            $this->log($error_string_append . "DB name is blank.");
+            $this->log($error_string_append . 'DB name is blank.');
             return false;
         }
         $cpanel_account = $this->get_cpanel_account($cpanel_parameter, $cpanel_parameter_type);
@@ -606,9 +603,9 @@ class WHM extends Base
         $db_user = $this->db_prefix_check($db_user, $cpanel_account['user']);
         $db_name = $this->db_prefix_check($db_name, $cpanel_account['user']);
 
-        $finish_message_append = sprintf(" privileges for DB user <strong>%s</strong> for DB schema <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.",
+        $finish_message_append = sprintf(' privileges for DB user <strong>%s</strong> for DB schema <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.',
             $db_user, $db_name, $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
-        switch ($action) {
+        switch($action) {
             case 'get':
                 $api_function = 'get_privileges_on_database';
                 break;
@@ -622,7 +619,7 @@ class WHM extends Base
                         $this->log("Can't set" . $finish_message_append . ' Existing DB privileges are identical.', 'warning');
                         return false;
                     }
-                    $this->log("Overwriting existing email DB user privileges which are: " . build_recursive_list($existing_privileges), 'info');
+                    $this->log('Overwriting existing email DB user privileges which are: ' . build_recursive_list($existing_privileges), 'info');
                 }
                 break;
         }
@@ -655,7 +652,7 @@ class WHM extends Base
      * @return bool
      */
     public
-    function set_db_user_privileges(string $db_user = '', string $db_name = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
+    function set_db_user_privileges(string $db_user = '', string $db_name = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user'): bool
     {
         return $this->db_user_privileges('set', $db_user, $db_name, $cpanel_parameter, $cpanel_parameter_type);
     }
@@ -667,7 +664,7 @@ class WHM extends Base
      * @return bool
      */
     public
-    function delete_db_user(string $db_user = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
+    function delete_db_user(string $db_user = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user'): bool
     {
         //$this->log( 'Deleting DB User', 'info' );
         $error_string_append = "Couldn't delete DB user. ";
@@ -683,7 +680,7 @@ class WHM extends Base
         }
         $db_user = $this->db_prefix_check($db_user, $cpanel_account['user']);
 
-        $finish_message_append = sprintf(" DB user <strong>%s</strong> from cPanel account with %s <strong>%s</strong>.",
+        $finish_message_append = sprintf(' DB user <strong>%s</strong> from cPanel account with %s <strong>%s</strong>.',
             $db_user, $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
 
         $this->log('Deleting' . $finish_message_append, 'info');
@@ -710,12 +707,12 @@ class WHM extends Base
      * @return bool
      */
     public
-    function delete_db(string $db_name, string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
+    function delete_db(string $db_name, string $cpanel_parameter = '', string $cpanel_parameter_type = 'user'): bool
     {
         //$this->log( 'Deleting DB', 'info' );
         $error_string = "Couldn't delete DB schema. ";
         if (empty($db_name)) {
-            $this->log($error_string . "DB name is blank.", 'error');
+            $this->log($error_string . 'DB name is blank.', 'error');
             return false;
         }
 
@@ -727,9 +724,9 @@ class WHM extends Base
 
         $db_name = $this->db_prefix_check($db_name, $cpanel_account['user']);
 
-        $finish_message_append = sprintf(" DB schema <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.",
+        $finish_message_append = sprintf(' DB schema <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.',
             $db_name, $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
-        $this->log("Deleting" . $finish_message_append, 'info');
+        $this->log('Deleting' . $finish_message_append, 'info');
         if (!$result = $this->api_call('cpanel', array_merge($this->cpanel_api_functions['delete_database'], array(
             'cpanel_jsonapi_user' => $cpanel_account['user'],
             'name' => $db_name
@@ -787,7 +784,7 @@ class WHM extends Base
      * @return bool
      */
     public
-    function create_subdomain(string $subdomain = '', string $rootdomain = '', string $directory = '')
+    function create_subdomain(string $subdomain = '', string $rootdomain = '', string $directory = ''): bool
     {
         //$this->log( 'Adding subdomain to cPanel account', 'info' );
         if (!isset($subdomain, $rootdomain, $directory)) {
@@ -823,7 +820,7 @@ class WHM extends Base
      * @param string $subdomain_slug
      * @param string $cpanel_parameter
      * @param string $cpanel_parameter_type
-     * @return bool
+     * @return array|bool
      */
     public
     function get_subdomain(string $subdomain_slug = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
@@ -832,7 +829,7 @@ class WHM extends Base
         //$this->log( 'Querying cPanel account for subdomain.', 'info' );
         $error_string = "Can't query subdomain. ";
         if (empty($subdomain_slug)) {
-            $this->log($error_string . ". Subdomain slug input missing. ", 'error');
+            $this->log($error_string . '. Subdomain slug input missing. ', 'error');
             return false;
         }
 
@@ -843,9 +840,9 @@ class WHM extends Base
         }
         $subdomain_url = $subdomain_slug . '.' . $cpanel_account['domain'];
 
-        $finish_message_append = sprintf(" subdomain <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.",
+        $finish_message_append = sprintf(' subdomain <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.',
             $subdomain_url, $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
-        $this->log("Querying for" . $finish_message_append, 'info');
+        $this->log('Querying for' . $finish_message_append, 'info');
 
         if (!$result = $this->api_call('cpanel', array_merge($this->cpanel_api_functions['single_domain_data'], array(
             'domain' => $subdomain_url,
@@ -871,12 +868,12 @@ class WHM extends Base
      * @return bool
      */
     public
-    function delete_subdomain(string $subdomain_slug = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
+    function delete_subdomain(string $subdomain_slug = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user'): bool
     {
         //$this->log( 'Deleting cPanel subdomain', 'info' );
         $error_string = "Can't delete cPanel subdomain. ";
         if (empty($subdomain_slug)) {
-            $this->log("Subdomain slug input is missing.", 'error');
+            $this->log('Subdomain slug input is missing.', 'error');
             return false;
         }
 
@@ -887,7 +884,7 @@ class WHM extends Base
         }
         $subdomain_url = $subdomain_slug . '.' . $cpanel_account['domain'];
 
-        $finish_message_append = sprintf(" subdomain <strong>%s</strong> from cPanel account with %s <strong>%s</strong>.",
+        $finish_message_append = sprintf(' subdomain <strong>%s</strong> from cPanel account with %s <strong>%s</strong>.',
             $subdomain_url, $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
 
         $this->log('Deleting' . $finish_message_append, 'info');
@@ -921,7 +918,7 @@ class WHM extends Base
      */
     public
     function email_filter($action = '', string $account = '', string $filter_name = '', $args = array(),
-                          string $cpanel_parameter = '', string $cpanel_parameter_type = 'user', bool $quiet = false)
+                          string $cpanel_parameter = '', string $cpanel_parameter_type = 'user', bool $quiet = false): bool
     {
         if (!$this->validate_action($action, array('create', 'delete', 'get'), "Can't do email filter stuff."))
             return false;
@@ -939,12 +936,12 @@ class WHM extends Base
             $this->log($error_string_append . "Couldn't find cPanel account to add email filter to. ", 'error');
             return false;
         }
-        $finish_message_append = sprintf(" email filter <strong>%s</strong> for email account <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.",
+        $finish_message_append = sprintf(' email filter <strong>%s</strong> for email account <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.',
             $filter_name, $account, $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
         $args_api_call = array();
         if (!$quiet)
             $this->log(ucfirst($this->actions[$action]['present']) . $finish_message_append, 'info');
-        switch ($action) {
+        switch($action) {
             case 'create':
                 $api_function = 'store_filter';
                 $queried_filter = $this->get_email_filter( //check if identical email filter exists because API doesn't check this
@@ -977,10 +974,10 @@ class WHM extends Base
                             $is_different = false;
                     }
                     if (isset($is_different) && !$is_different) {
-                        $this->log($error_string_append . "Identical email filter already exists.", 'warning');
+                        $this->log($error_string_append . 'Identical email filter already exists.', 'warning');
                         return false;
                     } else
-                        $this->log("Overwriting existing email filter which has the following attributes: " . build_recursive_list($queried_filter));
+                        $this->log('Overwriting existing email filter which has the following attributes: ' . build_recursive_list($queried_filter));
                 }
                 if (!empty($args)) {
                     foreach ($args as $action_parameter => $arg) {
@@ -1044,7 +1041,7 @@ class WHM extends Base
      * @return bool
      */
     public
-    function get_email_filter(string $account = '', string $filter_name = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
+    function get_email_filter(string $account = '', string $filter_name = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user'): bool
     {
         return $this->email_filter('get', $account, $filter_name, array(), $cpanel_parameter, $cpanel_parameter_type, true);
     }
@@ -1059,7 +1056,7 @@ class WHM extends Base
      */
     public
     function create_email_filter(string $account = '', string $filter_name = '',
-                                 $args = array(), string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
+                                 $args = array(), string $cpanel_parameter = '', string $cpanel_parameter_type = 'user'): bool
     {
         return $this->email_filter('create', $account, $filter_name, $args, $cpanel_parameter, $cpanel_parameter_type);
     }
@@ -1072,7 +1069,7 @@ class WHM extends Base
      * @return bool
      */
     public
-    function delete_email_filter(string $account = '', string $filter_name = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
+    function delete_email_filter(string $account = '', string $filter_name = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user'): bool
     {
         return $this->email_filter('delete', $account, $filter_name, array(), $cpanel_parameter, $cpanel_parameter_type);
     }
@@ -1084,7 +1081,7 @@ class WHM extends Base
      * @return bool
      */
     public
-    function get_quota_info(string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
+    function get_quota_info(string $cpanel_parameter = '', string $cpanel_parameter_type = 'user'): bool
     {
         //$this->log( 'Getting quota info', 'info' );
         $error_string_append = "Can't get quota info. ";
@@ -1094,10 +1091,10 @@ class WHM extends Base
             return false;
         }
 
-        $finish_message_append = sprintf(" quota information from cPanel account with %s <strong>%s</strong>",
+        $finish_message_append = sprintf(' quota information from cPanel account with %s <strong>%s</strong>',
             $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
 
-        $this->log("Querying" . $finish_message_append, 'info');
+        $this->log('Querying' . $finish_message_append, 'info');
         if (!$result = $this->api_call('cpanel', array_merge($this->cpanel_api_functions['get_quota_info'], array(
             'cpanel_jsonapi_user' => $cpanel_account['user']
         )))
@@ -1122,7 +1119,7 @@ class WHM extends Base
      * @return bool
      */
     public
-    function import_key(string $key = '', string $key_name = '', string $key_pass = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
+    function import_key(string $key = '', string $key_name = '', string $key_pass = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user'): bool
     {
         $error_string_append = "Can't import SSH key into cPanel. ";
         $cpanel_account = $this->get_cpanel_account($cpanel_parameter, $cpanel_parameter_type);
@@ -1131,10 +1128,10 @@ class WHM extends Base
             return false;
         }
 
-        $finish_message_append = sprintf(" SSH key named <strong>%s</strong> into cPanel account with %s <strong>%s</strong>",
+        $finish_message_append = sprintf(' SSH key named <strong>%s</strong> into cPanel account with %s <strong>%s</strong>',
             $key_name, $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
 
-        $this->log("Importing " . $finish_message_append, 'info');
+        $this->log('Importing ' . $finish_message_append, 'info');
         if (!$result = $this->api_call('cpanel', array_merge($this->cpanel_api_functions['importkey'], array(
             'cpanel_jsonapi_user' => $cpanel_account['user'],
             'key' => $key,
@@ -1167,11 +1164,11 @@ class WHM extends Base
         string $key_pass = '',
         string $key_bits = '2048',
         string $cpanel_parameter = '',
-        string $cpanel_parameter_type = 'user')
+        string $cpanel_parameter_type = 'user'): bool
     {
         $error_string_append = "Can't generate cPanel SSH key. ";
         if (empty($key_name)) {
-            $this->log($error_string_append . "No key name supplied to function.", 'error');
+            $this->log($error_string_append . 'No key name supplied to function.', 'error');
             return false;
         }
         $cpanel_account = $this->get_cpanel_account($cpanel_parameter, $cpanel_parameter_type);
@@ -1180,11 +1177,11 @@ class WHM extends Base
             return false;
         }
         if ($ssh_key = $this->fetchkey($key_name, 1, $cpanel_parameter, $cpanel_parameter_type)) {
-            $this->log(sprintf("%s Key named <strong>%s</strong> already exists.", $error_string_append, $key_name), 'warning');
+            $this->log(sprintf('%s Key named <strong>%s</strong> already exists.', $error_string_append, $key_name), 'warning');
             return $ssh_key;
         }
 
-        $finish_message_append = sprintf(" SSH key named <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.",
+        $finish_message_append = sprintf(' SSH key named <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.',
             $key_name, $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
         $this->log('Generating' . $finish_message_append, 'info');
         if (!$result = $this->api_call('cpanel', array_merge($this->_cpanel_api_functions['SSH']['genkey'], array(
@@ -1219,11 +1216,11 @@ class WHM extends Base
         int $pub = 1,
         string $cpanel_parameter = '',
         string $cpanel_parameter_type = 'user'
-    )
+    ): bool
     {
         $error_string_append = "Can't fetch SSH key. ";
         if (empty($key_name)) {
-            $this->log($error_string_append . "No key name supplied to function.", 'error');
+            $this->log($error_string_append . 'No key name supplied to function.', 'error');
             return false;
         }
         $cpanel_account = $this->get_cpanel_account($cpanel_parameter, $cpanel_parameter_type);
@@ -1231,7 +1228,7 @@ class WHM extends Base
             $this->log($error_string_append . "Couldn't find cPanel account to fetch SSH key for.", 'error');
             return false;
         }
-        switch ($pub) {
+        switch($pub) {
             case 0:
                 $key_type = 'private';
                 break;
@@ -1239,11 +1236,11 @@ class WHM extends Base
                 $key_type = 'public';
                 break;
             default:
-                $this->log($error_string_append . "Key type must be 1 for public key or 0 for private key.", 'error');
+                $this->log($error_string_append . 'Key type must be 1 for public key or 0 for private key.', 'error');
                 return false;
                 break;
         }
-        $finish_message_append = sprintf(" %s SSH key named <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.",
+        $finish_message_append = sprintf(' %s SSH key named <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.',
             $key_type, $key_name, $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
         //$this->log('Fetching' . $finish_message_append, 'info');
         if (!$result = $this->api_call('cpanel', array_merge($this->_cpanel_api_functions['SSH']['fetchkey'], array(
@@ -1276,11 +1273,11 @@ class WHM extends Base
         int $pub = 1,
         string $cpanel_parameter = '',
         string $cpanel_parameter_type = 'user'
-    )
+    ): bool
     {
         $error_string_append = "Can't list SSH keys. ";
         if (empty($key_name)) {
-            $this->log($error_string_append . "No key name supplied to function.", 'error');
+            $this->log($error_string_append . 'No key name supplied to function.', 'error');
             return false;
         }
         $cpanel_account = $this->get_cpanel_account($cpanel_parameter, $cpanel_parameter_type);
@@ -1288,7 +1285,7 @@ class WHM extends Base
             $this->log($error_string_append . "Couldn't find cPanel account to list SSH keys for.", 'error');
             return false;
         }
-        switch ($pub) {
+        switch($pub) {
             case 0:
                 $key_type = 'private';
                 break;
@@ -1296,11 +1293,11 @@ class WHM extends Base
                 $key_type = 'public';
                 break;
             default:
-                $this->log($error_string_append . "Key type must be 1 for public key or 0 for private key.", 'error');
+                $this->log($error_string_append . 'Key type must be 1 for public key or 0 for private key.', 'error');
                 return false;
                 break;
         }
-        $finish_message_append = sprintf(" %s SSH keys named <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.",
+        $finish_message_append = sprintf(' %s SSH keys named <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.',
             $key_type, $key_name, $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
         //$this->log('Fetching' . $finish_message_append, 'info');
         if (!$result = $this->api_call('cpanel', array_merge($this->_cpanel_api_functions['SSH']['listkeys'], array(
@@ -1328,14 +1325,14 @@ class WHM extends Base
      * @return bool
      */
     public
-    function authkey(string $key_name = '', string $action = 'authorize', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
+    function authkey(string $key_name = '', string $action = 'authorize', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user'): bool
     {
         if (!$this->validate_action($action, array('authorize', 'deauthorize'), "Can't do cPanel key authorisation stuff."))
             return false;
 
         $error_string_append = sprintf("Can't %s SSH key.", $this->actions[$action]['action']);
         if (empty($key_name)) {
-            $this->log($error_string_append . "No key name supplied to function.", 'error');
+            $this->log($error_string_append . 'No key name supplied to function.', 'error');
             return false;
         }
 
@@ -1346,7 +1343,7 @@ class WHM extends Base
             return false;
         }
 
-        $finish_message_append = sprintf(" SSH key named <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.",
+        $finish_message_append = sprintf(' SSH key named <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.',
             $key_name, $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
         $this->log(ucfirst($this->actions[$action]['present']) . ' ' . $finish_message_append, 'info');
         $error_string_append = "Can't " . $action . $finish_message_append;
@@ -1357,7 +1354,7 @@ class WHM extends Base
             return false;
         }
         if (($key['authstatus'] == 'authorized' && $action == 'authorize') || ($key['authstatus'] == 'not authorized' && $action == 'deauthorize')) {
-            $this->log(sprintf("%s Key named <strong>%s</strong> is already %s.",
+            $this->log(sprintf('%s Key named <strong>%s</strong> is already %s.',
                 $error_string_append, $key_name, $this->actions[$action]['past']), 'warning');
             return false;
         }
@@ -1375,7 +1372,7 @@ class WHM extends Base
             $this->log('Successfully ' . $this->actions[$action]['past'] . $finish_message_append, 'success');
             return true;
         }
-        $this->log("Failed to " . $action . $finish_message_append);
+        $this->log('Failed to ' . $action . $finish_message_append);
         return false;
     }
 
@@ -1387,12 +1384,12 @@ class WHM extends Base
      * @return bool
      */
     public
-    function delkey(string $key_name = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
+    function delkey(string $key_name = '', string $cpanel_parameter = '', string $cpanel_parameter_type = 'user'): bool
     {
         $action = 'delete';
         $error_string_append = sprintf("Can't delete SSH key.");
         if (empty($key_name)) {
-            $this->log($error_string_append . "No key name supplied to function.", 'error');
+            $this->log($error_string_append . 'No key name supplied to function.', 'error');
             return false;
         }
         $cpanel_account = $this->get_cpanel_account($cpanel_parameter, $cpanel_parameter_type);
@@ -1402,7 +1399,7 @@ class WHM extends Base
             return false;
         }
 
-        $finish_message_append = sprintf(" SSH key named <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.",
+        $finish_message_append = sprintf(' SSH key named <strong>%s</strong> in cPanel account with %s <strong>%s</strong>.',
             $key_name, $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
         $this->log(ucfirst($this->actions[$action]['present']) . $finish_message_append, 'info');
         if (!$this->fetchkey($key_name, 1, $cpanel_parameter, $cpanel_parameter_type)) {
@@ -1444,7 +1441,7 @@ class WHM extends Base
                              string $source_repository = '',
                              string $cpanel_parameter = '',
                              string $cpanel_parameter_type = 'user'
-    )
+    ): bool
     {
         if (!in_array($action, array('clone', 'delete', 'get', 'update'))) {
             $this->log("Can't do version control stuff. Non valid action.");
@@ -1452,7 +1449,7 @@ class WHM extends Base
         }
         $error_string_append = sprintf("Can't %s cPanel version control repository.", $action);
         if (empty($repository_root) && $action != 'get') {
-            $this->log(sprintf("%s Repository root function arg is missing.", $error_string_append));
+            $this->log(sprintf('%s Repository root function arg is missing.', $error_string_append));
             return false;
         }
         d($cpanel_parameter);
@@ -1464,15 +1461,15 @@ class WHM extends Base
         $repository_url = json_decode($source_repository)->url ?? '';
         $repository_url_str = !empty($repository_url) ? sprintf(' sourced from <strong>%s</strong>', $repository_url) : '';
         $repository_root_str = !empty($repository_root) ? sprintf(' located at <strong>%s</strong>', $repository_root) : '';
-        $finish_message_append = sprintf(" Git repository%s%s in cPanel account with %s <strong>%s</strong>.",
+        $finish_message_append = sprintf(' Git repository%s%s in cPanel account with %s <strong>%s</strong>.',
             $repository_root_str, $repository_url_str, $cpanel_parameter_type, $cpanel_account[$cpanel_parameter_type]);
         if ($action != 'get')
             $this->log(ucfirst($this->actions[$action]['present']) . $finish_message_append, 'info');
         $args = array();
-        switch ($action) {
+        switch($action) {
             case 'clone':
                 if (empty($repo_name) || empty($source_repository)) {
-                    $this->log(sprintf("%s Some creation function args are missing.", $error_string_append));
+                    $this->log(sprintf('%s Some creation function args are missing.', $error_string_append));
                     return false;
                 }
                 $existing_repo = $this->version_control('get', $repository_root, $repo_name, $source_repository);
@@ -1484,7 +1481,7 @@ class WHM extends Base
                     elseif (!empty($existing_repo['source_repository']['url']) && $existing_repo['source_repository']['url'] == $repository_url)
                         $existing_repo_error = sprintf('with remote url <strong>%s</strong>', $repository_url);
                     if (!empty($existing_repo_error)) {
-                        $this->log(sprintf("%s Repository %s already exists.", $error_string_append, $existing_repo_error), 'warning');
+                        $this->log(sprintf('%s Repository %s already exists.', $error_string_append, $existing_repo_error), 'warning');
                         return false;
                     }
                 }
@@ -1499,7 +1496,7 @@ class WHM extends Base
                 $function = 'delete';
                 $existing_repo = $this->version_control('get', $repository_root);
                 if (empty($existing_repo)) {
-                    $this->log(sprintf("%s No repository at <strong>%s</strong> to delete.", $error_string_append, $repository_root), 'warning');
+                    $this->log(sprintf('%s No repository at <strong>%s</strong> to delete.', $error_string_append, $repository_root), 'warning');
                     return false;
                 }
                 $args = array(
@@ -1525,7 +1522,7 @@ class WHM extends Base
             return false;
         $finish_message_append .= $result['message'];
         if ($result['success']) {
-            switch ($action) {
+            switch($action) {
                 case 'clone':
                     if ($this->version_control('get', $repository_root, $repo_name, $source_repository)) {
                         $success = true;
@@ -1596,11 +1593,11 @@ class WHM extends Base
      * @param string $api
      * @return bool|null
      */
-    function get_api_success(array $curl_result = array(), string $api = '')
+    private function get_api_success(array $curl_result = array(), string $api = ''): ?bool
     {
         if (empty($api))
             $api = $this->get_api_version($curl_result);
-        switch ($api) {
+        switch($api) {
             case 'cPanel API 2':
                 if (isset($curl_result['cpanelresult']['data'][0]['result']))
                     $flag = $curl_result['cpanelresult']['data'][0]['result'];
@@ -1632,7 +1629,7 @@ class WHM extends Base
      * @param string $function
      * @return bool|string
      */
-    function get_api_version(array $curl_result = array(), string $function = '')
+    private function get_api_version(array $curl_result = array(), string $function = '')
     {
         if (empty($curl_result) && empty($function))
             return false;
@@ -1645,7 +1642,7 @@ class WHM extends Base
                 return 'WHM';
         }
         if (!empty($function) && key_exists($function, $this->cpanel_api_functions)) {
-            switch ($this->cpanel_api_functions[$function]['cpanel_jsonapi_apiversion']) {
+            switch($this->cpanel_api_functions[$function]['cpanel_jsonapi_apiversion']) {
                 case 2:
                     return 'cPanel API 2';
                     break;
@@ -1664,17 +1661,17 @@ class WHM extends Base
      * @return string
      */
     private
-    function get_api_message(array $curl_result = array(), string $api = '')
+    function get_api_message(array $curl_result = array(), string $api = ''): string
     {
         if (empty($api))
             $api = $this->get_api_version($curl_result);
-        switch ($api) {
+        switch($api) {
             case 'cPanel API 2':
                 if (!empty($curl_result['cpanelresult']['data']['reason']))
                     $message = $curl_result['cpanelresult']['data']['reason'];
-                else if (!empty($curl_result['cpanelresult']['data'][0]['reason']))
+                elseif (!empty($curl_result['cpanelresult']['data'][0]['reason']))
                     $message = $curl_result['cpanelresult']['data'][0]['reason'];
-                else if (!empty($curl_result['cpanelresult']['error']))
+                elseif (!empty($curl_result['cpanelresult']['error']))
                     $message = $curl_result['cpanelresult']['error'];
                 else
                     $message = '&nbsp;';

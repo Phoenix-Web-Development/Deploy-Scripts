@@ -4,6 +4,7 @@ namespace Phoenix;
 
 /**
  * Class WordPress
+ *
  * @package Phoenix
  */
 class TransferWPDB extends AbstractDeployer
@@ -15,178 +16,169 @@ class TransferWPDB extends AbstractDeployer
     protected $logElement = 'h3';
 
     /**
-     * @var
+     * @var cPanelAccount|cPanelSubdomain|Environ
      */
-    private $terminals;
+    private $fromEnviron;
 
+    /**
+     * @var TerminalClient|null
+     */
+    private $fromTerminal;
 
-    function __construct()
+    /**
+     * @var cPanelAccount|cPanelSubdomain|Environ
+     */
+    private $destEnviron;
+
+    /**
+     * @var TerminalClient|null
+     */
+    private $destTerminal;
+
+    /**
+     * TransferWPDB constructor.
+     *
+     * @param cPanelAccount|cPanelSubdomain|Environ $fromEnviron
+     * @param TerminalClient $fromTerminal
+     * @param cPanelAccount|cPanelSubdomain|Environ $destEnviron
+     * @param TerminalClient|null $destTerminal
+     */
+    public function __construct($fromEnviron, TerminalClient $fromTerminal, $destEnviron = null, TerminalClient $destTerminal = null)
     {
+        $this->fromEnviron = $fromEnviron;
+        $this->fromTerminal = $fromTerminal;
+        $this->destEnviron = $destEnviron;
+        $this->destTerminal = $destTerminal;
         parent::__construct();
     }
 
     /**
-     * @param string $fromEnviron
-     * @param string $destEnviron
-     * @param TerminalClient $fromTerminal
-     * @param TerminalClient $destTerminal
      * @return bool|null
      */
-    function transfer(
-        string $fromEnviron = '',
-        string $destEnviron = '',
-        TerminalClient $fromTerminal = null,
-        TerminalClient $destTerminal = null
-    )
+    public function transfer(): bool
     {
-
-        $args = $this->getArgs($fromEnviron, $destEnviron);
-        $this->mainStr($fromEnviron, $destEnviron, $args['from']['url'], $args['dest']['url']);
+        $args = $this->getArgs();
+        $this->mainStr($this->fromEnviron->name, $this->destEnviron->name, $args['from']['url'], $args['dest']['url']);
         $this->logStart();
-        if (!$this->validate($fromTerminal, $destTerminal))
+        if (!$this->validate($args))
             return false;
-        if (empty($args))
-            return false;
+
         $success = [];
-        $fromFilepath = $this->getFilePath($fromEnviron, $args['from']['db_name']);
+        $fromFilepath = self::getFilePath($this->fromEnviron->name, $args['from']['db_name']);
 
-        if (!$fromTerminal->wp_db()->export($args['from']['dir'], $fromFilepath))
-            return $this->logError("Export failed.");
+        if (!$this->fromTerminal->wp_db()->export($args['from']['dir'], $fromFilepath))
+            return $this->logError('Export failed.');
 
-        $success['backup'] = $this->backup($destEnviron, $destTerminal);
+        $success['backup'] = $this->backup();
         if (!$success['backup'])
-            return $this->logError("Backup failed.");
+            return $this->logError('Backup failed.');
 
-        $success['import'] = $destTerminal->wp_db()->import($args['dest']['dir'], $fromFilepath . '.gz');
+        $success['import'] = $this->destTerminal->wp_db()->import($args['dest']['dir'], $fromFilepath . '.gz');
         if (!$success['import'])
-            return $this->logError("Import failed.");
+            return $this->logError('Import failed.');
 
-        $success['replaceURLs'] = $destTerminal->wp_db()->replaceURLs($args['dest']['dir'], $args['from']['url'], $args['dest']['url']);
+        $success['replaceURLs'] = $this->destTerminal->wp_db()->replaceURLs($args['dest']['dir'], $args['from']['url'], $args['dest']['url']);
 
 
         $wpOptions = array(
             'option' => array(
                 'name' => 'blog_public',
-                'value' => $destEnviron == 'live' ? 1 : 0
+                'value' => $this->destEnviron->name === 'live' ? 1 : 0
             )
         );
         $wpOption = array(
             'directory' => $args['dest']['dir'],
             'option' => array(
                 'name' => 'blog_public',
-                'value' => $destEnviron == 'live' ? 1 : 0
+                'value' => $this->destEnviron->name === 'live' ? 1 : 0
             )
         );
-        $success['search_visibility_option'] = $destTerminal->wp()->setOption($wpOption);
+        $success['search_visibility_option'] = $this->destTerminal->wp()->setOption($wpOption);
 
-        $success = !in_array(false, $success) ? true : false;
+        $success = !in_array(false, $success, true) ? true : false;
         return $this->logFinish($success);
     }
 
     /**
-     * @param string $environ
-     * @param TerminalClient|null $terminal
      * @return bool|null
      */
-    function backup(string $environ = '', TerminalClient $terminal = null)
+    public function backup(): ?bool
     {
-        $this->mainStr($environ);
+        $this->mainStr();
         $this->logStart();
-        if (!$this->validate())
+        $args = $this->getArgs();
+        if (!$this->validate($args))
             return false;
-        $args = $this->getArgs($environ);
-        if (empty($args))
-            return false;
-        $success = $terminal->wp_db()->export($args['from']['dir'], $this->getFilePath($environ, $args['from']['db_name']));
+
+        $success = $this->fromTerminal->wp_db()->export($args['from']['dir'], self::getFilePath($this->fromEnviron->name, $args['from']['db_name']));
         return $this->logFinish($success);
 
     }
 
     /**
+     * @param $args
      * @return bool
      */
-    function validate()
+    private function validate($args): bool
     {
+        if (empty($args))
+            return false;
+        if (empty($args['from']['dir']))
+            return $this->logError("Couldn't get from environment web directory.");
+        if (empty($args['from']['db_name']))
+            return $this->logError('From environment DB name missing from config.');
+        if ($this->getCaller() === 'transfer') {
+            if (empty($args['from']['url']))
+                return $this->logError('From environment URL missing from config.');
+            if (empty($args['dest']['dir']))
+                return $this->logError('Destination environment directory missing from config.');
+            if (empty($args['dest']['url']))
+                return $this->logError('Destination environment URL missing from config.');
+        }
         return true;
     }
 
     /**
      * @param string $environ
-     * @param string $db_name
+     * @param string $dbName
      * @return string
      */
-    protected
-    function getFilePath(string $environ = '', string $db_name = '')
+    protected static
+    function getFilePath(string $environ = '', string $dbName = ''): string
     {
-        $filename = $db_name . '-' . $environ . date("-Y-m-d-H_i_s") . '.sql';
+        $filename = $dbName . '-' . $environ . date('-Y-m-d-H_i_s') . '.sql';
         return BASE_DIR . '/../backups/' . $filename;
     }
 
     /**
-     * @param string $fromEnviron
-     * @param string $destEnviron
-     * @return mixed
+     * @return array|bool
      */
     protected
-    function getArgs(string $fromEnviron = '', string $destEnviron = '')
+    function getArgs()
     {
 
-        $args['from']['environ'] = $fromEnviron;
-        $args['from']['dir'] = ph_d()->getEnvironDir($fromEnviron, 'web');
-        if (empty($args['from']['dir']))
-            return $this->logError("Couldn't get web directory.");
+        $args['from']['dir'] = $this->fromEnviron->getEnvironDir('web');
+        $fromEnviron = $this->fromEnviron->name;
         $args['from']['db_name'] = ph_d()->config->environ->$fromEnviron->db->name ?? '';
-        if (empty($args['from']['db_name']))
-            $this->logError(" DB name missing from config");
 
-        if ($this->getCaller() == 'transfer') {
-            $args['from']['url'] = ph_d()->getEnvironURL($fromEnviron, true, true);
-            $args['dest']['environ'] = $destEnviron;
-            $args['dest']['dir'] = ph_d()->getEnvironDir($destEnviron, 'web');
-            $args['dest']['url'] = ph_d()->getEnvironURL($destEnviron, true, true);
+        if ($this->getCaller() === 'transfer') {
+            $args['from']['url'] = $this->fromEnviron->getEnvironURL(true, true);
+            $args['dest']['dir'] = $this->destEnviron->getEnvironDir('web');
+            $args['dest']['url'] = $this->destEnviron->getEnvironURL(true, true);
         }
         return $args;
     }
 
-    /**
-     * @param string $environ
-     * @param TerminalClient $terminal
-     */
-    /*
-    public function setTerminal(string $environ = '', TerminalClient $terminal = null)
-    {
-        $this->terminals[$environ] = $terminal;
-    }
-*/
-    /**
-     * @param $environ
-     * @return mixed
-     */
-    /*
-    public function getTerminal($environ)
-    {
-        return $this->terminals[$environ];
-    }
-*/
 
-    /**
-     * @param string $fromEnviron
-     * @param string $destEnviron
-     * @param string $fromURL
-     * @param string $destURL
-     * @return string
-     */
     protected
-    function mainStr(string $fromEnviron = '', string $destEnviron = '', string $fromURL = '', string $destURL = '')
+    function mainStr(string $fromEnviron = '', string $destEnviron = '', string $fromURL = '', string $destURL = ''): string
     {
         $action = $this->getCaller();
-        if (func_num_args() == 0) {
-            if (!empty($this->_mainStr[$action]))
-                return $this->_mainStr[$action];
-        }
+        if (!empty($this->_mainStr[$action]) && func_num_args() === 0)
+            return $this->_mainStr[$action];
 
 
-        $fromString = !empty($fromEnviron) ? ' ' . $fromEnviron . ' environ' : '';
+        $fromString = !empty($this->fromEnviron->name) ? ' ' . $this->fromEnviron->name . ' environ' : '';
         if (!empty($fromString) && !empty($fromURL))
             $fromString .= ' at ' . $fromURL;
         $destString = !empty($destEnviron) ? ' to ' . $destEnviron . ' environ' : '';

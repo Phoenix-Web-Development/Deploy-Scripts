@@ -4,11 +4,12 @@ namespace Phoenix\DBComponents;
 
 /**
  * Class DatabaseComponents
+ *
  * @package Phoenix
  */
 class Database extends AbstractDBComponents
 {
-    function check(array $args = [])
+    public function check(array $args = []): bool
     {
         if (!$this->validate($args))
             return false;
@@ -17,24 +18,23 @@ class Database extends AbstractDBComponents
             FROM INFORMATION_SCHEMA.SCHEMATA
             WHERE SCHEMA_NAME = '" . $args['name'] . "'"
         );
-        $success = $existingDB->fetch()['SCHEMA_NAME'] == $args['name'] ? true : false;
-        return $success;
+        return $existingDB->fetch()['SCHEMA_NAME'] === $args['name'];
     }
 
     /**
      * @param array $args
      * @return bool|null
      */
-    function create(array $args = [])
+    public function create(array $args = []): ?bool
     {
         $this->mainStr($args);
         $this->logStart();
         if (!$this->validate($args))
             return false;
         if ($this->check($args))
-            return $this->logFinish(true, "DB already exists.");
+            return $this->logFinish(true, 'DB already exists.');
 
-        $this->pdo->run("CREATE DATABASE " . $args['name'] . ";");
+        $this->pdo->run('CREATE DATABASE ' . $args['name'] . ';');
         $success = $this->check($args);
 
         return $this->logFinish($success);
@@ -44,14 +44,14 @@ class Database extends AbstractDBComponents
      * @param array $args
      * @return bool|null
      */
-    function delete(array $args = [])
+    public function delete(array $args = []): ?bool
     {
         $this->mainStr($args);
         $this->logStart();
         if (!$this->validate($args))
             return false;
         if (!$this->check($args))
-            return $this->logFinish(true, "No need to delete, DB " . $args['name'] . " doesn't exist to delete.");
+            return $this->logFinish(true, 'No need to delete, DB ' . $args['name'] . " doesn't exist to delete.");
 
         $this->pdo->run('DROP DATABASE ' . $args['name'] . ';');
         $success = $this->check($args) ? false : true;
@@ -63,18 +63,18 @@ class Database extends AbstractDBComponents
      * @param array $args
      * @return bool
      */
-    function validate(array $args = [])
+    private function validate(array $args = []): bool
     {
         if (empty($args))
-            return $this->logError("No args inputted to method.");
+            return $this->logError('No args inputted to method.');
 
         $argKeys = [
-            'name',
+            'name'
         ];
 
         foreach ($argKeys as $argKey) {
             if (empty($args[$argKey]))
-                return $this->logError("Argument <strong>" . $argKey . "</strong> missing from input");
+                return $this->logError('Argument <strong>' . $argKey . '</strong> missing from input');
         }
 
         return true;
@@ -84,13 +84,11 @@ class Database extends AbstractDBComponents
      * @param array $args
      * @return string
      */
-    protected function mainStr(array $args = [])
+    protected function mainStr(array $args = []): string
     {
         $action = $this->getCaller();
-        if (func_num_args() == 0) {
-            if (!empty($this->_mainStr[$action]))
-                return $this->_mainStr[$action];
-        }
+        if (!empty($this->_mainStr[$action]) && func_num_args() === 0)
+            return $this->_mainStr[$action];
         $dbName = !empty($args['name']) ? ' <strong>' . $args['name'] . '</strong>' : '';
 
         return $this->_mainStr[$action] = sprintf('%s database schema%s', $this->environment, $dbName);

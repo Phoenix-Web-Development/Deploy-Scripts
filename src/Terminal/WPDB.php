@@ -15,7 +15,7 @@ class WPDB extends AbstractTerminal
      */
     protected $logElement = 'h4';
 
-    const EXT = '.gz';
+    private const EXT = '.gz';
 
     /**
      * @param string $wp_dir
@@ -24,7 +24,7 @@ class WPDB extends AbstractTerminal
      */
     public function export(
         string $wp_dir = '',
-        string $local_dest_filepath = '')
+        string $local_dest_filepath = ''): bool
     {
         $args = array(
             'wp_dir' => $wp_dir,
@@ -39,9 +39,9 @@ class WPDB extends AbstractTerminal
         $dest_paths = $this->generateDBFilePaths(self::trailing_slash($wp_dir) . basename($args['local_dir']));
 
         if ($this->file_exists($dest_paths['path']['uncompressed']) || $this->file_exists($dest_paths['path']['compressed']))
-            return $this->logError("Backup file already exists in WordPress directory.");
-        $exec_commands = "wp db export --add-drop-table " . $dest_paths['name']['uncompressed'] . " --exclude_tables=bbi_parts,suzuki_parts;
-        tar -vczf " . $dest_paths['name']['compressed'] . " " . $dest_paths['name']['uncompressed'] . ";";
+            return $this->logError('Backup file already exists in WordPress directory.');
+        $exec_commands = 'wp db export --add-drop-table ' . $dest_paths['name']['uncompressed'] . ' --exclude_tables=bbi_parts,suzuki_parts;
+        tar -vczf ' . $dest_paths['name']['compressed'] . ' ' . $dest_paths['name']['uncompressed'] . ';';
         $output = $this->exec($exec_commands, $wp_dir);
 
 
@@ -65,7 +65,7 @@ class WPDB extends AbstractTerminal
     public function import(
         string $wp_dir = '',
         string $local_orig_filepath = ''
-    )
+    ): bool
     {
         $args = array(
             'wp_dir' => $wp_dir,
@@ -80,14 +80,14 @@ class WPDB extends AbstractTerminal
 
         if (!$this->put($dest_paths['path']['compressed'], $args['local_dir'], 'file')) {
             if (!$this->put($dest_paths['path']['uncompressed'], $args['local_dir'], 'file'))
-                return $this->logError("Uploading DB file via SFTP failed.");
+                return $this->logError('Uploading DB file via SFTP failed.');
             $uncompressed_upload = true;
         }
 
         $exec_commands = '';
         if (empty($uncompressed_upload))
-            $exec_commands .= "tar -zxvf " . $dest_paths['name']['compressed'] . ' ' . $dest_paths['name']['uncompressed'] . ";";
-        $exec_commands .= "wp db import " . $dest_paths['name']['uncompressed'] . ";";
+            $exec_commands .= 'tar -zxvf ' . $dest_paths['name']['compressed'] . ' ' . $dest_paths['name']['uncompressed'] . ';';
+        $exec_commands .= 'wp db import ' . $dest_paths['name']['uncompressed'] . ';';
         $output = $this->exec($exec_commands, $args['wp_dir']);
 
         $success = (stripos($output, 'success') !== false && stripos($output, 'error') === false) ? true : false;
@@ -110,7 +110,7 @@ class WPDB extends AbstractTerminal
         string $wp_dir = '',
         string $old_url = '',
         string $dest_url = ''
-    )
+    ): bool
     {
         $args = array(
             'wp_dir' => $wp_dir,
@@ -125,9 +125,9 @@ class WPDB extends AbstractTerminal
         if (!empty($args['old_url']) && !empty($args['new_url'])) {
             $url_error = " URL doesn't contain https:// or http:// protocol.";
             if (strpos($args['new_url'], 'https://') !== 0 && strpos($args['new_url'], 'http://') !== 0)
-                return $this->logError("Destination" . $url_error);
+                return $this->logError('Destination' . $url_error);
             if (strpos($args['old_url'], 'https://') !== 0 && strpos($args['old_url'], 'http://') !== 0)
-                return $this->logError("Origin" . $url_error);
+                return $this->logError('Origin' . $url_error);
         }
 
         $exec_commands = $this->getSearchReplaceURLCommands($args['old_url'], $args['new_url']);
@@ -143,14 +143,14 @@ class WPDB extends AbstractTerminal
      * @return bool
      */
     private
-    function generateDBFilePaths(string $filepath = '')
+    function generateDBFilePaths(string $filepath = ''): bool
     {
         if (empty($filepath))
             return false;
         $filename = basename($filepath);
         $filepaths['name']['uncompressed'] = rtrim($filename, self::EXT);
         $filepaths['path']['uncompressed'] = rtrim($filepath, self::EXT);
-        $filepaths['name']['compressed'] = $filepaths['name']['uncompressed'] . self::EXT;;
+        $filepaths['name']['compressed'] = $filepaths['name']['uncompressed'] . self::EXT;
         $filepaths['path']['compressed'] = $filepaths['path']['uncompressed'] . self::EXT;
         return $filepaths;
     }
@@ -161,7 +161,7 @@ class WPDB extends AbstractTerminal
      * @return string
      */
     private
-    function getSearchReplaceURLCommands(string $old_url = '', string $new_url = '')
+    function getSearchReplaceURLCommands(string $old_url = '', string $new_url = ''): string
     {
         //--skip-tables=<tables>
         if (empty($old_url) || empty($new_url))
@@ -195,7 +195,7 @@ class WPDB extends AbstractTerminal
      * @return bool
      */
     protected
-    function validate($args = [])
+    function validate($args = []): bool
     {
         if (empty($args['wp_dir']))
             return $this->logError("WordPress directory wasn't supplied to function.");
@@ -204,7 +204,7 @@ class WPDB extends AbstractTerminal
         if (!$this->is_dir($args['wp_dir']))
             return $this->logError(sprintf(" WordPress directory <strong>%s</strong> doesn't exist.", $args['wp_dir']));
         if (!$this->client->WP_CLI()->check())
-            return $this->logError("WP CLI missing.");
+            return $this->logError('WP CLI missing.');
         if ($this->getCaller() == 'replaceURLs') {
             if (empty($args['old_url']))
                 return $this->logError("URL to replace wasn't supplied to function.");
@@ -219,17 +219,15 @@ class WPDB extends AbstractTerminal
      * @return string
      */
     protected
-    function mainStr($args = array())
+    function mainStr($args = array()): string
     {
         $action = $this->getCaller();
-        if (func_num_args() == 0) {
-            if (!empty($this->_mainStr[$action]))
-                return $this->_mainStr[$action];
-        }
-        $string = sprintf("%s environment WordPress database", $this->environment);
+        if (!empty($this->_mainStr[$action]) && func_num_args() === 0)
+            return $this->_mainStr[$action];
+        $string = sprintf('%s environment WordPress database', $this->environment);
         //$wp_dir = !empty($args['wp_dir']) ? ' in directory <strong>' . $args['wp_dir'] . '</strong>' : '';
         $filepath = !empty($args['local_dir']) ? ' local destination <strong>' . $args['local_dir'] . '</strong>' : ' a local destination';
-        switch ($action) {
+        switch($action) {
             case 'import':
                 $string = 'to ' . $string . ' from' . $filepath;
                 break;

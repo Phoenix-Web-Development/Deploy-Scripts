@@ -88,6 +88,16 @@ class Base
             'past' => 'got',
             'action' => 'get'
         ),
+        'getSubdomains' => array(
+            'present' => 'getting',
+            'past' => 'got',
+            'action' => 'get'
+        ),
+        'getSubdomaincPanel' => array(
+            'present' => 'getting',
+            'past' => 'got',
+            'action' => 'get'
+        ),
         'give' => array(
             'present' => 'giving',
             'past' => 'gave',
@@ -210,7 +220,6 @@ class Base
      */
     public function __construct()
     {
-        return;
     }
 
     /**
@@ -245,11 +254,10 @@ class Base
 
     public function actions(array $actions = array())
     {
-        if (!empty($actions)) {
+        if (!empty($actions))
             $this->_actions = $actions;
-        } else if (!empty($this->_actions)) {
+        elseif (!empty($this->_actions))
             return $this->_actions;
-        }
         return false;
     }
 
@@ -259,7 +267,7 @@ class Base
      * @return bool
      */
     public
-    function log(string $message_string = '', string $message_type = 'error')
+    function log(string $message_string = '', string $message_type = 'error'): bool
     {
         return logger()->add($message_string, $message_type);
     }
@@ -270,11 +278,11 @@ class Base
      * @param string $message
      * @return bool
      */
-    static function validate_action($action = '', $actions = array(), $message = '')
+    public static function validate_action($action = '', $actions = array(), $message = ''): bool
     {
         if (empty($action)) {
             $fail = true;
-            $fail_string = "No action inputted to %s.";
+            $fail_string = 'No action inputted to %s.';
         } elseif (!in_array($action, $actions)) {
             $fail = true;
             $fail_string = "%s received '<strong>%s</strong>' as input action.";
@@ -282,8 +290,8 @@ class Base
         if (!empty($fail)) {
             $debug_backtrace = !empty(debug_backtrace()[1]['function']) ? '<code>' . debug_backtrace()[1]['function'] . '()</code> function' : 'function';
             $fail_string = sprintf($fail_string, $debug_backtrace, $action, $debug_backtrace);
-            Base::log(sprintf("%s Action must be %s. %s",
-                $message, Base::implode_item_str($actions), $fail_string), 'error');
+            self::log(sprintf('%s Action must be %s. %s',
+                $message, self::implodeItemStr($actions), $fail_string), 'error');
             return false;
         }
         return true;
@@ -293,13 +301,13 @@ class Base
      * @param array $array
      * @return string
      */
-    static function implode_item_str(array $array = array())
+    private static function implodeItemStr(array $array = array()): string
     {
         foreach ($array as &$item) {
             $item = "'" . $item . "'";
         }
         $last = array_slice($array, -1);
-        $first = join(", ", array_slice($array, 0, -1));
+        $first = join(', ', array_slice($array, 0, -1));
         $both = array_filter(array_merge(array($first), $last), 'strlen');
         return join(' or ', $both);
     }

@@ -16,7 +16,7 @@ class PDOWrap extends PDO
      * PDOWrap constructor.
      * @param array $args
      */
-    function __construct(array $args = [])
+    public function __construct(array $args = [])
     {
         $default_options = [
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
@@ -57,7 +57,7 @@ class PDOWrap extends PDO
      * @param null $query
      * @return array|bool|mixed
      */
-    function get_row($table, $columns = 'all', $query = null)
+    public function get_row($table, $columns = 'all', $query = null)
     {
         return $this->get_data($table, $columns, $query, true);
 
@@ -69,7 +69,7 @@ class PDOWrap extends PDO
      * @param null $query
      * @return array|bool|mixed
      */
-    function get_rows($table, $columns = 'all', $query = null)
+    public function get_rows($table, $columns = 'all', $query = null)
     {
         return $this->get_data($table, $columns, $query, false);
     }

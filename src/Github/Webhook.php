@@ -15,7 +15,7 @@ class Webhook extends AbstractGithub
      * @return bool|null
      * @throws \Github\Exception\MissingArgumentException
      */
-    public function create(string $repo_name = '', string $url = '', string $secret = '')
+    public function create(string $repo_name = '', string $url = '', string $secret = ''): ?bool
     {
         $this->mainStr($repo_name, $url);
         $this->logStart();
@@ -33,7 +33,7 @@ class Webhook extends AbstractGithub
             )
         );
         if ($this->get($repo_name, $url))
-            return $this->logError("Found existing webhook with the same url.", 'warning');
+            return $this->logError('Found existing webhook with the same url.', 'warning');
         $success = $this->client->client->repo()->hooks()->create($this->client->user, $repo_name, $params);
         return $this->logFinish($success);
     }
@@ -42,7 +42,7 @@ class Webhook extends AbstractGithub
      * @param string $repo_name
      * @return bool|null
      */
-    public function delete(string $repo_name = '')
+    public function delete(string $repo_name = ''): ?bool
     {
         return $this->remove($repo_name);
     }
@@ -52,7 +52,7 @@ class Webhook extends AbstractGithub
      * @param string $url
      * @return bool|null
      */
-    public function remove(string $repo_name = '', string $url = '')
+    public function remove(string $repo_name = '', string $url = ''): ?bool
     {
         $this->mainStr($repo_name, $url);
         $this->logStart();
@@ -72,7 +72,7 @@ class Webhook extends AbstractGithub
      * @param string $url
      * @return bool
      */
-    public function get(string $repo_name = '', string $url = '')
+    public function get(string $repo_name = '', string $url = ''): bool
     {
         $this->mainStr($repo_name, $url);
         if (!$this->validate($repo_name, $url))
@@ -92,23 +92,23 @@ class Webhook extends AbstractGithub
      * @param string $secret
      * @return bool
      */
-    protected function validate(string $repo_name = '', string $url = '', string $secret = '')
+    protected function validate(string $repo_name = '', string $url = '', string $secret = ''): bool
     {
         if (empty($repo_name))
-            return $this->logError("Repository name not supplied to method.");
+            return $this->logError('Repository name not supplied to method.');
         if (!$this->client->repo()->get($repo_name)) {
             $type = $this->getCaller() == 'remove' ? 'warning' : 'error';
             return $this->logError(sprintf("Github repository <strong>%s</strong> doesn't exist.", $repo_name), $type);
         }
         if (empty($url))
-            return $this->logError("Url not supplied to method.");
+            return $this->logError('Url not supplied to method.');
         if (filter_var($url, FILTER_VALIDATE_URL) === FALSE)
-            return $this->logError("Invalid url supplied to method.");
+            return $this->logError('Invalid url supplied to method.');
         if ($this->getCaller() == 'create') {
             if (empty($secret))
-                return $this->logError("Webhook secret not supplied to method.");
+                return $this->logError('Webhook secret not supplied to method.');
             if (strlen($secret) < 9)
-                return $this->logError("Webhook secret too short. Should be 8 chars long or greater.");
+                return $this->logError('Webhook secret too short. Should be 8 chars long or greater.');
         }
         return true;
     }
@@ -118,15 +118,13 @@ class Webhook extends AbstractGithub
      * @param string $url
      * @return string
      */
-    protected function mainStr(string $repo_name = '', string $url = '')
+    protected function mainStr(string $repo_name = '', string $url = ''): string
     {
-        if (func_num_args() == 0) {
-            if (!empty($this->_mainStr))
-                return $this->_mainStr;
-        }
+        if (!empty($this->_mainStr) && func_num_args() === 0)
+            return $this->_mainStr;
 
         $repo_name = !empty($repo_name) ? sprintf(' in repository <strong>%s</strong>', $repo_name) : '';
         $url = !empty($url) ? sprintf(' with payload url <strong>%s</strong>', $url) : '';
-        return $this->_mainStr = " Github webhook" . $repo_name . $url;
+        return $this->_mainStr = ' Github webhook' . $repo_name . $url;
     }
 }

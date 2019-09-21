@@ -4,6 +4,7 @@ namespace Phoenix\Terminal;
 
 /**
  * Class LocalProjectDirSetup
+ *
  * @package Phoenix\Terminal
  */
 class LocalProjectDirSetup extends AbstractTerminal
@@ -21,7 +22,7 @@ class LocalProjectDirSetup extends AbstractTerminal
     /**
      * @param array $args
      */
-    public function setProjectArgs(array $args = [])
+    public function setProjectArgs(array $args = []): void
     {
         $this->projectArgs = $args;
     }
@@ -30,7 +31,7 @@ class LocalProjectDirSetup extends AbstractTerminal
      * @param array $args
      * @return bool|null
      */
-    public function create(array $args = [])
+    public function create(array $args = []): ?bool
     {
         $this->mainStr($args);
         $this->logStart();
@@ -44,8 +45,8 @@ class LocalProjectDirSetup extends AbstractTerminal
             $owner = posix_getpwuid(fileowner($args['dir']))['name'];
             $group = posix_getgrgid(filegroup($args['dir']))['name'];
             if ($owner == $args['owner'] && $group == $args['group'])
-                return $this->logFinish(true, "Directory already exists and has correct permissions");
-            return $this->logError("Directory already exists but it has wrong permissions.");
+                return $this->logFinish(true, 'Directory already exists and has correct permissions');
+            return $this->logError('Directory already exists but it has wrong permissions.');
         }
 
         //check if project dir is a subdirectory of nominated dir
@@ -75,7 +76,7 @@ class LocalProjectDirSetup extends AbstractTerminal
      * @param array $args
      * @return bool|null
      */
-    public function install(array $args = [])
+    public function install(array $args = []): ?bool
     {
         return $this->create($args);
     }
@@ -84,7 +85,7 @@ class LocalProjectDirSetup extends AbstractTerminal
      * @param array $args
      * @return bool|null
      */
-    public function delete(array $args = [])
+    public function delete(array $args = []): ?bool
     {
         $this->mainStr($args);
         $this->logStart();
@@ -101,7 +102,7 @@ class LocalProjectDirSetup extends AbstractTerminal
      * @param array $args
      * @return bool|null
      */
-    public function uninstall($args = [])
+    public function uninstall($args = []): ?bool
     {
         return $this->delete($args);
     }
@@ -110,23 +111,23 @@ class LocalProjectDirSetup extends AbstractTerminal
      * @param array $args
      * @return bool
      */
-    protected function validate(array $args = [])
+    protected function validate(array $args = []): bool
     {
         if (empty($args))
-            return $this->logError("No args inputted to method.");
+            return $this->logError('No args inputted to method.');
 
         $action = $this->getCaller();
         $argKeys = ['dir'];
-        if ($action == 'create') {
+        if ($action === 'create') {
             $argKeys[] = 'owner';
             $argKeys[] = 'group';
         }
 
         foreach ($argKeys as $argKey) {
             if (empty($args[$argKey]))
-                return $this->logError("Argument <strong>" . $argKey . "</strong> missing from input.");
-            if ($action == 'create' && empty($this->projectArgs[$argKey]))
-                return $this->logError("Project argument <strong>" . $argKey . "</strong> missing from class.");
+                return $this->logError('Argument <strong>' . $argKey . '</strong> missing from input.');
+            if ($action === 'create' && empty($this->projectArgs[$argKey]))
+                return $this->logError('Project argument <strong>' . $argKey . '</strong> missing from class.');
         }
         return true;
     }
@@ -135,19 +136,17 @@ class LocalProjectDirSetup extends AbstractTerminal
      * @param array $args
      * @return string
      */
-    protected function mainStr(array $args = [])
+    protected function mainStr(array $args = []): string
     {
-        if (func_num_args() == 0) {
-            if (!empty($this->_mainStr))
-                return $this->_mainStr;
-        }
+        if (!empty($this->_mainStr) && func_num_args() === 0)
+            return $this->_mainStr;
 
         $dirStr = !empty($args['dir']) ? sprintf(' at <strong>%s</strong>', $args['dir']) : '';
         $permissionsStr = !empty($args['owner']) && !empty($args['group']) ? sprintf(' with owner <strong>%s</strong> and group <strong>%s</strong>', $args['owner'], $args['group']) : '';
         $purposeStr = !empty($args['purpose']) ? ' <strong>' . ucfirst($args['purpose']) . '</strong>' : '';
         $environStr = ' ' . $this->environment . ' environ';
 
-        return $this->_mainStr = sprintf("%s%s directory%s%s", $environStr, $purposeStr, $dirStr, $permissionsStr);
+        return $this->_mainStr = sprintf('%s%s directory%s%s', $environStr, $purposeStr, $dirStr, $permissionsStr);
     }
 
 }

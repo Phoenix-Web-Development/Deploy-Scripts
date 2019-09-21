@@ -22,12 +22,6 @@ class GithubClient extends BaseClient
 
     private $_user;
 
-    public function __construct()
-    {
-        parent::__construct();
-        return true;
-    }
-
     protected function client(\Github\Client $client = null)
     {
         if (!empty($this->_client))
@@ -68,7 +62,7 @@ class GithubClient extends BaseClient
         $error_string = sprintf("Can't execute <code>%s</code> Github method.", $name);
         if (!empty($api))
             return $api;
-        $this->log($error_string . " No Github connection was established.");
+        $this->log($error_string . ' No Github connection was established.');
         return new ErrorAbstract();
     }
 }

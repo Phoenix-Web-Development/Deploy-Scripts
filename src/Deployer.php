@@ -6,23 +6,27 @@ use phpseclib\Crypt\RSA;
 use phpseclib\Net\SFTP;
 use phpseclib\Net\SSH2;
 use Github\Client;
+use stdClass;
+use Phoenix\Curl;
+use Phoenix\WHM;
 
 //use Phoenix\Functions;
 
 /**
+ * Class Deployer
+ *
  * @property WHM $whm
- * @property \stdClass $config
+ * @property stdClass $config
  * @property Bitbucket $bitbucket
+ * @property array $environ
  * @property GithubClient $github
- * @property cPanelSubdomain $cPanelSubdomain
+ * @property array $placeholders
  * @property TerminalClient $terminal
  *
- * Class Deployer
+ * @package Phoenix
  */
 final class Deployer extends Base
 {
-
-
     /**
      * @var null
      */
@@ -41,7 +45,7 @@ final class Deployer extends Base
     /**
      * @var
      */
-    private $_cPanelSubdomain;
+    private $_environ;
 
     /**
      * @var
@@ -61,29 +65,24 @@ final class Deployer extends Base
     /**
      * @var
      */
-    public $configControl;
+    private $_placeholders;
 
     /**
      * @var
      */
-    public $staging_cpanel_key;
-
-    /**
-     * @var array
-     */
+    public $configControl;
 
     /**
      * @var Template
      */
     public $template;
 
-
     /**
      * @return null|Deployer
      */
-    public static function instance()
+    public static function instance(): ?Deployer
     {
-        if (is_null(self::$_instance)) {
+        if (self::$_instance === null) {
             self::$_instance = new self();
         }
         return self::$_instance;
@@ -95,84 +94,114 @@ final class Deployer extends Base
     public function __construct()
     {
         parent::__construct();
-        if (!defined('BASE_DIR')) define('BASE_DIR', dirname(__FILE__));
+        if (!defined('BASE_DIR')) define('BASE_DIR', __DIR__);
         if (!defined('CONFIG_DIR')) define('CONFIG_DIR', BASE_DIR . '/../configs/');
         if (!defined('BASH_WRAPPER')) define('BASH_WRAPPER', BASE_DIR . '/../bash/wrapper.sh');
 
         new Logging();
         $this->actionRequests = new ActionRequests();
+
         $this->configControl = new ConfigControl();
+        if (!empty($this->configControl->getConfigSelected())) {
+            $config = $this->configControl->substitutePlaceholders($this->config, $this->placeholders);
+            $this->configControl->setConfig($config);
+        }
+
         $this->template = new Template();
 
         if (!empty($this->config->environ->local->wp_cli_cache_dir))
             putenv('WP_CLI_CACHE_DIR=' . $this->config->environ->local->wp_cli_cache_dir);
-        return true;
+    }
+
+    /**
+     * @return array|bool
+     */
+    protected function placeholders()
+    {
+        if (!empty($this->_placeholders))
+            return $this->_placeholders;
+
+        $placeholders = array(
+            'project_name' => ucwords($this->config->project->name ?? ''),
+            'root_email_folder' => $this->config->project->root_email_folder ?? '',
+            'live_domain' => $this->environ('live')->getEnvironURL() ?? '',
+            'staging_domain' => $this->environ('staging')->getEnvironURL() ?? '',
+            'live_cpanel_username' => $this->config->environ->live->cpanel->account->username ?? ''
+        );
+        $return = [];
+        foreach ($placeholders as $placeholderName => $placeholder) {
+            if (empty($placeholder)) {
+                $this->log(sprintf("Couldn't obtain value for <strong>%s</strong> config placeholder.", $placeholderName));
+                return [];
+            }
+            $return['%' . $placeholderName . '%'] = $placeholder;
+        }
+        return $this->_placeholders = $return;
     }
 
     /**
      * @return bool
      * @throws \Github\Exception\MissingArgumentException
      */
-    public function run()
+    public function run(): bool
     {
-
         $this->template->get('header');
 
         $action = '';
 
-        if ($this->actionRequests->can_do('update'))
+        if ($this->actionRequests->canDo('update'))
             $action = 'update';
-        elseif ($this->actionRequests->can_do('create'))
+        elseif ($this->actionRequests->canDo('create'))
             $action = 'deploy';
-        elseif ($this->actionRequests->can_do('transfer'))
+        elseif ($this->actionRequests->canDo('transfer'))
             $action = 'transfer';
-        elseif ($this->actionRequests->can_do('delete'))
+        elseif ($this->actionRequests->canDo('delete'))
             $action = 'delete';
         if (!empty($action)) {
-            switch ($action) {
+            switch($action) {
                 case 'delete':
-                    if ($this->actionRequests->can_do('delete_version_control'))
+                    if ($this->actionRequests->canDo('delete_version_control'))
                         $this->versionControlMainRepo('delete');
-                    if ($this->actionRequests->can_do('delete_live_stuff'))
+                    if ($this->actionRequests->canDo('delete_live_stuff'))
                         $this->doRemoteEnvironStuff('delete', 'live');
-                    if ($this->actionRequests->can_do('delete_staging_stuff'))
+                    if ($this->actionRequests->canDo('delete_staging_stuff'))
                         $this->doRemoteEnvironStuff('delete', 'staging');
-                    if ($this->actionRequests->can_do('delete_local_stuff'))
+                    if ($this->actionRequests->canDo('delete_local_stuff'))
                         $this->doLocalStuff('delete');
                     break;
                 case 'deploy':
-                    if ($this->actionRequests->can_do('create_version_control'))
+                    if ($this->actionRequests->canDo('create_version_control'))
                         $this->versionControlMainRepo('create');
-                    if ($this->actionRequests->can_do('create_live_stuff'))
+                    if ($this->actionRequests->canDo('create_live_stuff'))
                         $this->doRemoteEnvironStuff('create', 'live');
-                    if ($this->actionRequests->can_do('create_staging_stuff'))
+                    if ($this->actionRequests->canDo('create_staging_stuff'))
                         $this->doRemoteEnvironStuff('create', 'staging');
-                    if ($this->actionRequests->can_do('create_local_stuff'))
+                    if ($this->actionRequests->canDo('create_local_stuff'))
                         $this->doLocalStuff('create');
                     break;
                 case 'update':
-                    if ($this->actionRequests->can_do('update_live_stuff'))
+                    if ($this->actionRequests->canDo('update_live_stuff'))
                         $this->updateWP('live');
-                    if ($this->actionRequests->can_do('update_staging_stuff'))
+                    if ($this->actionRequests->canDo('update_staging_stuff'))
                         $this->updateWP('staging');
-                    if ($this->actionRequests->can_do('update_local_stuff'))
+                    if ($this->actionRequests->canDo('update_local_stuff'))
                         $this->updateWP('local');
                     break;
                 case 'transfer':
 
                     $wpdb = new TransferWPDB();
                     //transfer_wp_db_live_to_local
-                    if ($this->actionRequests->can_do('transfer_wp_db_live_to_staging'))
+                    if ($this->actionRequests->canDo('transfer_wp_db_live_to_staging'))
                         $wpdb->transfer('live', 'staging', $this->terminal('live'), $this->terminal('staging'));
-                    if ($this->actionRequests->can_do('transfer_wp_db_live_to_local'))
+                    if ($this->actionRequests->canDo('transfer_wp_db_live_to_local'))
                         $wpdb->transfer('live', 'local', $this->terminal('live'), $this->terminal('local'));
-                    if ($this->actionRequests->can_do('transfer_wp_db_staging_to_live'))
+                    if ($this->actionRequests->canDo('transfer_wp_db_staging_to_live'))
                         $wpdb->transfer('staging', 'live', $this->terminal('staging'), $this->terminal('live'));
-                    if ($this->actionRequests->can_do('transfer_wp_db_staging_to_local'))
+                    if ($this->actionRequests->canDo('transfer_wp_db_staging_to_local'))
                         $wpdb->transfer('staging', 'local', $this->terminal('staging'), $this->terminal('local'));
-                    if ($this->actionRequests->can_do('transfer_wp_db_local_to_live'))
+                    if ($this->actionRequests->canDo('transfer_wp_db_local_to_live'))
                         $wpdb->transfer('local', 'live', $this->terminal('local'), $this->terminal('live'));
-                    if ($this->actionRequests->can_do('transfer_wp_db_local_to_staging'))
+                    if ($this->actionRequests->canDo('transfer_wp_db_local_to_staging'))
                         $wpdb->transfer('local', 'staging', $this->terminal('local'), $this->terminal('staging'));
                     break;
             }
@@ -182,21 +211,23 @@ final class Deployer extends Base
             template()->get('form');
             $unixUser = posix_getpwuid(posix_geteuid())['name'] ?? 'unknown';
             $unixUser = sprintf('Local server unix user is <strong>%s</strong>.', $unixUser);
-            $root = $this->terminal('local')->root ?? 'unknown';
+            $root = $this->terminal('local')->root;
+            $root = !empty($root) ? $root : 'unknown';
             $root = sprintf(' Local root directory is <strong>%s</strong>.', $root);
             $this->log($unixUser . $root, 'info');
-            $diskspace = $this->getWHMDiskSpace();
-
+            $diskSpace = $this->getWHMDiskSpace();
+            d($diskSpace);
             $plan = $this->config->environ->live->cpanel->create_account_args->plan ?? '';
-            if (!empty($this->whm) && !empty($plan)) {
+            if (!empty($plan)) {
                 $package_size = $this->whm->get_pkg_info($plan)['data']['pkg']['QUOTA'];
-                if (($diskspace['total'] - $diskspace['allocated']) > $package_size)
+                if (($diskSpace['total'] - $diskSpace['allocated']) > $package_size)
                     $disk_message = 'You have';
                 else
                     $disk_message = 'Not enough';
                 $this->log(sprintf('Total disk space - <strong>%s</strong>MB. Disk used - <strong>%s</strong>MB. Allocated disk space - <strong>%s</strong>MB. %s unallocated disk space for a new <strong>%s</strong>MB cPanel account.',
-                    $diskspace['total'], $diskspace['used'], $diskspace['allocated'], $disk_message, $package_size), 'info');
-                $this->log('<h3>cPanel Staging Subdomains</h3>' . build_recursive_list((array)ph_d()->getStagingSubdomains()), 'light');
+                    $diskSpace['total'], $diskSpace['used'], $diskSpace['allocated'], $disk_message, $package_size), 'info');
+                d('gigfhg');
+                $this->log('<h3>cPanel Staging Subdomains</h3>' . build_recursive_list((array)$this->environ('staging')->getSubdomains()), 'light');
             }
         }
         $this->log('<h3>Input Config Array</h3>' . build_recursive_list((array)ph_d()->config), 'light');
@@ -247,8 +278,8 @@ final class Deployer extends Base
         if (!empty($this->_whm))
             return $this->_whm;
         if (!isset($this->config->whm->user, $this->config->whm->token, $this->config->whm->query_url)
-            || !class_exists('\Phoenix\Curl')
-            || !class_exists('\Phoenix\WHM')
+            || !class_exists(Curl::class)
+            || !class_exists(WHM::class)
         )
             return false;
         $whm_curl = new Curl(
@@ -265,20 +296,28 @@ final class Deployer extends Base
     }
 
     /**
-     * @return cPanelSubdomain
+     * @param string $name
+     * @return cPanelAccount|cPanelSubdomain|Environ|string
      */
-    protected function cPanelSubdomain()
+    protected function environ(string $name = 'live')
     {
-        if (!empty($this->_cPanelSubdomain))
-            return $this->_cPanelSubdomain;
-        return $this->_cPanelSubdomain = new cPanelSubdomain(
-            'staging',
-            $this->config,
-            $this->terminal('staging'),
-            $this->actionRequests,
-            $this->whm
-        );
+        if (!empty($this->_environ[$name]))
+            return $this->_environ[$name];
+        switch($name) {
+            case 'live':
+                $environ = new cPanelAccount($name, $this->config, $this->whm, $this->actionRequests);
+                break;
+            case 'staging':
+                $environ = new cPanelSubdomain($name, $this->config, $this->whm);
+                break;
+            case 'local':
+                $environ = new Environ($name, $this->config);
+                break;
+        }
+
+        return $this->_environ[$name] = $environ ?? null;
     }
+
 
     /**
      * @return bool|GithubClient
@@ -289,11 +328,11 @@ final class Deployer extends Base
             return $this->_github;
         $error_string = "Can't connect to GitHub API.";
         if (empty($this->config->version_control->github->token)) {
-            $this->log(sprintf("%s Token missing from config.", $error_string));
+            $this->log(sprintf('%s Token missing from config.', $error_string));
             return false;
         }
         if (empty($this->config->version_control->github->user)) {
-            $this->log(sprintf("%s Github user missing from config.", $error_string));
+            $this->log(sprintf('%s Github user missing from config.', $error_string));
             return false;
         }
         $github = new GithubClient();
@@ -309,51 +348,54 @@ final class Deployer extends Base
     }
 
     /**
-     * @param string $environment
+     * @param string $environ
      * @return bool|TerminalClient
      */
-    public function terminal(string $environment = 'live')
+    public function terminal(string $environ = 'live')
     {
-        if (!empty($this->_terminal->$environment))
-            return $this->_terminal->$environment;
+        if (!empty($this->_terminal->$environ))
+            return $this->_terminal->$environ;
         if (empty($this->_terminal))
-            $this->_terminal = new \stdClass();
-        //$error_string = sprintf("Can't connect %s environment via SSH.", $environment);
-        $terminal = new TerminalClient($environment);
+            $this->_terminal = new stdClass();
+        //$error_string = sprintf("Can't connect %s environment via SSH.", $environ);
+        $terminal = new TerminalClient($environ);
 
-        if ($environment != 'local') {
-            $sftp = $this->get_phpseclib('sftp', $environment);
+        if ($environ !== 'local') {
+            $sftp = $this->get_phpseclib('sftp', $environ);
             if (!empty($sftp)) {
                 $terminal->ssh = $sftp;
-                //$terminal->ssh($sftp);
             }
         }
-        return $this->_terminal->$environment = $terminal;
+        //$this->_terminal->$environ = $terminal;
+        //$this->environ($environ)->setRoot($terminal->root);
+        $this->environ($environ)->setTerminal($terminal);
+        return $this->_terminal->$environ = $terminal;;
     }
 
     /**
      * @param string $protocol
-     * @param string $environment
+     * @param string $environ
      * @return bool|SSH2|SFTP
      */
-    function get_phpseclib($protocol = 'ssh', string $environment = 'live')
+    private function get_phpseclib($protocol = 'ssh', string $environ = 'live')
     {
-        $message = sprintf("%s environment %s connection.", $environment, $protocol);
-        //if ($environment != 'local') {
+        $message = sprintf('%s environment %s connection.', $environ, $protocol);
+        //if ($environ !== 'local') {
 
-        $ssh_args = $this->getEnvironSSHArgs($environment);
-        if (!empty($ssh_args)) {
-            switch ($protocol) {
+        //$sshArgs = $this->getEnvironSSHArgs($environ);
+        $sshArgs = $this->environ($environ)->getSSHArgs();
+        if (!empty($sshArgs)) {
+            switch($protocol) {
                 case 'ssh':
-                    $ssh = new SSH2($ssh_args->hostname, $ssh_args->port);
+                    $ssh = new SSH2($sshArgs->hostname, $sshArgs->port);
                     break;
                 case 'sftp':
-                    $ssh = new SFTP($ssh_args->hostname, $ssh_args->port);
+                    $ssh = new SFTP($sshArgs->hostname, $sshArgs->port);
                     break;
             }
         }
-        $passphrase = $this->config->environ->local->ssh_keys->live->passphrase ?? '';
-        $key_name = $this->config->environ->local->ssh_keys->live->key_name ?? '';
+        //$passphrase = $this->config->environ->local->ssh_keys->live->passphrase ?? '';
+        //$key_name = $this->config->environ->local->ssh_keys->live->key_name ?? '';
         if (!empty($passphrase) && !empty($key_name)) {
             $private_key_location = $this->config->environ->local->directory . $key_name;
 
@@ -370,8 +412,8 @@ final class Deployer extends Base
                 $key->loadKey(file_get_contents($private_key_location));
             }
         }
-        if (!empty($ssh) && $ssh->login($ssh_args->username, $ssh_args->password)) {
-            $this->log("Successfully authenticated " . $message, 'success');
+        if (!empty($ssh) && $ssh->login($sshArgs->username, $sshArgs->password)) {
+            $this->log('Successfully authenticated ' . $message, 'success');
             return $ssh;
         }
         //}
@@ -380,154 +422,119 @@ final class Deployer extends Base
     }
 
     /**
-     * @return array|bool|\stdClass
+     * @return array|bool|stdClass
      */
     protected function config()
     {
         return $this->configControl->config;
     }
 
-    /**
-     * @param string $environment
-     * @return array|bool
-     */
-    public function getEnvironSSHArgs(string $environment = 'live')
-    {
-        $error_string = sprintf("Can't connect %s environment via SSH.", $environment);
-        switch ($environment) {
-            case 'live':
-                $live_domain = $this->config->environ->live->domain ?? '';
-                $live_username = $this->config->environ->live->cpanel->account->username ?? '';
-                if (!$this->findcPanelAccount($live_domain, $live_username)) {
-                    $this->log($error_string . " Couldn't locate live cPanel account.");
-                    return false;
-                }
-                $ssh_args = $this->config->environ->live->cpanel->ssh ?? array();
-                break;
-            case 'staging':
-                $subdomain = $this->cPanelSubdomain->findSubdomaincPanel();
-                if (!$subdomain) {
-                    $slug = $this->config->environ->staging->cpanel->subdomain->slug ?? '';
-                    $slug = !empty($slug) ? "<strong>" . $slug . "</strong> " : '';
-                    $this->log(sprintf("%s Apparently subdomain %sdoesn't exist in your staging cPanel accounts.",
-                        $error_string, $slug));
-                    return false;
-                }
-                $domain = $subdomain['domain'];
-                $ssh_args = $this->config->environ->staging->cpanel->accounts->$domain->ssh ?? array();
-                break;
-            case 'local':
-                $ssh_args = $this->config->environ->local->ssh ?? array();
-                break;
-        }
-        if (empty($ssh_args) && !isset($ssh_args->hostname, $ssh_args->port)) {
-            $this->log(sprintf("%s %s cPanel account SSH args missing.", $error_string, ucfirst($environment)));
-            return false;
-        }
-        return $ssh_args;
-    }
 
     /**
      * @param string $action
-     * @param string $environment
+     * @param string $environ
      * @return bool
      * @throws \Github\Exception\MissingArgumentException
      */
-    public function doRemoteEnvironStuff($action = 'create', $environment = 'live')
+    public function doRemoteEnvironStuff($action = 'create', $environ = 'live'): bool
     {
-        if (!$this->validate_action($action, array('create', 'delete'), sprintf("Can't do %s environ stuff.", $environment)))
+        if (!$this->validate_action($action, array('create', 'delete'), sprintf("Can't do %s environ stuff.", $environ)))
             return false;
-        if (!in_array($environment, array('live', 'staging'))) {
+        if (!in_array($environ, array('live', 'staging'))) {
             $this->log(sprintf("Can't %s stuff. Environment must be 'live' or 'staging'.", $action), 'error');
             return false;
         }
-        $this->log(sprintf('<h2>%s nominated %s stuff.</h2>', ucfirst($this->actions[$action]['present']), $environment), 'info');
+        $this->log(sprintf('<h2>%s nominated %s stuff.</h2>', ucfirst($this->actions[$action]['present']), $environ), 'info');
         $success = [];
 
         //actual site environment and db - logic mess
-        if ($environment == 'live' && $this->actionRequests->can_do($action . '_live_site')) {
-            $cPanelAccount = new cPanelAccount('live', $this->config, $this->terminal('staging'), $this->actionRequests, $this->whm);
-            $success['live_cpanel_account'] = $cPanelAccount->$function_name();
-        } elseif ($action == 'create' && $environment == 'staging' && $this->actionRequests->can_do($action . '_staging_subdomain'))
-            $success['staging_subdomain'] = $this->cPanelSubdomain->$action();
+        if ($environ === 'live' && $this->actionRequests->canDo($action . '_live_site'))
+            $success['live_cpanel_account'] = $this->environ('live')->$action();
+        elseif ($action === 'create' && $environ === 'staging' && $this->actionRequests->canDo($action . '_staging_subdomain'))
+            $success['staging_subdomain'] = $this->environ('staging')->$action();
 
-        if ($this->actionRequests->can_do($action . '_' . $environment . '_db')
-            && ($action == 'create' || $environment == 'staging' || ($action == 'delete' && !$this->actionRequests->can_do($action . '_live_site')))) {
-            $databaseComponents = new DatabaseComponents($environment, $this->whm);
+        if ($this->actionRequests->canDo($action . '_' . $environ . '_db')
+            && ($action === 'create' || $environ === 'staging' || ($action === 'delete' && !$this->actionRequests->canDo($action . '_live_site')))) {
+            //$dbConfig = (array)$this->config->environ->$environ->db;
+            $dbConfig = $this->config->environ->$environ->db ?? null;
+            $databaseComponents = new DatabaseComponents($environ, $dbConfig, $this->whm);
             $success['db'] = $databaseComponents->$action();
         }
 
         //shared actions
-        if ($this->actionRequests->can_do($action . '_' . $environment . '_email_filters')) {
-            $email_filters = new EmailFilters($environment, $this->whm);
+        if ($this->actionRequests->canDo($action . '_' . $environ . '_email_filters')) {
+            $email_filters = new EmailFilters($environ, $this->whm);
             $success['email_filters'] = $email_filters->$action();
         }
 
-        if (($action == 'create' && $this->actionRequests->can_do($action . '_' . $environment . '_initial_git_commit'))
-            || $this->actionRequests->can_do($action . '_' . $environment . '_version_control')) {
+        if (($action === 'create' && $this->actionRequests->canDo($action . '_' . $environ . '_initial_git_commit'))
+            || $this->actionRequests->canDo($action . '_' . $environ . '_version_control')) {
             $versionControl = new EnvironVersionControl(
-                $environment,
-                $this->terminal($environment),
+                $this->environ($environ),
+                $this->config,
+                $this->terminal($environ),
                 $this->github,
                 $this->whm
             );
-            if ($this->actionRequests->can_do($action . '_' . $environment . '_version_control'))
+            if ($this->actionRequests->canDo($action . '_' . $environ . '_version_control'))
                 $success['setup_version_control'] = $versionControl->$action();
         }
 
-
-        if ($this->actionRequests->can_do($action . '_' . $environment . '_wp')) {
-            $wp = new WordPress($environment, $this->terminal($environment), $this->actionRequests, $this->whm);
+        if ($this->actionRequests->canDo($action . '_' . $environ . '_wp')) {
+            $liveURL = $this->environ('live')->getEnvironURL(true, true);
+            $wp = new WordPress($this->environ($environ), $this->config, $this->terminal($environ), $this->actionRequests, $liveURL, $this->whm);
             $success['wp'] = $wp->$action();
         }
 
-        if ($action == 'create' && $this->actionRequests->can_do($action . '_' . $environment . '_initial_git_commit'))
+        if ($action === 'create' && $this->actionRequests->canDo($action . '_' . $environ . '_initial_git_commit'))
             $success['synced'] = $versionControl->sync();
 
-        if ($action == 'delete' && && $environment == 'staging' && $this->actionRequests->can_do($action . '_staging_subdomain'))
-            $success['staging_subdomain'] = $this->cPanelSubdomain->$action();
+        if ($action === 'delete' && $environ === 'staging' && $this->actionRequests->canDo($action . '_staging_subdomain'))
+            $success['staging_subdomain'] = $this->environ('staging')->$action();
 
-        $success = !in_array(false, $success) ? true : false;
+        $success = !in_array(false, $success, true) ? true : false;
 
         if ($success) {
-            $this->log(sprintf('Successfully %s nominated %s stuff.', $this->actions[$action]['past'], $environment), 'success');
+            $this->log(sprintf('Successfully %s nominated %s stuff.', $this->actions[$action]['past'], $environ), 'success');
             return true;
         }
-        $this->log(sprintf('Something may have gone wrong while %s nominated %s stuff.', $this->actions[$action]['present'], $environment), 'error');
+        $this->log(sprintf('Something may have gone wrong while %s nominated %s stuff.', $this->actions[$action]['present'], $environ), 'error');
         return false;
     }
 
     /**
      * @param string $action
      */
-    public function doLocalStuff($action = 'create')
+    public function doLocalStuff($action = 'create'): void
     {
-        if ($this->actionRequests->can_do($action . "_local_version_control") ||
-            ($action == 'create' && $this->actionRequests->can_do("create_local_initial_git_commit")))
+        $environ = $this->environ('local');
+
+        if ($this->actionRequests->canDo($action . '_local_version_control') ||
+            ($action === 'create' && $this->actionRequests->canDo('create_local_initial_git_commit')))
             $versionControl = new EnvironVersionControl(
-                'local',
+                $this->environ('local'),
+                $this->config,
                 $this->terminal('local'),
                 $this->github,
                 $this->whm
             );
 
-        if ($this->actionRequests->can_do($action . "_local_version_control"))
+        if ($this->actionRequests->canDo($action . '_local_version_control'))
             $versionControl->$action();
 
-
-        if ($this->actionRequests->can_do($action . "_local_virtual_host")) {
+        if ($this->actionRequests->canDo($action . '_local_virtual_host')) {
             $domain = $this->config->environ->local->domain ?? '';
             $sitesAvailable = $this->config->environ->local->dirs->sites_available->path ?? '';
 
-            $webDir = $this->getEnvironDir('local', 'web');
+            $webDir = $environ->getEnvironDir('web');
             $webOwner = $this->config->environ->local->dirs->web->owner ?? '';
             $webGroup = $this->config->environ->local->dirs->web->group ?? '';
 
-            $logDir = $this->getEnvironDir('local', 'log');
+            $logDir = $environ->getEnvironDir('log');
 
             $localDirSetup = $this->terminal('local')->LocalProjectDirSetup();
             $localDirSetup->setProjectArgs([
-                'dir' => $this->getEnvironDir('local', 'project') ?? '',
+                'dir' => $environ->getEnvironDir('project') ?? '',
                 'owner' => $this->config->environ->local->dirs->project->owner ?? '',
                 'group' => $this->config->environ->local->dirs->project->group ?? '',
             ]);
@@ -555,7 +562,7 @@ final class Deployer extends Base
             $this->terminal('local')->localVirtualHost()->$action($virtualHostArgs);
 
 
-            if (!$logDirSuccess && $action == 'delete') {
+            if (!$logDirSuccess && $action === 'delete') {
                 $this->terminal('local')->LocalProjectDirSetup()->delete([
                     'dir' => $logDir . 'access.log',
                     'purpose' => 'access log'
@@ -567,7 +574,7 @@ final class Deployer extends Base
             }
         }
 
-        if ($this->actionRequests->can_do($action . "_local_database_components")) {
+        if ($this->actionRequests->canDo($action . '_local_database_components')) {
             $pdoWrap = null;
             try {
                 $pdoWrap = new PDOWrap([
@@ -582,57 +589,28 @@ final class Deployer extends Base
 
             $client = new DBComponentsClient('local', $pdoWrap);
 
-            $databaseComponents = new DatabaseComponents('local', null, $client);
+            $dbConfig = $this->config->environ->$environ->db ?? null;
+            $databaseComponents = new DatabaseComponents('local', $dbConfig, null, $client);
             $databaseComponents->$action();
         }
 
-        if ($this->actionRequests->can_do($action . "_local_wp")) {
-            $wp = new WordPress('local', $this->terminal('local'), $this->actionRequests);
+        if ($this->actionRequests->canDo($action . '_local_wp')) {
+            $liveURL = $this->environ('live')->getEnvironURL(true, true);
+            $wp = new WordPress($this->environ('local'), $this->config, $this->terminal('local'), $this->actionRequests, $liveURL);
             $wp->$action;
         }
 
-        if ($action == 'create' && $this->actionRequests->can_do("create_local_initial_git_commit")) {
+        if ($action === 'create' && $this->actionRequests->canDo('create_local_initial_git_commit')) {
             $versionControl->sync();
         }
     }
-
-    /**
-     * @param string $environment
-     * @return bool
-     */
-    function findEnvironcPanel(string $environment = 'live')
-    {
-        $error_string = sprintf("Can't find %s environment cPanel.", $environment);
-        switch ($environment) {
-            case 'live':
-                $cpanel_username = $this->config->environ->$environment->cpanel->account->username ?? '';
-                $cpanel_domain = $this->config->environ->$environment->domain ?? '';
-                if (empty($cpanel_domain) || empty($cpanel_username)) {
-                    $this->log($error_string . " Domain and/or cPanel username are missing from config.", 'error');
-                    return false;
-                }
-                $cPanel_account = $this->findcPanelAccount($cpanel_domain, $cpanel_username);
-                break;
-            case 'staging':
-                $slug = $this->config->environ->staging->cpanel->subdomain->slug ?? '';
-                if (empty($slug)) {
-                    $this->log($error_string . " Staging cPanel subdomain slug missing from config.", 'error');
-                    return false;
-                }
-                $cPanel_account = $this->cPanelSubdomain->findSubdomaincPanel();
-                break;
-        }
-        return $cPanel_account ?? false;
-    }
-
-
 
 
     /**
      * @param string $action
      * @return bool
      */
-    function versionControlMainRepo(string $action = 'create')
+    public function versionControlMainRepo(string $action = 'create'): bool
     {
         if (!$this->validate_action($action, array('create', 'delete'), "Can't do main version control repository stuff."))
             return false;
@@ -647,201 +625,41 @@ final class Deployer extends Base
             $this->log(sprintf('Successfully %s version control main repository.', $this->actions[$action]['past']), 'success');
             return true;
         }
-        $this->log(sprintf("Something may have gone wrong while %s version control main repository.", $this->actions[$action]['present']), 'error');
+        $this->log(sprintf('Something may have gone wrong while %s version control main repository.', $this->actions[$action]['present']), 'error');
         return false;
     }
 
-    /**
-     * @param string $environ
-     * @param bool $scheme
-     * @param bool $prefix
-     * @return bool|string
-     */
-    public function getEnvironURL(string $environ = 'live', bool $scheme = false, bool $prefix = false)
-    {
-
-        $error_string = sprintf("Can't get %s environment url.", $environ);
-        switch ($environ) {
-            case 'staging':
-                $staging_cpanel = $this->cPanelSubdomain->findSubdomaincPanel();
-                if (!$staging_cpanel)
-                    return false;
-                $slug = $this->config->environ->staging->cpanel->subdomain->slug ?? '';
-                if (empty($slug)) {
-                    $this->log($error_string . " Subdomain slug missing.", 'error');
-                    return false;
-                }
-                $url = $slug . '.' . $staging_cpanel['domain'];
-                //$url = $this->whm->get_subdomain($slug)['domain'];
-                break;
-            case 'local':
-            case 'live':
-            default:
-                if (empty($this->config->environ->$environ->domain)) {
-                    $this->log($error_string . " Domain missing from config.", 'error');
-                    return false;
-                }
-                $url = $this->config->environ->$environ->domain;
-                break;
-        }
-
-        if ($prefix && !empty($this->config->environ->$environ->www)) {
-            $url = 'www.' . $url;
-        }
-        if ($scheme) {
-            //$protocol = $environ == 'local' ? 'http://' : 'https://';
-            $protocol = 'https://';
-            if (strpos($protocol, $url) !== 0)
-                $url = $protocol . $url;
-        }
-        return $url;
-    }
 
     /**
-     * @param string $environ
-     * @param string $type
-     * @return bool|string
-     */
-    public function getEnvironDir(string $environ = 'live', $type = 'web')
-    {
-        if (empty($environ))
-            return false;
-        $error_string = sprintf("Couldn't determine %s environment %s directory.", $environ, $type);
-        $root = '';
-        if ($environ != 'local') {
-            $root = $this->terminal($environ)->root;
-            if (empty($root)) {
-                $this->log($error_string . " Couldn't get SSH root directory.");
-                return false;
-            }
-        }
-
-        switch ($environ) {
-            case 'live':
-                switch ($type) {
-                    case 'web':
-                        $dir = '/public_html';
-                        break;
-                    case 'worktree':
-                        $dir = $this->config->environ->$environ->version_control->worktree_dir ?? '/public_html';
-                        break;
-                    case 'git':
-                        $dir = $this->config->environ->$environ->version_control->repo_dir ?? '/git/website';
-                        break;
-                    default:
-                        $this->log($error_string . " Type <strong>" . $type . "</strong> in <strong>" . $environ . "</strong> environ not accounted for.");
-                        return false;
-                        break;
-                }
-                break;
-            case 'staging':
-                switch ($type) {
-                    case 'web':
-                        $dir = $this->config->environ->$environ->cpanel->subdomain->directory ?? '';
-                        break;
-                    case 'worktree':
-                        $dir = $this->config->environ->$environ->version_control->worktree_dir ??
-                            $this->config->environ->$environ->cpanel->subdomain->directory ?? '';
-                        break;
-                    case 'git':
-                        if (!empty($this->config->environ->$environ->version_control->repo_dir))
-                            $dir = $this->config->environ->$environ->version_control->repo_dir;
-                        else {
-                            $repo_name = $this->config->version_control->repo_name ?? '';
-                            if (empty($repo_name)) {
-                                $this->log($error_string . ' Version control repo name missing from config.');
-                                return false;
-                            }
-                            $dir = '/git/' . $repo_name . '/website';
-                        }
-                        break;
-                    case 'github_webhook_endpoint_config':
-                        $dir = '/.github_webhook_configs';
-                        break;
-                    default:
-                        $this->log($error_string . " Type <strong>" . $type . "</strong> in <strong>" . $environ . "</strong> environ not accounted for.");
-                        return false;
-                        break;
-                }
-                break;
-            case 'local':
-                $rootWebDir = $this->config->environ->local->dirs->web_root->path ?? '';
-                if (empty($rootWebDir)) {
-                    $this->log($error_string . ' Root web dir missing from config.');
-                    return false;
-                }
-
-                $projectDirName = $this->config->environ->$environ->dirs->project->name ?? $this->config->project->name ?? '';
-
-                if (empty($projectDirName)) {
-                    $this->log($error_string . ' Project name missing from config.');
-                    return false;
-                }
-                $dir = $rootWebDir . $projectDirName;
-
-                $public_html = 'public';
-                switch ($type) {
-                    case 'web':
-                        $dir .= $this->config->environ->$environ->dirs->web->path ?? '/Project/' . $public_html;
-                        break;
-                    case 'git':
-                        $dir .= $this->config->environ->$environ->dirs->repo->path ?? '/Project/' . $public_html;
-                        break;
-                    case 'worktree':
-                        $dir .= $this->config->environ->$environ->dirs->worktree->path ?? '/Project/' . $public_html;
-                        break;
-                    case 'log':
-                        $dir .= $this->config->environ->$environ->dirs->log->path ?? '/Project/';
-                        break;
-                    case 'project':
-                        break;
-                    default:
-                        $this->log($error_string . " Type <strong>" . $type . "</strong> in <strong>" . $environ . "</strong> environ not accounted for.");
-                        return false;
-                        break;
-                }
-                break;
-        }
-        if (empty($dir)) {
-            $this->log($error_string);
-            return false;
-        }
-        $directory = $root . $dir;
-        return $directory;
-    }
-
-    /**
-     * @return array
+     * @return array|bool
      */
     public function getWHMDiskSpace()
     {
-        if (empty($this->whm))
-            return false;
         $accounts = $this->whm->get_cpanel_accounts();
-        $diskused = 0;
-        $disklimit = 0;
+        $diskUsed = 0;
+        $diskLimit = 0;
         foreach ($accounts as $account) {
-            $diskused += intval($account['diskused']);
-            $disklimit += intval($account['disklimit']);
+            $diskUsed += (int)$account['diskused'];
+            $diskLimit += (int)$account['disklimit'];
         }
-        $diskusage = $this->whm->get_disk_usage();
-        $disktotal = $diskusage['total'] ?? 100000;
+        $diskUsage = $this->whm->get_disk_usage();
+        $diskTotal = $diskUsage['total'] ?? 100000;
         return array(
-            'used' => $diskused,
-            'allocated' => $disklimit,
-            'total' => $disktotal
+            'used' => $diskUsed,
+            'allocated' => $diskLimit,
+            'total' => $diskTotal
         );
     }
 
     /**
-     * @param string $environment
+     * @param string $environ
      * @return bool
      */
-    public function updateWP($environment = 'live')
+    public function updateWP($environ = 'live'): bool
     {
-        $mainStr = sprintf(" WordPress in %s environment. ", $environment);
+        $mainStr = sprintf(' WordPress in %s environment. ', $environ);
         $this->log('<h2>Updating ' . $mainStr . '</h2>', 'info');
-        $directory = $this->getEnvironDir($environment, 'web');
+        $directory = $this->environ('live')->getEnvironDir('web');
         $errorString = "Can't update " . $mainStr;
         if (empty($directory)) {
             $this->log($errorString . " Couldn't get web directory.");
@@ -849,24 +667,24 @@ final class Deployer extends Base
         }
         $WPCLI = $this->terminal->wp_cli()->installOrUpdate();
         if (!$WPCLI) {
-            $this->log(sprintf('Failed to update WordPress in %s environment.', $environment));
+            $this->log(sprintf('Failed to update WordPress in %s environment.', $environ));
             return false;
         }
         $backupDB = new TransferWPDB();
-        $backup = $backupDB->backup($environment, $this->terminal($environment));
+        $backup = $backupDB->backup($environ, $this->terminal($environ));
         if ($backup) {
-            $gitPull = $this->terminal($environment)->gitBranch()->pull(['worktree' => $directory, 'branch' => 'dev']);
+            $gitPull = $this->terminal($environ)->gitBranch()->pull(['worktree' => $directory, 'branch' => 'dev']);
             if ($gitPull) {
-                $wp_update = $this->terminal($environment)->wp()->update(['directory' => $directory]);
+                $wp_update = $this->terminal($environ)->wp()->update(['directory' => $directory]);
                 if ($wp_update)
-                    $git_commit = $this->terminal($environment)->gitBranch()->commit($directory, 'dev');
+                    $git_commit = $this->terminal($environ)->gitBranch()->commit($directory, 'dev');
             }
         }
         if (!empty($backup) && !empty($gitPull) && !empty($wp_update) && !empty($git_commit)) {
-            $this->log(sprintf('Successfully updated WordPress in %s environment.', $environment), 'success');
+            $this->log(sprintf('Successfully updated WordPress in %s environment.', $environ), 'success');
             return true;
         }
-        $this->log(sprintf('Failed to update WordPress in %s environment.', $environment));
+        $this->log(sprintf('Failed to update WordPress in %s environment.', $environ));
         return false;
     }
 }
@@ -879,5 +697,3 @@ function ph_d()
 {
     return Deployer::instance();
 }
-
-

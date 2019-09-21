@@ -4,6 +4,7 @@ namespace Phoenix\Terminal;
 
 /**
  * Class SSHConfig
+ *
  * @package Phoenix\Terminal
  */
 class SSHConfig extends AbstractTerminal
@@ -28,7 +29,7 @@ class SSHConfig extends AbstractTerminal
         string $hostname = '',
         string $key_name = 'id_rsa',
         string $user = '',
-        int $port = 22)
+        int $port = 22): bool
     {
         $this->mainStr($host, $hostname, $key_name, $user, $port);
         $this->logStart();
@@ -42,16 +43,16 @@ class SSHConfig extends AbstractTerminal
         }
         $perms = substr(decoct($this->ssh->fileperms($this->filepath())), -3, 3);
         if ($perms != 0600) {
-            $this->log(sprintf("SSH Config file permissions <strong>%s</strong> are wrong. Setting to 0600.", $perms), 'warning');
+            $this->log(sprintf('SSH Config file permissions <strong>%s</strong> are wrong. Setting to 0600.', $perms), 'warning');
             $this->chmod($this->filepath(), 0600);
         }
         if ($this->check($host))
-            return $this->logError(sprintf("Config entry for <strong>%s</strong> already exists.", $host), 'warning');
+            return $this->logError(sprintf('Config entry for <strong>%s</strong> already exists.', $host), 'warning');
         $output = $this->exec('echo -e "Host ' . $host . '\n  Hostname ' . $hostname . '\n  User ' . $user
             . '\n  IdentityFile ~/.ssh/' . $key_name . '\n  Port ' . $port . '" >> ' . $this->filepath() . ';');
         $config_after = $this->get($this->filepath());
         if ($config_before == $config_after)
-            return $this->logFinish(false, "Config file is unchanged after attempting to add to it. " . $output);
+            return $this->logFinish(false, 'Config file is unchanged after attempting to add to it. ' . $output);
         $success = $this->check($host) ? true : false;
         return $this->logFinish($success, $output);
     }
@@ -60,7 +61,7 @@ class SSHConfig extends AbstractTerminal
      * @param string $host
      * @return bool
      */
-    public function delete(string $host = '')
+    public function delete(string $host = ''): bool
     {
         $this->mainStr($host);
         $this->logStart();
@@ -79,7 +80,7 @@ class SSHConfig extends AbstractTerminal
         if (strpos($output, "unterminated `s' command") !== false)
             return $this->logError($output);
         if ($config_before == $config_after)
-            return $this->logFinish(false, "Config file is unchanged after attempting to delete from it. " . $output);
+            return $this->logFinish(false, 'Config file is unchanged after attempting to delete from it. ' . $output);
         $success = !$this->check($host) ? true : false;
         return $this->logFinish($success, $output);
     }
@@ -88,7 +89,7 @@ class SSHConfig extends AbstractTerminal
      * @param string $host
      * @return bool
      */
-    public function check(string $host = '')
+    public function check(string $host = ''): bool
     {
         if (!$this->file_exists($this->filepath()))
             return false;
@@ -109,19 +110,17 @@ class SSHConfig extends AbstractTerminal
                      string $hostname = '',
                      string $key_name = 'id_rsa',
                      string $user = '',
-                     int $port = 22)
+                     int $port = 22): string
     {
-        if (func_num_args() == 0) {
-            if (!empty($this->_mainStr))
-                return $this->_mainStr;
-        }
+        if (!empty($this->_mainStr) && func_num_args() === 0)
+            return $this->_mainStr;
         $host = !empty($host) ? sprintf(' for host named <strong>%s</strong>', $host) : '';
         $hostname = !empty($hostname) ? sprintf(' with hostname <strong>%s</strong>', $hostname) : '';
         $key_name = !empty($key_name) ? sprintf(' and key named <strong>%s</strong>', $key_name) : '';
         $user = !empty($user) ? sprintf(' and user <strong>%s</strong>', $user) : '';
         $port = !empty($port) ? sprintf(' and port <strong>%s</strong>', $port) : '';
-        $dirStr = !empty($this->filepath) ? sprintf(" in config file at <strong>%s</strong>", $this->filepath) : '';
-        return $this->_mainStr = sprintf("%s environment SSH config%s%s%s%s%s%s", $this->environment, $host, $hostname, $key_name, $user, $port, $dirStr);
+        $dirStr = !empty($this->filepath) ? sprintf(' in config file at <strong>%s</strong>', $this->filepath) : '';
+        return $this->_mainStr = sprintf('%s environment SSH config%s%s%s%s%s%s', $this->environment, $host, $hostname, $key_name, $user, $port, $dirStr);
     }
 
     /**

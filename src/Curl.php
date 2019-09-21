@@ -37,10 +37,7 @@ class Curl
      */
     public function __construct($base_query_url, $authorisation = false, $userpwd = false, $content_type = 'application/json')
     {
-        if (empty($base_query_url) || empty($base_query_url))
-            return false;
-
-        return $this->init($base_query_url, $authorisation, $userpwd, $content_type);
+        $this->init($base_query_url, $authorisation, $userpwd, $content_type);
     }
 
     /**
@@ -50,7 +47,7 @@ class Curl
      * @param string $content_type
      * @return bool
      */
-    public function init($base_query_url, $authorisation = false, $userpwd = false, $content_type = 'application/json')
+    public function init($base_query_url, $authorisation = false, $userpwd = false, $content_type = 'application/json'): bool
     {
         if (empty($base_query_url) || empty($base_query_url))
             return false;
@@ -90,12 +87,13 @@ class Curl
             if (!empty($this->userpwd))
                 curl_setopt($this->handler, CURLOPT_USERPWD, $this->userpwd);
         }
+        return true;
     }
 
     /**
      * @param bool $header
      */
-    public function set_header($header = false)
+    public function set_header($header = false): void
     {
 
     }
@@ -134,10 +132,8 @@ class Curl
                     $query .= '?' . $arg_string;
                 }
             }
-        } else {
-            if (!empty($this->headers['content-length']))
-                unset($this->headers['content-length']);
-        }
+        } elseif (!empty($this->headers['content-length']))
+            unset($this->headers['content-length']);
 
         switch ($request_type) {
             case 'PUT':

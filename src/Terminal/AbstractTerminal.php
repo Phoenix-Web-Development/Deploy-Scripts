@@ -41,6 +41,7 @@ class AbstractTerminal extends BaseAbstract
 
     /**
      * AbstractTerminal constructor.
+     *
      * @param TerminalClient $client
      */
     public function __construct(TerminalClient $client)
@@ -55,7 +56,7 @@ class AbstractTerminal extends BaseAbstract
      */
     protected function client(TerminalClient $client = null)
     {
-        if (func_num_args() == 0) {
+        if (func_num_args() === 0) {
             if (!empty($this->_client))
                 return $this->_client;
             return false;
@@ -118,7 +119,7 @@ class AbstractTerminal extends BaseAbstract
      * @return bool
      */
     public
-    function is_readable(string $dir = '')
+    function is_readable(string $dir = ''): bool
     {
         if ($this->environment != 'local')
             return $this->ssh->is_readable($dir);
@@ -130,7 +131,7 @@ class AbstractTerminal extends BaseAbstract
      * @return bool
      */
     public
-    function is_writable(string $dir = '')
+    function is_writable(string $dir = ''): bool
     {
         if ($this->environment != 'local') {
             if ($this->ssh->is_writable($dir))
@@ -149,11 +150,11 @@ class AbstractTerminal extends BaseAbstract
      * @return bool|null
      */
     public
-    function isDirEmpty(string $dir = '')
+    function isDirEmpty(string $dir = ''): ?bool
     {
         $error_string = "Can't check if directory empty.";
         if (empty($dir)) {
-            $this->log(sprintf("%s No directory supplied to function.", $error_string));
+            $this->log(sprintf('%s No directory supplied to function.', $error_string));
             return false;
         }
         if (!$this->is_dir($dir)) {
@@ -173,7 +174,7 @@ class AbstractTerminal extends BaseAbstract
      * @return bool
      */
     public
-    function file_exists(string $path = '')
+    function file_exists(string $path = ''): bool
     {
         if ($this->environment != 'local') {
             return $this->ssh->file_exists($path);
@@ -192,7 +193,7 @@ class AbstractTerminal extends BaseAbstract
      * @return bool
      */
     public
-    function is_dir(string $dir = '')
+    function is_dir(string $dir = ''): bool
     {
         if (empty($dir))
             return false;
@@ -218,7 +219,7 @@ class AbstractTerminal extends BaseAbstract
      * @return bool
      */
     public
-    function mkdir(string $filepath = '', int $mode = 07777, $recursive = false)
+    function mkdir(string $filepath = '', int $mode = 07777, $recursive = false): bool
     {
         if ($this->environment != 'local') {
             return $this->ssh->mkdir($filepath, $mode, $recursive);
@@ -232,7 +233,7 @@ class AbstractTerminal extends BaseAbstract
      * @param bool $recursive
      * @return bool|mixed
      */
-    function chmod($filepath, $mode, $recursive = false)
+    public function chmod($filepath, $mode, $recursive = false)
     {
         if ($this->environment != 'local') {
             return $this->ssh->chmod($mode, $filepath, $recursive);
@@ -286,7 +287,7 @@ class AbstractTerminal extends BaseAbstract
     function put(string $filepath = '', string $data = '', $mode = 'string')
     {
         if ($this->environment != 'local') {
-            switch ($mode) {
+            switch($mode) {
                 case 'file':
                     $mode = SFTP::SOURCE_LOCAL_FILE;
                     break;
@@ -349,14 +350,14 @@ class AbstractTerminal extends BaseAbstract
 
         $objects = scandir($filepath);
         foreach ($objects as $object) {
-            if (!in_array($object, [".", ".."])) {
-                $item = $filepath . "/" . $object;
+            if (!in_array($object, ['.', '..'])) {
+                $item = $filepath . '/' . $object;
                 if (is_dir($item))
                     $success = $this->deleteFile($item);
                 else
                     $success = unlink($item);
                 if (!$success)
-                    return $this->logError(sprintf("Failed to delete <strong>%s</strong>.", $item));
+                    return $this->logError(sprintf('Failed to delete <strong>%s</strong>.', $item));
             }
         }
         return rmdir($filepath);
@@ -387,24 +388,19 @@ class AbstractTerminal extends BaseAbstract
      * @param bool $success
      * @param string $output
      * @param string $command
-     * @return bool|null
+     * @return bool
      */
-    protected function logFinish(bool $success = false, string $output = '', string $command = '')
+    protected function logFinish(bool $success = false, string $output = '', string $command = ''): bool
     {
+        $output = $this->formatOutput($output);
+        $command = $this->formatOutput($command, 'command');
 
-        if (!empty($this->getCaller())) {
+        $string = $this->getFinishStr($success);
 
-            $output = $this->formatOutput($output);
-            $command = $this->formatOutput($command, 'command');
-
-            $string = $this->getFinishStr($success);
-
-            $string .= $command . $output;
-            $messageType = $success ? 'success' : 'error';
-            $this->log($string, $messageType);
-            return $success;
-        }
-        return null;
+        $string .= $command . $output;
+        $messageType = $success ? 'success' : 'error';
+        $this->log($string, $messageType);
+        return $success;
     }
 
     /**
@@ -423,12 +419,12 @@ class AbstractTerminal extends BaseAbstract
             $output = substr($output, 0, $maxStrLen) . '...<strong><i>snipped for brevity</i></strong>...' . substr($output, -1 * $maxStrLen, $maxStrLen);
         $append = '</pre>';
         if (substr($output, -strlen($append)) !== $append)
-            $output = $output . $append;
+            $output .= $append;
         $title = 'Command';
         if ($type == 'output')
             $title = 'Terminal output';
 
-        $prepend = "<pre><strong>" . $title . ":</strong> ";
+        $prepend = '<pre><strong>' . $title . ':</strong> ';
         if (substr($output, 0, strlen($prepend)) !== $prepend)
             $output = $prepend . $output;
 
@@ -441,9 +437,9 @@ class AbstractTerminal extends BaseAbstract
      * @return string
      */
     public
-    function formatSudoCommand(string $script = '', array $args = [])
+    function formatSudoCommand(string $script = '', array $args = []): string
     {
-        $command = "sudo " . BASH_WRAPPER . " " . $script . " '" . implode("' '", $args) . "'";
+        $command = 'sudo ' . BASH_WRAPPER . ' ' . $script . " '" . implode("' '", $args) . "'";
         return $command;
     }
 
@@ -485,7 +481,7 @@ class AbstractTerminal extends BaseAbstract
         if (!empty($this->_prompt))
             return $this->_prompt;
         $prompt = $this->exec('echo "$PS1"');
-        $prompt = str_replace('\u', $this->whoami(), $prompt);
+        $prompt = str_replace('\u', $this->whoAmI(), $prompt);
         $prompt = str_replace('\h', trim($this->exec('hostname -a')), $prompt);
         $prompt = str_replace('\w', '~', $prompt);
         $prompt = trim($prompt);
@@ -500,9 +496,9 @@ class AbstractTerminal extends BaseAbstract
     /**
      * @return bool|string
      */
-    function whoami()
+    public function whoAmI()
     {
-        return trim($this->exec('whoami')) ?? false;
+        return trim($this->exec('whoami')) ?? '';
     }
 
     /**
@@ -511,7 +507,7 @@ class AbstractTerminal extends BaseAbstract
      * @param string $filepath
      * @return bool
      */
-    protected function inSanityList(string $filepath = '')
+    protected function inSanityList(string $filepath = ''): bool
     {
         if (empty($filepath))
             return false;

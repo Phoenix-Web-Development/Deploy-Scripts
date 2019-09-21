@@ -3,10 +3,11 @@
 namespace Phoenix;
 
 /**
+ * Class ConfigControl
+ *
  * @property $config
  * @property $placeholders
  *
- * Class ConfigControl
  * @package Phoenix
  */
 class ConfigControl extends Base
@@ -33,13 +34,10 @@ class ConfigControl extends Base
      *
      * ConfigControl constructor.
      */
-    function __construct()
+    public function __construct()
     {
         parent::__construct();
         $this->processRequest();
-        $config = $this->config();
-        $config = $this->substitutePlaceholders($config);
-        $this->setConfig($config);
     }
 
     /**
@@ -66,7 +64,7 @@ class ConfigControl extends Base
     }
 
     /**
-     * @return bool
+     * @return array|bool
      */
     public function getConfigSelected()
     {
@@ -80,7 +78,7 @@ class ConfigControl extends Base
      */
     private function processRequest()
     {
-        $configSelected = $_POST['config-select'] ?? false;
+        $configSelected = $_POST['config-select'] ?? '';
         if (empty($configSelected))
             return false;
         $fileList = $this->getConfigFileList();
@@ -95,7 +93,7 @@ class ConfigControl extends Base
      * @param object|null $config
      * @return object|stdClass
      */
-    function setConfig(object $config = null)
+    public function setConfig(object $config = null)
     {
         if (!empty($config))
             return $this->_config = $config;
@@ -105,9 +103,9 @@ class ConfigControl extends Base
         $site_config = [];
         if (file_exists($configSelected['path'])) {
             $site_config = include $configSelected['path'];
-            $message = "<strong>" . ucfirst($configSelected['name']) . "</strong> site specific config loaded.";
+            $message = '<strong>' . ucfirst($configSelected['name']) . '</strong> site specific config loaded.';
         } else
-            $message = "<h3>No site specific config currently loaded.</h3>";
+            $message = '<h3>No site specific config currently loaded.</h3>';
         $this->log($message, 'info');
 
         $config = array_replace_recursive($base_config, $site_config);
@@ -118,49 +116,15 @@ class ConfigControl extends Base
     }
 
     /**
-     * @return stdClass
+     * @return \stdClass
      */
-    protected function config()
+    protected function config(): \stdClass
     {
         //print_r($this->_config);
         if (!empty($this->_config))
             return $this->_config;
-        $this->setConfig();
-        return $this->_config ?? false;
-    }
-
-    /**
-     * @return array|bool
-     */
-    protected function placeholders()
-    {
-        if (!empty($this->_placeholders))
-            return $this->_placeholders;
-        /*
-                $placeholders = array(
-                    'project_name' => ucwords($this->_config['project']['name'] ?? ''),
-                    'root_email_folder' => $this->_config['project']['root_email_folder'] ?? '',
-                    //'staging_domain'=> ph_d()->getEnvironURL('staging') ?? '',
-                    'live_domain' => ph_d()->getEnvironURL('live') ?? '',
-                    'live_cpanel_username' => $this->_config['environ']['live']['cpanel']['account']['username'] ?? ''
-                );
-        */
-        $placeholders = array(
-            'project_name' => ucwords($this->_config->project->name ?? ''),
-            'root_email_folder' => $this->_config->project->root_email_folder ?? '',
-            'staging_domain' => ph_d()->getEnvironURL('staging') ?? '',
-            'live_domain' => ph_d()->getEnvironURL('live') ?? '',
-            'live_cpanel_username' => $this->_config->environ->live->cpanel->account->username ?? ''
-        );
-        $return = [];
-        foreach ($placeholders as $placeholderName => $placeholder) {
-            if (empty($placeholder)) {
-                $this->log(sprintf("Couldn't obtain value for <strong>%s</strong> config placeholder.", $placeholderName));
-                return [];
-            }
-            $return['%' . $placeholderName . '%'] = $placeholder;
-        }
-        return $this->_placeholders = $return;
+        return $this->setConfig();
+        //$this->_config ?? new \stdClass;
     }
 
 
@@ -168,16 +132,17 @@ class ConfigControl extends Base
      * Recursive function to substitute placeholder strings in config with actual value
      *
      * @param object|null $config
+     * @param array $placeholders
      * @return object
      */
-    function substitutePlaceholders(object $config = null)
+    public function substitutePlaceholders(object $config = null, array $placeholders = [])
     {
-        foreach ($this->placeholders as $placeholder => $actualValue) {
+        foreach ($placeholders as $placeholder => $actualValue) {
 
             foreach ($config as $key => &$value) {
 
-                if (is_array($value))
-                    $value = $this->substitutePlaceholders($value);
+                if (is_array($value) || is_object($value))
+                    $value = $this->substitutePlaceholders($value, $placeholders);
                 elseif (is_string($value)) {
                     if (strpos($value, $placeholder) !== false) {
                         $value = str_replace($placeholder, $actualValue, $value);
@@ -189,8 +154,15 @@ class ConfigControl extends Base
                     //d($placeholder . ' ' .$actualValue);
                     $newKey = str_replace($placeholder, $actualValue, $key);
                     //d($newKey);
-                    $config[$newKey] = $value;
-                    unset($config[$key]);
+                    if (is_array($config)) {
+                        $config[$newKey] = $value;
+                        unset($config[$key]);
+                    }
+                    if (is_object($value)) {
+                        $config->$newKey = $value;
+                        unset($config->$key);
+                    }
+
                 }
             }
         }

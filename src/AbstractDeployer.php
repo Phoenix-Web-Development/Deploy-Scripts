@@ -2,8 +2,6 @@
 
 namespace Phoenix;
 
-use Phoenix\BaseAbstract;
-
 /**
  * @property string $environment
  *
@@ -12,19 +10,5 @@ use Phoenix\BaseAbstract;
  */
 class AbstractDeployer extends BaseAbstract
 {
-    /**
-     * @var
-     */
-    protected $_client;
-
-
-    /**
-     * AbstractDeployer constructor.
-     */
-    public function __construct()
-    {
-        parent::__construct();
-    }
-
 
 }

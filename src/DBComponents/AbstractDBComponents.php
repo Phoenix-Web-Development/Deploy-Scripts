@@ -37,7 +37,7 @@ class AbstractDBComponents extends BaseAbstract
      */
     protected function client(DBComponentsClient $client = null)
     {
-        if (func_num_args() == 0) {
+        if (func_num_args() === 0) {
             if (!empty($this->_client)) {
                 return $this->_client;
             }

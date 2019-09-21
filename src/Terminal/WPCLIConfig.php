@@ -29,7 +29,7 @@ class WPCLIConfig extends AbstractTerminal
     /**
      * @return bool
      */
-    public function check()
+    public function check(): bool
     {
         if (!$this->validate())
             return false;
@@ -42,13 +42,13 @@ class WPCLIConfig extends AbstractTerminal
     /**
      * @return bool
      */
-    public function delete()
+    public function delete(): bool
     {
         $this->logStart();
         if (!$this->validate())
             return false;
         if (!$this->check())
-            return $this->logFinish(true, "No need to delete " . $this->mainStr() . ' as file doesn\'t exist.');
+            return $this->logFinish(true, 'No need to delete ' . $this->mainStr() . ' as file doesn\'t exist.');
         $success = $this->deleteFile($this->filepath) ? true : false;
         return $this->logFinish($success);
 
@@ -57,7 +57,7 @@ class WPCLIConfig extends AbstractTerminal
     /**
      * @return bool
      */
-    public function uninstall()
+    public function uninstall(): bool
     {
         return $this->delete();
     }
@@ -65,13 +65,13 @@ class WPCLIConfig extends AbstractTerminal
     /**
      * @return bool
      */
-    public function create()
+    public function create(): bool
     {
         $this->logStart();
         if (!$this->validate())
             return false;
         if ($this->check()) {
-            $this->log(sprintf("No need to create %s. It already exists.", $this->mainStr()), 'success');
+            $this->log(sprintf('No need to create %s. It already exists.', $this->mainStr()), 'success');
             return true;
         }
 
@@ -80,10 +80,10 @@ class WPCLIConfig extends AbstractTerminal
         if (!$this->is_dir($dirpath)) {
             $this->mkdir($dirpath);
             if (!$this->is_dir($dirpath))
-                return $this->logError("Directory " . $dirpath . " doesn't exist.");
+                return $this->logError('Directory ' . $dirpath . " doesn't exist.");
         }
-        $CLIConfig = "apache_modules:
-  - mod_rewrite";
+        $CLIConfig = 'apache_modules:
+  - mod_rewrite';
         $success = $this->put($filepath, $CLIConfig);
         return $this->logFinish($success);
     }
@@ -91,7 +91,7 @@ class WPCLIConfig extends AbstractTerminal
     /**
      * @return bool
      */
-    public function install()
+    public function install(): bool
     {
         return $this->create();
     }
@@ -100,16 +100,16 @@ class WPCLIConfig extends AbstractTerminal
     /**
      * @return string
      */
-    protected function mainStr()
+    protected function mainStr(): string
     {
-        $dirStr = !empty($this->filepath) ? sprintf(" at path <strong>%s</strong>", $this->filepath) : '';
-        return sprintf("WP CLI config file in %s environ%s", $this->environment, $dirStr);
+        $dirStr = !empty($this->filepath) ? sprintf(' at path <strong>%s</strong>', $this->filepath) : '';
+        return sprintf('WP CLI config file in %s environ%s', $this->environment, $dirStr);
     }
 
     /**
      * @return string
      */
-    protected function validate()
+    protected function validate(): string
     {
         if (empty($this->filepath()))
             return $this->logError(sprintf("Couldn't get path to %s environ WP CLI config.", $this->environment));
@@ -119,7 +119,7 @@ class WPCLIConfig extends AbstractTerminal
     /**
      * @return string
      */
-    protected function filepath()
+    protected function filepath(): string
     {
         if (!empty($this->_filepath))
             return $this->_filepath;

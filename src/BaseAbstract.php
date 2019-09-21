@@ -2,7 +2,8 @@
 
 namespace Phoenix;
 
-use Phoenix\Base;
+use Exception;
+use ReflectionMethod;
 
 /**
  * @property string $mainStr
@@ -23,14 +24,6 @@ class BaseAbstract extends Base
     protected $logElement = '';
 
     /**
-     * BaseAbstract constructor.
-     */
-    public function __construct()
-    {
-        parent::__construct();
-    }
-
-    /**
      * @return bool|mixed
      */
     protected function getCaller()
@@ -39,16 +32,16 @@ class BaseAbstract extends Base
         array_shift($dbt);
         $i = 0;
         foreach ($dbt as $function) {
-            if ($i == 5)
+            if ($i === 5)
                 break;
             $caller = $function['function'] ?? null;
             try {
-                $reflection = new \ReflectionMethod($this, $caller);
+                $reflection = new ReflectionMethod($this, $caller);
                 if ($reflection->isPublic()) {
                     $caller = explode('\\', $caller);
                     return end($caller);
                 }
-            } catch (\Exception $e) {
+            } catch (Exception $e) {
                 echo 'Caught exception: ', $e->getMessage(), "\n";
             }
             $i++;
@@ -60,7 +53,7 @@ class BaseAbstract extends Base
      * @param string $string
      * @return string
      */
-    protected function elementWrap(string $string = '')
+    protected function elementWrap(string $string = ''): string
     {
         $logElement = $this->logElement;
         if (empty($logElement))
@@ -71,7 +64,7 @@ class BaseAbstract extends Base
     /**
      * @return string
      */
-    protected function mainStr()
+    protected function mainStr(): string
     {
         return "I probably shouldn't have been called";
     }
@@ -79,7 +72,7 @@ class BaseAbstract extends Base
     /**
      *
      */
-    protected function logStart()
+    protected function logStart(): void
     {
         $string = ucfirst($this->actions[$this->getCaller()]['present']) . ' ' . $this->mainStr() . '.';
         $string = $this->elementWrap($string);
@@ -91,7 +84,7 @@ class BaseAbstract extends Base
      * @param string $type
      * @return bool
      */
-    protected function logError($error = '', $type = 'error')
+    protected function logError($error = '', $type = 'error'): bool
     {
         $caller = $this->getCaller() ?? 'missing action string';
         $action = !empty($caller) ? $this->actions[$caller]['action'] : 'missing action string';
@@ -106,26 +99,32 @@ class BaseAbstract extends Base
      * @param string $message
      * @return bool|null
      */
-    protected function logFinish(bool $success = false, string $message = '')
+    protected function logFinish(bool $success = false, string $message = ''): bool
     {
-        if (!empty($this->getCaller())) {
-            $string = $this->getFinishStr($success);
-            $string .= !empty($message) ? '<p>' . $message . '</p>' : '';
-            $messageType = $success ? 'success' : 'error';
-            $this->log($string, $messageType);
-            return $success;
-        }
-        return null;
+        $string = $this->getFinishStr($success);
+        $string .= !empty($message) ? '<p>' . $message . '</p>' : '';
+        $messageType = $success ? 'success' : 'error';
+        $this->log($string, $messageType);
+        return $success;
     }
 
     /**
      * @param $success
      * @return string
      */
-    protected function getFinishStr(bool $success = false)
+    protected function getFinishStr(bool $success = false): string
     {
-        $string = $success ? 'Successfully' : 'Failed to';
-        return $this->elementWrap($string . ' ' . $this->actions[$this->getCaller()]['action'] . ' ' . $this->mainStr());
+        if ($success) {
+            $string = 'Successfully';
+            $tense = 'past';
+
+        } else {
+            $string = 'Failed to';
+            $tense = 'action';
+        }
+        $action = $this->getCaller();
+        $action = $this->actions[$action][$tense] ?? $action ?? '<strong>Unknown Action</strong>';
+        return $this->elementWrap($string . ' ' . $action . ' ' . $this->mainStr());
     }
 
 }

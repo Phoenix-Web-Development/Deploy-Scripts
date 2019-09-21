@@ -4,6 +4,7 @@ namespace Phoenix\Github;
 
 /**
  * Class Repository
+ *
  * @package Phoenix\Github
  */
 class Repository extends AbstractGithub
@@ -13,7 +14,7 @@ class Repository extends AbstractGithub
      * @param string $url
      * @return bool|null
      */
-    public function create(string $repo_name = '', string $url = '')
+    public function create(string $repo_name = '', string $url = ''): ?bool
     {
         $this->mainStr($repo_name);
         $this->logStart();
@@ -22,7 +23,7 @@ class Repository extends AbstractGithub
 
 
         if ($this->get($repo_name))
-            return $this->logError(sprintf("Repository named <strong>%s</strong> already exists.", $repo_name), 'warning');
+            return $this->logError(sprintf('Repository named <strong>%s</strong> already exists.', $repo_name), 'warning');
 
         $url = !empty($url) && strpos($url, 'https://') !== 0 && strpos($url, 'http://') !== 0 ? 'https://' . $url : $url;
         $created_repo = $this->client->client->repo()->create($repo_name, 'Website of ' . $repo_name, $url,
@@ -38,7 +39,7 @@ class Repository extends AbstractGithub
      * @param string $repo_name
      * @return bool|null
      */
-    public function remove(string $repo_name = '')
+    public function remove(string $repo_name = ''): ?bool
     {
         return $this->delete($repo_name);
     }
@@ -47,7 +48,7 @@ class Repository extends AbstractGithub
      * @param string $repo_name
      * @return bool|null
      */
-    public function delete(string $repo_name = '')
+    public function delete(string $repo_name = ''): ?bool
     {
         $this->mainStr($repo_name);
         $this->logStart();
@@ -67,7 +68,7 @@ class Repository extends AbstractGithub
      * @param $repo_name
      * @return bool|null
      */
-    public function get(string $repo_name = '')
+    public function get(string $repo_name = ''): ?bool
     {
         $this->mainStr($repo_name);
         if (!$this->validate($repo_name))
@@ -87,10 +88,10 @@ class Repository extends AbstractGithub
      * @param string $repo_name
      * @return bool
      */
-    protected function validate(string $repo_name = '')
+    protected function validate(string $repo_name = ''): bool
     {
         if (empty($repo_name))
-            return $this->logError("Repository name not supplied to method.");
+            return $this->logError('Repository name not supplied to method.');
         return true;
     }
 
@@ -98,14 +99,12 @@ class Repository extends AbstractGithub
      * @param string $repo_name
      * @return string
      */
-    protected function mainStr(string $repo_name = '')
+    protected function mainStr(string $repo_name = ''): string
     {
-        if (func_num_args() == 0) {
-            if (!empty($this->_mainStr))
-                return $this->_mainStr;
-        }
+        if (!empty($this->_mainStr) && func_num_args() === 0)
+            return $this->_mainStr;
 
         $repo_name = !empty($repo_name) ? sprintf(' named <strong>%s</strong>', $repo_name) : '';
-        return $this->_mainStr = " GitHub repository" . $repo_name;
+        return $this->_mainStr = ' GitHub repository' . $repo_name;
     }
 }

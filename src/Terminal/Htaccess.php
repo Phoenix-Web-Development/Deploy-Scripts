@@ -4,6 +4,7 @@ namespace Phoenix\Terminal;
 
 /**
  * Class Htaccess
+ *
  * @package Phoenix\Terminal
  */
 class Htaccess extends AbstractTerminal
@@ -22,7 +23,7 @@ class Htaccess extends AbstractTerminal
      * @param array $args
      * @return bool|null
      */
-    public function prepend(array $args = [])
+    public function prepend(array $args = []): ?bool
     {
 
         $this->mainStr($args);
@@ -39,32 +40,32 @@ class Htaccess extends AbstractTerminal
     RewriteRule ^(.*)$ http://%1/$1 [R=301,L]";
 
         //If file in WP Uploads dir not found look for it at the live address
-        $missingImageProxy = !empty($args['live_url']) && $this->environment != 'live' ? "
+        $missingImageProxy = !empty($args['live_url']) && $this->environment != 'live' ? '
 ## Query live server for WordPress upload if file not found
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule ^wp-content/uploads/[^/]+/ " . $args['live_url'] . "%{REQUEST_URI} [R,QSA,L]" : '';
+    RewriteRule ^wp-content/uploads/[^/]+/ ' . $args['live_url'] . '%{REQUEST_URI} [R,QSA,L]' : '';
 
         $customRulesHeading = $args['htaccess_heading'] ?? 'Custom Rules';
-        $customRulesHeadingStart = "### " . $customRulesHeading . " start ###";
-        $customRulesHeadingEnd = "### " . $customRulesHeading . " end ###";
-        $htaccessRules = $customRulesHeadingStart . "
+        $customRulesHeadingStart = '### ' . $customRulesHeading . ' start ###';
+        $customRulesHeadingEnd = '### ' . $customRulesHeading . ' end ###';
+        $htaccessRules = $customRulesHeadingStart . '
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /
     <IfModule mod_litespeed.c>
         RewriteRule .* - [E=noabort:1]
-    </IfModule>" . $wwwString . "
+    </IfModule>' . $wwwString . '
 ## Redirect http to https             
     RewriteCond %{HTTPS} !on [NC]
-    RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]" . $missingImageProxy . "         
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]' . $missingImageProxy . '         
 </IfModule>
-" . $customRulesHeadingEnd;
+' . $customRulesHeadingEnd;
 
         $remoteFile = self::trailing_slash($args['directory']) . '.htaccess';
         $existingHtaccess = $this->get($remoteFile);
         if (strpos($existingHtaccess, $htaccessRules) !== false)
-            return $this->logFinish(true, "No need as the <code>.htaccess</code> file already contains new rules.");
+            return $this->logFinish(true, 'No need as the <code>.htaccess</code> file already contains new rules.');
 
         //Remove old custom rules to be replaced by new ones
         $customRulesStartPoint = strpos($existingHtaccess, $customRulesHeadingStart);
@@ -84,13 +85,13 @@ class Htaccess extends AbstractTerminal
      * @param array $args
      * @return bool
      */
-    protected function validate(array $args = [])
+    protected function validate(array $args = []): bool
     {
         if (!$this->is_dir($args['directory'])) {
             return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $args['directory']));
         }
         if (!$this->file_exists(self::trailing_slash($args['directory']) . '.htaccess')) {
-            return $this->logError(sprintf("No <code>.htaccess</code> file in directory <strong>%s</strong>.", $args['directory']));
+            return $this->logError(sprintf('No <code>.htaccess</code> file in directory <strong>%s</strong>.', $args['directory']));
         }
         return true;
     }
@@ -100,14 +101,12 @@ class Htaccess extends AbstractTerminal
      * @return string
      */
     protected
-    function mainStr(array $args = [])
+    function mainStr(array $args = []): string
     {
-        if (func_num_args() == 0) {
-            if (!empty($this->_mainStr))
-                return $this->_mainStr;
-        }
+        if (!empty($this->_mainStr) && func_num_args() === 0)
+            return $this->_mainStr;
         $dirStr = !empty($args['directory']) ? sprintf(' in directory <strong>%s</strong>', $args['directory']) : '';
         $wwwStr = !empty($args['www']) ? ' for www containing URL' : ' for non-www URL';
-        return $this->_mainStr = sprintf("%s environment <code>.htaccess</code> file%s%s", $this->environment, $dirStr, $wwwStr);
+        return $this->_mainStr = sprintf('%s environment <code>.htaccess</code> file%s%s', $this->environment, $dirStr, $wwwStr);
     }
 }

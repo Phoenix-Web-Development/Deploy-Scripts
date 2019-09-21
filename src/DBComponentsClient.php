@@ -41,14 +41,10 @@ class DBComponentsClient extends BaseClient
      * @param PDOWrap|null $pdo
      * @return bool|null
      */
-    protected function pdo($pdo = null)
+    protected function pdo($pdo = null): ?bool
     {
 
-        if (func_num_args() == 0) {
-            if (!empty($this->_pdo))
-                return $this->_pdo;
-            //return false;
-        }
+        if (!empty($this->_pdo) && func_num_args() === 0) return $this->_pdo;
         return $this->_pdo = $pdo;
     }
 

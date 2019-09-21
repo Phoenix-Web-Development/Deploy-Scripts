@@ -13,7 +13,7 @@ class Gitignore extends AbstractTerminal
      * @param string $worktree
      * @return bool
      */
-    public function create(string $worktree = '')
+    public function create(string $worktree = ''): bool
     {
         $this->logStart();
         if (!$this->validate($worktree))
@@ -22,10 +22,10 @@ class Gitignore extends AbstractTerminal
             return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $worktree));
         }
         if (!$this->client->git()->checkGitWorktree($worktree))
-            return $this->logError(sprintf("Directory <strong>%s</strong> is not a Git worktree.", $worktree));
+            return $this->logError(sprintf('Directory <strong>%s</strong> is not a Git worktree.', $worktree));
         $filepath = self::trailing_slash($worktree) . '.gitignore';
         if ($this->file_exists($filepath) && $this->size($filepath) > 0)
-            return $this->logFinish(true, sprintf("Gitignore file at <strong>%s</strong> already exists so no need to create.", $worktree));
+            return $this->logFinish(true, sprintf('Gitignore file at <strong>%s</strong> already exists so no need to create.', $worktree));
         $success = $this->put($filepath, BASE_DIR . '/../configs/gitignore-template', 'file') ? true : false;
         return $this->logFinish($success);
     }
@@ -34,7 +34,7 @@ class Gitignore extends AbstractTerminal
      * @param string $worktree
      * @return bool
      */
-    public function delete(string $worktree = '')
+    public function delete(string $worktree = ''): bool
     {
         $this->logStart();
         if (!$this->validate($worktree))
@@ -50,7 +50,7 @@ class Gitignore extends AbstractTerminal
      * @param string $worktree
      * @return bool
      */
-    protected function validate(string $worktree = '')
+    protected function validate(string $worktree = ''): bool
     {
         return true;
 
@@ -61,13 +61,11 @@ class Gitignore extends AbstractTerminal
      * @return string
      */
     protected
-    function mainStr(string $worktree = '')
+    function mainStr(string $worktree = ''): string
     {
-        if (func_num_args() == 0) {
-            if (!empty($this->_mainStr))
-                return $this->_mainStr;
-        }
+        if (!empty($this->_mainStr) && func_num_args() === 0)
+            return $this->_mainStr;
         $worktree = !empty($worktree) ? sprintf(' in directory <strong>%s</strong>', $worktree) : '';
-        return $this->_mainStr = sprintf("%s environment gitignore file%s", $this->environment, $worktree);
+        return $this->_mainStr = sprintf('%s environment gitignore file%s', $this->environment, $worktree);
     }
 }

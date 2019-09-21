@@ -4,6 +4,7 @@ namespace Phoenix\Terminal;
 
 /**
  * Class SSHKey
+ *
  * @package Phoenix\Terminal
  */
 class SSHKey extends AbstractTerminal
@@ -30,10 +31,10 @@ class SSHKey extends AbstractTerminal
         $pub_exists = $this->file_exists($filepath . '.pub');
         if ($private_exists || $pub_exists) {
             if ($private_exists && $pub_exists) {
-                $this->log("Can't create " . $this->mainStr() . " Public and private key already exists.", 'info');
+                $this->log("Can't create " . $this->mainStr() . ' Public and private key already exists.', 'info');
                 return true;
             }
-            return $this->logError("Public or private key already exists.");
+            return $this->logError('Public or private key already exists.');
         }
         $output = $this->exec('ssh-keygen -q -t rsa -N "' . $passphrase . '" -f ' . $filepath .
             '; cat ' . $filepath . '.pub');
@@ -49,7 +50,7 @@ class SSHKey extends AbstractTerminal
      * @param string $key_name
      * @return bool
      */
-    public function delete(string $key_name = 'id_rsa')
+    public function delete(string $key_name = 'id_rsa'): bool
     {
         $this->mainStr($key_name);
         $this->logStart();
@@ -66,10 +67,10 @@ class SSHKey extends AbstractTerminal
      * @param string $key_name
      * @return bool
      */
-    protected function validate($key_name = '')
+    protected function validate($key_name = ''): bool
     {
         if (empty($key_name))
-            return $this->logError("Key name function input is missing.");
+            return $this->logError('Key name function input is missing.');
         if (empty($this->filepath()))
             return $this->logError(sprintf("Couldn't get %s environ home directory.", $this->environment));
         return true;
@@ -79,15 +80,13 @@ class SSHKey extends AbstractTerminal
      * @param string $key_name
      * @return string
      */
-    protected function mainStr($key_name = '')
+    protected function mainStr($key_name = ''): string
     {
-        if (func_num_args() == 0) {
-            if (!empty($this->_mainStr))
-                return $this->_mainStr;
-        }
+        if (!empty($this->_mainStr) && func_num_args() === 0)
+            return $this->_mainStr;
         $key_name = !empty($key_name) ? ' named <strong>' . $key_name . '</strong>' : '';
-        $dirStr = !empty($this->filepath) ? sprintf(" at path <strong>%s</strong>", $this->filepath) : '';
-        return $this->_mainStr = sprintf("%s environment SSH key%s%s", $this->environment, $key_name, $dirStr);
+        $dirStr = !empty($this->filepath) ? sprintf(' at path <strong>%s</strong>', $this->filepath) : '';
+        return $this->_mainStr = sprintf('%s environment SSH key%s%s', $this->environment, $key_name, $dirStr);
     }
 
     /**

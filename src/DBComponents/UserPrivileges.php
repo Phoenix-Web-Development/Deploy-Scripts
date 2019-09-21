@@ -4,6 +4,7 @@ namespace Phoenix\DBComponents;
 
 /**
  * Class User
+ *
  * @package Phoenix\DBComponents
  */
 class UserPrivileges extends AbstractDBComponents
@@ -12,7 +13,7 @@ class UserPrivileges extends AbstractDBComponents
      * @param array $args
      * @return bool
      */
-    function check(array $args = [])
+    public function check(array $args = []): bool
     {
         if (!$this->validate($args))
             return false;
@@ -21,7 +22,7 @@ class UserPrivileges extends AbstractDBComponents
         d($results);
         foreach ($results as $result) {
             if (strpos($result['Grants for ' . $args['username'] . '@localhost'],
-                    "GRANT ALL PRIVILEGES ON `" . $args['name'] . "`.* TO '" . $args['username'] . "'@'localhost'") !== false)
+                    'GRANT ALL PRIVILEGES ON `' . $args['name'] . "`.* TO '" . $args['username'] . "'@'localhost'") !== false)
                 return true;
         }
         return false;
@@ -31,15 +32,15 @@ class UserPrivileges extends AbstractDBComponents
      * @param array $args
      * @return bool|null
      */
-    function give(array $args = [])
+    public function give(array $args = []): ?bool
     {
         $this->mainStr($args);
         $this->logStart();
         if (!$this->validate($args))
             return false;
         if ($this->check($args))
-            return $this->logFinish(true, "User already has DB privileges.");
-        $stmt = "GRANT ALL PRIVILEGES ON " . $args['name'] . ".* TO '" . $args['username'] . "'@'localhost';";
+            return $this->logFinish(true, 'User already has DB privileges.');
+        $stmt = 'GRANT ALL PRIVILEGES ON ' . $args['name'] . ".* TO '" . $args['username'] . "'@'localhost';";
         //d($stmt);
         $this->pdo->run($stmt);
         $success = $this->check($args);
@@ -53,7 +54,7 @@ class UserPrivileges extends AbstractDBComponents
      * @param array $args
      * @return bool|null
      */
-    function create(array $args = [])
+    public function create(array $args = []): ?bool
     {
         return $this->give($args);
     }
@@ -62,10 +63,10 @@ class UserPrivileges extends AbstractDBComponents
      * @param array $args
      * @return bool
      */
-    function validate(array $args = [])
+    private function validate(array $args = []): bool
     {
         if (empty($args))
-            return $this->logError("No args inputted to method.");
+            return $this->logError('No args inputted to method.');
 
         $argKeys = [
             'username',
@@ -74,7 +75,7 @@ class UserPrivileges extends AbstractDBComponents
 
         foreach ($argKeys as $argKey) {
             if (empty($args[$argKey]))
-                return $this->logError("Argument <strong>" . $argKey . "</strong> missing from input");
+                return $this->logError('Argument <strong>' . $argKey . '</strong> missing from input');
         }
 
         return true;
@@ -84,12 +85,11 @@ class UserPrivileges extends AbstractDBComponents
      * @param array $args
      * @return string
      */
-    protected function mainStr(array $args = [])
+    protected function mainStr(array $args = []): string
     {
         $action = $this->getCaller();
-        if (func_num_args() == 0) {
-            if (!empty($this->_mainStr[$action]))
-                return $this->_mainStr[$action];
+        if (func_num_args() === 0) {
+            return $this->_mainStr[$action];
         }
         $dbUser = !empty($args['username']) ? ' to user <strong>' . $args['username'] . '</strong>' : '';
         $dbName = !empty($args['name']) ? ' for database <strong>' . $args['name'] . '</strong>' : '';
