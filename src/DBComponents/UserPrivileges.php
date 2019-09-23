@@ -19,7 +19,6 @@ class UserPrivileges extends AbstractDBComponents
             return false;
         $existingUser = $this->pdo->run("SHOW GRANTS FOR '" . $args['username'] . "'@'localhost'");
         $results = $existingUser->fetchAll();
-        d($results);
         foreach ($results as $result) {
             if (strpos($result['Grants for ' . $args['username'] . '@localhost'],
                     'GRANT ALL PRIVILEGES ON `' . $args['name'] . "`.* TO '" . $args['username'] . "'@'localhost'") !== false)

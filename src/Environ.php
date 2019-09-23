@@ -222,7 +222,6 @@ class Environ extends AbstractDeployer
             case 'local':
             case 'live':
             default:
-                d($this->config);
                 if (empty($this->config->environ->$environName->domain)) {
                     $this->log($errorString . ' Domain missing from config.');
                     return false;
@@ -243,9 +242,9 @@ class Environ extends AbstractDeployer
     }
 
     /**
-     * @return bool
+     * @return array|bool
      */
-    public function findcPanel(): bool
+    public function findcPanel()
     {
         switch($this->name) {
             case 'live':

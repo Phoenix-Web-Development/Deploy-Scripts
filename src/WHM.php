@@ -360,7 +360,6 @@ class WHM extends Base
     {
         if (!$result = $this->api_call('getdiskusage', array()))
             return false;
-        d($result);
         if ($result['success']) {
             return $result['result'];
         }
@@ -1452,7 +1451,6 @@ class WHM extends Base
             $this->log(sprintf('%s Repository root function arg is missing.', $error_string_append));
             return false;
         }
-        d($cpanel_parameter);
         $cpanel_account = $this->get_cpanel_account($cpanel_parameter, $cpanel_parameter_type);
         if (!$cpanel_account) {
             $this->log($error_string_append . " Couldn't find cPanel account.", 'error');

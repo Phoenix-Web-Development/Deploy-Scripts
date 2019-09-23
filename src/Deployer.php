@@ -216,7 +216,6 @@ final class Deployer extends Base
             $root = sprintf(' Local root directory is <strong>%s</strong>.', $root);
             $this->log($unixUser . $root, 'info');
             $diskSpace = $this->getWHMDiskSpace();
-            d($diskSpace);
             $plan = $this->config->environ->live->cpanel->create_account_args->plan ?? '';
             if (!empty($plan)) {
                 $package_size = $this->whm->get_pkg_info($plan)['data']['pkg']['QUOTA'];
@@ -226,7 +225,6 @@ final class Deployer extends Base
                     $disk_message = 'Not enough';
                 $this->log(sprintf('Total disk space - <strong>%s</strong>MB. Disk used - <strong>%s</strong>MB. Allocated disk space - <strong>%s</strong>MB. %s unallocated disk space for a new <strong>%s</strong>MB cPanel account.',
                     $diskSpace['total'], $diskSpace['used'], $diskSpace['allocated'], $disk_message, $package_size), 'info');
-                d('gigfhg');
                 $this->log('<h3>cPanel Staging Subdomains</h3>' . build_recursive_list((array)$this->environ('staging')->getSubdomains()), 'light');
             }
         }
@@ -643,7 +641,7 @@ final class Deployer extends Base
             $diskLimit += (int)$account['disklimit'];
         }
         $diskUsage = $this->whm->get_disk_usage();
-        $diskTotal = $diskUsage['total'] ?? 100000;
+        $diskTotal = $diskUsage['total'] ?? $this->config->whm->disk_total ?? 'unknown ';
         return array(
             'used' => $diskUsed,
             'allocated' => $diskLimit,

@@ -74,11 +74,11 @@ class WordPress extends AbstractDeployer
     }
 
     /**
-     *
+     * @return bool|null
      */
-    public function create(): void
+    public function create(): ?bool
     {
-        $this->install();
+        return $this->install();
     }
 
     /**
@@ -88,11 +88,11 @@ class WordPress extends AbstractDeployer
     {
         $this->mainStr();
         $this->logStart();
-        if (!$this->validate())
-            return false;
+
         $args = $this->getArgs();
-        if (empty($args))
+        if (!$this->validate($args))
             return false;
+
         $success = [];
         $success['wp_cli'] = $this->terminal->wp_cli()->installOrUpdate();
 
@@ -108,37 +108,15 @@ class WordPress extends AbstractDeployer
             $success['install'] = $wp->install($args);
 
             if ($success['install']) {
-                $wp_blog_public = $this->environ->name === 'live' ? 1 : 0;
-                $setOptions = array(
-                    array('name' => 'default_comment_status', 'value' => 'closed'),
-                    array('name' => 'blog_public', 'value' => $wp_blog_public),
-                    array('name' => 'blogdescription', 'value' => 'Enter tagline for ' . $args['title'] . ' here'),
-                );
-                if (!empty($args['timezone']))
-                    $setOptions[] = array('name' => 'timezone_string', 'value' => $args['timezone']);
-
-
-                $success['setOptions'] = [];
-                foreach ($setOptions as $option) {
-                    $args['option'] = $option;
-                    $success['setOptions'][] = $wp->setOption($args);
+                if (!empty($args['options'])) {
+                    $success['setOptions'] = $wp->setOptions($args);
                 }
-                $success['setOptions'] = !in_array(false, $success['setOptions'], true) ? true : false;
-
-
-                //if (!empty($args['options']['fresh_install'])) {}
-
-
                 $success['setRewriteRules'] = $wp->setRewriteRules($args);
-
                 $success['installedLatestTheme'] = $wp->installLatestDefaultTheme($args);
                 $success['permissions'] = $wp->setPermissions($args);
                 $success['updated'] = $wp->update($args);
             }
-
-            //$success = !in_array(false, $setOptionSuccess) ? true : false;
         }
-
 
         if ($this->actionRequests->canDo('create_' . $this->environ->name . '_wp_htaccess')) {
             $success['htaccess'] = $this->terminal->htaccess()->prepend($args);
@@ -155,11 +133,10 @@ class WordPress extends AbstractDeployer
     {
         $this->mainStr();
         $this->logStart();
-        if (!$this->validate())
-            return false;
         $args = $this->getArgs();
-        if (empty($args))
+        if (!$this->validate($args))
             return false;
+
 
         $success = $this->terminal->wp()->delete($args);
 
@@ -176,18 +153,20 @@ class WordPress extends AbstractDeployer
 
     }
 
-    /*
-    public function htaccess(): void
-    {
-
-    }
-    */
-
     /**
+     * @param $args
      * @return bool
      */
-    private function validate(): bool
+    private function validate($args): bool
     {
+        if (empty($args))
+            return $this->logError('No args found.');
+        if (empty($args['db']['name']))
+            return $this->logError(ucfirst($this->environ->name) . ' environ DB name missing from config.');
+        if (empty($args['db']['username']))
+            return $this->logError(ucfirst($this->environ->name) . ' environ DB username missing from config.');
+        if (empty($args['db']['password']))
+            return $this->logError(ucfirst($this->environ->name) . ' environ DB password missing from config.');
         return true;
     }
 
@@ -204,17 +183,9 @@ class WordPress extends AbstractDeployer
 
         $args['title'] = $this->config->project->title ?? 'Insert Site Title Here';
         $args['url'] = $this->environ->getEnvironURL(true, true);
-
         $args['db'] = !empty($this->config->environ->$environName->db) ? (array)$this->config->environ->$environName->db : [];
-        if (empty($args['db']['name']))
-            return $this->logError(ucfirst($environName) . ' environ DB name missing from config.');
-        if (empty($args['db']['username']))
-            return $this->logError(ucfirst($environName) . ' environ DB username missing from config.');
-        if (empty($args['db']['password']))
-            return $this->logError(ucfirst($environName) . ' environ DB password missing from config.');
 
         $args['cli']['config']['path'] = $this->config->environ->$environName->dirs->web_root->path ?? '';
-
         if ($environName !== 'local') {
             $cpanel = $this->environ->findcPanel();
             if (empty($cpanel['user']))
@@ -222,9 +193,18 @@ class WordPress extends AbstractDeployer
             $args['db']['name'] = $this->whm->db_prefix_check($args['db']['name'], $cpanel['user']);
             $args['db']['username'] = $this->whm->db_prefix_check($args['db']['username'], $cpanel['user']);
         }
-
-        //$args['live_url'] = $environName !== 'live' ? ph_d()->environ('live')->getEnvironURL(true, true) : '';
         $args['live_url'] = $this->liveURL;
+        $allOptions = !empty($args['options']->fresh_install->all) ? (array)$args['options']->fresh_install->all : [];
+        $environOptions = !empty($args['options']->fresh_install->$environName) ? (array)$args['options']->fresh_install->$environName : [];
+        $args['options'] = array_merge($allOptions, $environOptions);
+
+        //wp_config.php constants
+        $wpConfig = (array)$args['config'];
+        $wpConfigConstants = (array)$wpConfig['all'] ?? [];
+        if (!empty($wpConfig[$environName]))
+            $args['config'] = array_replace_recursive($wpConfigConstants, (array)$wpConfig[$environName]);
+
+
         return $args;
     }
 

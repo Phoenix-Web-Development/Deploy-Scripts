@@ -119,7 +119,6 @@ class cPanelAccount extends Environ
         $args = $this->getArgs();
         if (!$this->validate($args))
             return false;
-
         $cPanelAccount = $this->whm->get_cpanel_account($args['username']);
         if (empty($cPanelAccount))
             $cPanelAccount = $this->whm->get_cpanel_account($args['domain'], 'domain');
@@ -146,12 +145,14 @@ class cPanelAccount extends Environ
             return $this->logError('Domain missing from config .');
         if (empty($args['username']))
             return $this->logError('cPanel username missing from config.');
-        $cPanelAccount = $this->getcPanel('OR');
-        if (!empty($cPanelAccount)) {
-            if ($cPanelAccount['domain'] !== $args['domain'])
-                return $this->logError('Found existing cPanel account with requested user <strong>' . $cPanelAccount['user'] . '</strong> but differing domain <strong>' . $cPanelAccount['domain'] . '</strong>. Investigation warranted.');
-            if ($cPanelAccount['user'] !== $args['username'])
-                return $this->logError('Found existing cPanel account with requested domain <strong>' . $cPanelAccount['domain'] . '</strong> but differing user <strong>' . $cPanelAccount['user'] . '</strong>. Investigation warranted.');
+        if ($this->getCaller() !== 'getcPanel') {
+            $cPanelAccount = $this->getcPanel('OR');
+            if (!empty($cPanelAccount)) {
+                if ($cPanelAccount['domain'] !== $args['domain'])
+                    return $this->logError('Found existing cPanel account with requested user <strong>' . $cPanelAccount['user'] . '</strong> but differing domain <strong>' . $cPanelAccount['domain'] . '</strong>. Investigation warranted.');
+                if ($cPanelAccount['user'] !== $args['username'])
+                    return $this->logError('Found existing cPanel account with requested domain <strong>' . $cPanelAccount['domain'] . '</strong> but differing user <strong>' . $cPanelAccount['user'] . '</strong>. Investigation warranted.');
+            }
         }
         return true;
     }

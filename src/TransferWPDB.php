@@ -95,6 +95,8 @@ class TransferWPDB extends AbstractDeployer
         );
         $success['search_visibility_option'] = $this->destTerminal->wp()->setOption($wpOption);
 
+        //$this->destTerminal->wp()->setOptions($args);
+
         $success = !in_array(false, $success, true) ? true : false;
         return $this->logFinish($success);
     }

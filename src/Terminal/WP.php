@@ -99,7 +99,7 @@ class WP extends AbstractTerminal
             if (stripos($output, $potential_error) !== false)
                 return false;
         }
-        if ($output == '0')
+        if ($output === '0')
             return true;
         return false;
     }
@@ -137,7 +137,7 @@ class WP extends AbstractTerminal
         if (stripos($output, 'success') !== false) {
             $success = true;
         } else {
-            $success = strpos($output, 'WordPress files seem to already be present here') === false ? true : false;
+            $success = strpos($output, 'WordPress files seem to already be present here') === false;
         }
 
         return $this->logFinish($success, $output, $command);
@@ -166,7 +166,7 @@ class WP extends AbstractTerminal
         } else {
             $commands = '';
             foreach ($args['plugins'] as $plugin) {
-                if ($this->exec('wp plugin is-installed ' . $plugin . '; echo $?', $args['directory']) == '0')
+                if ($this->exec('wp plugin is-installed ' . $plugin . '; echo $?', $args['directory']) === '0')
                     $pluginsToInstall[] = $plugin;
             }
             $widgetCommands = '';
@@ -211,19 +211,19 @@ class WP extends AbstractTerminal
                 find ' . $args['directory'] . ' -type f -exec chmod ' . base_convert($permissions['files'], 10, 8) . ' {} \;
                 echo status is $?;                  
         ';
-
+        $success = [];
         $output = $this->exec($commands, $args['directory']);
         if (stripos($output, 'status is 0') !== false && stripos($output, 'status is 1') === false)
-            $findCommands = true;
+            $success['findCommands'] = true;
         if (!empty($findCommands)) {
             $configFilePath = $args['directory'] . '../wp-config.php';
             if ($this->file_exists($configFilePath))
-                $wpConfig = $this->chmod($configFilePath, $permissions['config']);
+                $success['wpConfig'] = $this->chmod($configFilePath, $permissions['config']);
             $htaccessFilePath = $args['directory'] . '.htaccess';
             if ($this->file_exists($htaccessFilePath))
-                $htaccess = $this->chmod($htaccessFilePath, $permissions['htaccess']);
+                $success['htaccess'] = $this->chmod($htaccessFilePath, $permissions['htaccess']);
         }
-        $success = (!empty($findCommands) && !empty($wpConfig) && !empty($htaccess)) ? true : false;
+        $success = !in_array(false, $success, true) ? true : false;
         return $this->logFinish($success, $output, $commands);
     }
 
@@ -237,14 +237,16 @@ class WP extends AbstractTerminal
         $this->logStart();
         if (!$this->validate($args))
             return false;
-        if (empty($args['option']['name']))
-            return $this->logError('Option name not passed to setOption method');
-        if (!isset($args['option']['value']) || $args['option']['value'] === '')
-            return $this->logError('Option value not passed to setOption method');
-        $command = 'wp option update ' . $args['option']['name'] . ' "' . $args['option']['value'] . '"';
-        $output = $this->exec($command, $args['directory']);
-        $success = (stripos($output, 'Success:') !== false) ? true : false;
-        return $this->logFinish($success, $output, $command);
+        $success = [];
+        foreach ($args['options'] as $optionName => $option) {
+            $args['option']['name'] = $optionName ?? '';
+            $args['option']['value'] = $option['value'] ?? '';
+            $args['option']['key_path'] = $option['key_path'] ?? '';
+            $success[$optionName] = $this->setOption($args);
+        }
+        if (!in_array(false, $success, true))
+            $success = true;
+        return $this->logFinish($success);
     }
 
     /**
@@ -261,13 +263,19 @@ class WP extends AbstractTerminal
             return $this->logError('Option name not passed to setOption method');
         if (!isset($args['option']['value']) || $args['option']['value'] === '')
             return $this->logError('Option value not passed to setOption method');
-        $command = 'wp option update ' . $args['option']['name'] . ' "' . $args['option']['value'] . '"';
+
+        if (!empty($args['option']['key_path']))
+            $command = 'wp option patch update ' . $args['option']['name'] . ' ' . $args['option']['key_path'] . ' "' . $args['option']['value'] . '"';
+        else
+            $command = 'wp option update ' . $args['option']['name'] . ' "' . $args['option']['value'] . '"';
         $output = $this->exec($command, $args['directory']);
-        $success = (stripos($output, 'Success:') !== false) ? true : false;
+        $success = stripos($output, 'Success:') !== false;
         return $this->logFinish($success, $output, $command);
     }
 
     /**
+     * Setup wp_config.php
+     *
      * @param array $args
      * @return bool|null
      */
@@ -291,17 +299,12 @@ class WP extends AbstractTerminal
             $command .= ';
         ';
         }
-
-        $wpConfig = (array)$args['config'];
-        $wpConfigConstants = (array)$wpConfig['all'] ?? [];
-        if (!empty($wpConfig[$this->environment]))
-            $wpConfigConstants = array_replace_recursive($wpConfigConstants, (array)$wpConfig[$this->environment]);
-        foreach ($wpConfigConstants as $configConstant => $constant) {
+        foreach ($args['config'] as $configConstant => $constant) {
             $command .= sprintf('wp config set %s %s --raw --type=constant;
             ', $configConstant, $constant);
         }
 
-        if ($this->exec('wp config path', $args['directory']) == self::trailing_slash($args['directory']) . 'wp-config.php')
+        if ($this->exec('wp config path', $args['directory']) === self::trailing_slash($args['directory']) . 'wp-config.php')
             $command .= 'mv wp-config.php ../';
 
         $output = $this->exec($command, $args['directory']);
@@ -489,9 +492,8 @@ class WP extends AbstractTerminal
     {
         $WPCLIparams = $this->exec('wp cli param-dump --with-values', $args['directory']);
         $WPCLIparams = json_decode($WPCLIparams, true);
-        d($WPCLIparams);
         $apacheModules = $WPCLIparams['apache_modules']['current'] ?? [];
-        if (in_array('mod_rewrite', $apacheModules))
+        if (in_array('mod_rewrite', $apacheModules, true))
             return true;
         return false;
     }
@@ -548,13 +550,11 @@ class WP extends AbstractTerminal
         if (empty($themes))
             return $this->logError("Couldn't find any themes in theme search.");
         $dotOrgThemes = array();
-        d($themes);
         foreach ($themes as $theme) {
-            if ($theme['author']['user_nicename'] == 'wordpressdotorg') {
+            if ($theme['author']['user_nicename'] === 'wordpressdotorg') {
                 $dotOrgThemes[] = $theme['slug'];
             }
         }
-        d($dotOrgThemes);
         if (empty($dotOrgThemes))
             return $this->logError("Couldn't find any themes by 'wordpressdotorg' in theme search.");
         $searchForThemes = [

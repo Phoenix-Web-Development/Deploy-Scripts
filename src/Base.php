@@ -173,6 +173,11 @@ class Base
             'past' => 'set option for',
             'action' => 'set option for'
         ),
+        'setOptions' => array(
+            'present' => 'setting options for',
+            'past' => 'set options for',
+            'action' => 'set options for'
+        ),
         'setPermissions' => array(
             'present' => 'setting permissions for',
             'past' => 'set permissions for',

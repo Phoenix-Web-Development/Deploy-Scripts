@@ -48,7 +48,8 @@ class Htaccess extends AbstractTerminal
 
         $customRulesHeading = $args['htaccess_heading'] ?? 'Custom Rules';
         $customRulesHeadingStart = '### ' . $customRulesHeading . ' start ###';
-        $customRulesHeadingEnd = '### ' . $customRulesHeading . ' end ###';
+        $customRulesHeadingEnd = '### ' . $customRulesHeading . ' end ###
+        ';
         $htaccessRules = $customRulesHeadingStart . '
 <IfModule mod_rewrite.c>
     RewriteEngine On
