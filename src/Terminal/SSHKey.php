@@ -72,7 +72,7 @@ class SSHKey extends AbstractTerminal
         if (empty($key_name))
             return $this->logError('Key name function input is missing.');
         if (empty($this->filepath()))
-            return $this->logError(sprintf("Couldn't get %s environ home directory.", $this->environment));
+            return $this->logError(sprintf("Couldn't get %s environ home directory.", $this->environ));
         return true;
     }
 
@@ -86,7 +86,7 @@ class SSHKey extends AbstractTerminal
             return $this->_mainStr;
         $key_name = !empty($key_name) ? ' named <strong>' . $key_name . '</strong>' : '';
         $dirStr = !empty($this->filepath) ? sprintf(' at path <strong>%s</strong>', $this->filepath) : '';
-        return $this->_mainStr = sprintf('%s environment SSH key%s%s', $this->environment, $key_name, $dirStr);
+        return $this->_mainStr = sprintf('%s environment SSH key%s%s', $this->environ, $key_name, $dirStr);
     }
 
     /**

@@ -29,12 +29,12 @@ class Environ extends AbstractDeployer
     /**
      * @var TerminalClient
      */
-    private $terminal;
+    protected $terminal;
 
     /**
      * @param TerminalClient $terminal
      */
-    public function setTerminal(TerminalClient $terminal)
+    public function setTerminal(TerminalClient $terminal): void
     {
         $this->terminal = $terminal;
     }

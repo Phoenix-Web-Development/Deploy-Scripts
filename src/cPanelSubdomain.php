@@ -86,6 +86,7 @@ class cPanelSubdomain extends Environ
 
 
         //check subdomain exists to delete.
+
         $cPanelAccount = $this->getSubdomaincPanel();
 
         if (empty($cPanelAccount))
@@ -94,6 +95,7 @@ class cPanelSubdomain extends Environ
         $success['subdomain'] = $this->whm->delete_subdomain($args['cpanel']->subdomain->slug);
 
         $directory = $this->getEnvironDir('web');
+
         if (!empty($directory)) {
             $success['deletedDirectory'] = $this->terminal->ssh->delete($directory);
             $success['prunedDirectory'] = $this->terminal->dir()->prune(dirname($directory));
@@ -101,6 +103,7 @@ class cPanelSubdomain extends Environ
 
         $success = !in_array(false, $success, true) ? true : false;
         return $this->logFinish($success);
+
     }
 
     /**
@@ -227,7 +230,7 @@ class cPanelSubdomain extends Environ
         if (!empty($this->_mainStr[$action]) && func_num_args() === 0)
             return $this->_mainStr[$action];
 
-        $accountStr = !empty($this->cPanelAccount['user']) ? ' in cPanel account with username <strong>%s</strong>' : '';
+        $accountStr = !empty($this->cPanelAccount['user']) ? ' in cPanel account with username <strong>' . $this->cPanelAccount['user'] . '</strong>' : '';
         $plural = $action == 'getSubdomains' ? 's' : '';
         return $this->_mainStr[$action] = $this->name . ' environ cPanel subdomain' . $plural . $accountStr;
     }

@@ -103,7 +103,7 @@ class WPCLIConfig extends AbstractTerminal
     protected function mainStr(): string
     {
         $dirStr = !empty($this->filepath) ? sprintf(' at path <strong>%s</strong>', $this->filepath) : '';
-        return sprintf('WP CLI config file in %s environ%s', $this->environment, $dirStr);
+        return sprintf('WP CLI config file in %s environ%s', $this->environ, $dirStr);
     }
 
     /**
@@ -112,7 +112,7 @@ class WPCLIConfig extends AbstractTerminal
     protected function validate(): string
     {
         if (empty($this->filepath()))
-            return $this->logError(sprintf("Couldn't get path to %s environ WP CLI config.", $this->environment));
+            return $this->logError(sprintf("Couldn't get path to %s environ WP CLI config.", $this->environ));
         return true;
     }
 

@@ -3,7 +3,7 @@
 namespace Phoenix;
 
 /**
- * @property string $environment
+ * @property string $environ
  *
  * Class AbstractDeployer
  * @package Phoenix\Terminal

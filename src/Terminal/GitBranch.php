@@ -288,6 +288,6 @@ class GitBranch extends AbstractTerminal
             return $this->_mainStr;
         $branchStr = !empty($args['branch']) ? ' <strong>' . $args['branch'] . '</strong>' : '';
         $workTreeStr = !empty($args['worktree']) ? sprintf(' with worktree at <strong>%s</strong>', $args['worktree']) : '';
-        return $this->_mainStr = sprintf('%s environ Git repository branch%s%s', $this->environment, $branchStr, $workTreeStr);
+        return $this->_mainStr = sprintf('%s environ Git repository branch%s%s', $this->environ, $branchStr, $workTreeStr);
     }
 }

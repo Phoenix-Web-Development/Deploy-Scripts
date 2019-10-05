@@ -1077,10 +1077,10 @@ class WHM extends Base
     /**
      * @param string $cpanel_parameter
      * @param string $cpanel_parameter_type
-     * @return bool
+     * @return array|bool
      */
     public
-    function get_quota_info(string $cpanel_parameter = '', string $cpanel_parameter_type = 'user'): bool
+    function get_quota_info(string $cpanel_parameter = '', string $cpanel_parameter_type = 'user')
     {
         //$this->log( 'Getting quota info', 'info' );
         $error_string_append = "Can't get quota info. ";

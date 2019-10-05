@@ -18,7 +18,7 @@ class DBComponentsClient extends BaseClient
     /**
      * @var string
      */
-    public $environment;
+    public $environ;
 
     /**
      * @var PDOWrap
@@ -27,13 +27,14 @@ class DBComponentsClient extends BaseClient
 
     /**
      * DBComponentsClient constructor.
-     * @param string $environment
+     *
+     * @param string $environ
      * @param PDOWrap|\PDOException $pdo
      */
-    public function __construct(string $environment = 'live', $pdo = null)
+    public function __construct(string $environ = 'live', $pdo = null)
     {
         parent::__construct();
-        $this->environment = $environment;
+        $this->environ = $environ;
         $this->pdo = $pdo;
     }
 

@@ -9,7 +9,7 @@ use Phoenix\PDOWrap;
 /**
  * @property DBComponentsClient $client
  * @property PDOWrap $pdo
- * @property string $environment
+ * @property string $environ
  *
  * Class AbstractDBComponents
  * @package Phoenix\DBComponents
@@ -60,10 +60,10 @@ class AbstractDBComponents extends BaseAbstract
      *
      * @return bool|string
      */
-    protected function environment()
+    protected function environ()
     {
-        if (!empty($this->client->environment))
-            return $this->client->environment;
+        if (!empty($this->client->environ))
+            return $this->client->environ;
         return false;
     }
 }

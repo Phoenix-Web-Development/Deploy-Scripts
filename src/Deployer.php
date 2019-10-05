@@ -487,8 +487,10 @@ final class Deployer extends Base
         if ($action === 'create' && $this->actionRequests->canDo($action . '_' . $environ . '_initial_git_commit'))
             $success['synced'] = $versionControl->sync();
 
-        if ($action === 'delete' && $environ === 'staging' && $this->actionRequests->canDo($action . '_staging_subdomain'))
+        if ($action === 'delete' && $environ === 'staging' && $this->actionRequests->canDo($action . '_staging_subdomain')) {
+            $terminal = $this->terminal('staging');
             $success['staging_subdomain'] = $this->environ('staging')->$action();
+        }
 
         $success = !in_array(false, $success, true) ? true : false;
 

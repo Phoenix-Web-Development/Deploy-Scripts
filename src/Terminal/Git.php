@@ -163,7 +163,7 @@ class Git extends AbstractTerminal
                 return true;
         }
         $unlockString = 'Waiting for %s environment Git repository to unlock failed. Waited <strong>%s</strong> seconds for file <strong>%s</strong> to delete.';
-        $this->log(sprintf($unlockString, $this->environment, $i, $filePath));
+        $this->log(sprintf($unlockString, $this->environ, $i, $filePath));
         return false;
     }
 
@@ -376,6 +376,6 @@ class Git extends AbstractTerminal
         $configStr = !empty($args['config_email']) && !empty($args['config_user']) ?
             ' with user name <strong>' . $args['config_user'] . '</strong> and email <strong>' . $args['config_email'] . '</strong>' : '';
 
-        return $this->_mainStr[$action] = sprintf('%s environment Git repository%s%s%s', $this->environment, $urlStr, $worktreePathStr, $branchStr);
+        return $this->_mainStr[$action] = sprintf('%s environment Git repository%s%s%s', $this->environ, $urlStr, $worktreePathStr, $branchStr);
     }
 }

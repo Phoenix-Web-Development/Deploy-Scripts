@@ -186,7 +186,6 @@ class WPDB extends AbstractTerminal
             $exec_commands .= 'wp search-replace "' . $old . '" "' . $dest . '" --all-tables-with-prefix --skip-tables="*_wfNotifications,*_wfHits,*_wfStatus";
                 ';
         }
-        d($exec_commands);
         //return false;
         return $exec_commands;
     }
@@ -224,7 +223,7 @@ class WPDB extends AbstractTerminal
         $action = $this->getCaller();
         if (!empty($this->_mainStr[$action]) && func_num_args() === 0)
             return $this->_mainStr[$action];
-        $string = sprintf('%s environment WordPress database', $this->environment);
+        $string = sprintf('%s environment WordPress database', $this->environ);
         //$wp_dir = !empty($args['wp_dir']) ? ' in directory <strong>' . $args['wp_dir'] . '</strong>' : '';
         $filepath = !empty($args['local_dir']) ? ' local destination <strong>' . $args['local_dir'] . '</strong>' : ' a local destination';
         switch($action) {

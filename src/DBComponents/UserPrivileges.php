@@ -93,6 +93,6 @@ class UserPrivileges extends AbstractDBComponents
         $dbUser = !empty($args['username']) ? ' to user <strong>' . $args['username'] . '</strong>' : '';
         $dbName = !empty($args['name']) ? ' for database <strong>' . $args['name'] . '</strong>' : '';
         //%s
-        return $this->_mainStr[$action] = sprintf('%s database permissions%s%s', $this->environment, $dbUser, $dbName);
+        return $this->_mainStr[$action] = sprintf('%s database permissions%s%s', $this->environ, $dbUser, $dbName);
     }
 }

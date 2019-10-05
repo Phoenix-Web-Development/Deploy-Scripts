@@ -93,7 +93,7 @@ class WPCLI extends AbstractTerminal
         if ($this->check()) {
             return $this->update();
         }
-        //$this->log(sprintf("WPCLI missing from %s environment so let's install it.", $this->environment), 'info');
+        //$this->log(sprintf("WPCLI missing from %s environment so let's install it.", $this->environ), 'info');
         return $this->install();
 
     }
@@ -124,7 +124,7 @@ class WPCLI extends AbstractTerminal
     protected function validate(): string
     {
         if (empty($this->filepath()))
-            return $this->logError(sprintf("Couldn't get %s environ home directory.", $this->environment));
+            return $this->logError(sprintf("Couldn't get %s environ home directory.", $this->environ));
         return true;
     }
 
@@ -135,7 +135,7 @@ class WPCLI extends AbstractTerminal
     protected function mainStr(): string
     {
         $dirStr = !empty($this->filepath()) ? sprintf(' at path <strong>%s</strong>', $this->filepath()) : '';
-        return sprintf('WP CLI in %s environment%s', $this->environment, $dirStr);
+        return sprintf('WP CLI in %s environment%s', $this->environ, $dirStr);
     }
 
     /**

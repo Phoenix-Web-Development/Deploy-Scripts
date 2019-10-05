@@ -9,7 +9,7 @@ use phpseclib\Net\SFTP;
 
 /**
  * @property WHMClient $client
- * @property string $environment
+ * @property string $environ
  *
  * Class AbstractTerminal
  * @package Phoenix\Terminal

@@ -91,6 +91,6 @@ class Database extends AbstractDBComponents
             return $this->_mainStr[$action];
         $dbName = !empty($args['name']) ? ' <strong>' . $args['name'] . '</strong>' : '';
 
-        return $this->_mainStr[$action] = sprintf('%s database schema%s', $this->environment, $dbName);
+        return $this->_mainStr[$action] = sprintf('%s database schema%s', $this->environ, $dbName);
     }
 }

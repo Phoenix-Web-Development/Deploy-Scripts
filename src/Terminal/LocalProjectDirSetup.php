@@ -144,7 +144,7 @@ class LocalProjectDirSetup extends AbstractTerminal
         $dirStr = !empty($args['dir']) ? sprintf(' at <strong>%s</strong>', $args['dir']) : '';
         $permissionsStr = !empty($args['owner']) && !empty($args['group']) ? sprintf(' with owner <strong>%s</strong> and group <strong>%s</strong>', $args['owner'], $args['group']) : '';
         $purposeStr = !empty($args['purpose']) ? ' <strong>' . ucfirst($args['purpose']) . '</strong>' : '';
-        $environStr = ' ' . $this->environment . ' environ';
+        $environStr = ' ' . $this->environ . ' environ';
 
         return $this->_mainStr = sprintf('%s%s directory%s%s', $environStr, $purposeStr, $dirStr, $permissionsStr);
     }

@@ -75,13 +75,13 @@ class Dir extends AbstractTerminal
 
 
     protected
-    function mainStr(string $dir = '')
+    function mainStr(string $dir = ''): string
     {
         $action = $this->getCaller();
         if (!empty($this->_mainStr[$action]) && func_num_args() === 0)
             return $this->_mainStr[$action];
         $dirStr = !empty($dir) ? ' starting with <strong>' . $dir . '</strong>' : '';
-        $envStr = !empty($this->environment) ? ' in ' . $dir . ' environ' : '';
+        $envStr = !empty($this->environ) ? ' in ' . $dir . ' environ' : '';
 
         return $this->_mainStr[$action] = sprintf('empty directories%s%s', $envStr, $dirStr);
     }
@@ -98,8 +98,8 @@ class Dir extends AbstractTerminal
     function move_files($origin_dir = '', $dest_dir = ''): bool
     {
         $mainStr = sprintf(' files from <strong>%s</strong> directory to <strong>%s</strong> directory in %s environment.',
-            $origin_dir, $dest_dir, $this->environment);
-        $error_string = sprintf("Can't move " . $mainStr . '.', $this->environment);
+            $origin_dir, $dest_dir, $this->environ);
+        $error_string = sprintf("Can't move " . $mainStr . '.', $this->environ);
         if (empty($origin_dir)) {
             $this->log(sprintf('%s Origin directory not supplied to function.', $error_string));
             return false;
@@ -115,7 +115,7 @@ class Dir extends AbstractTerminal
             return false;
         }
         if (!$this->is_dir($dest_dir) && !$this->mkdir($dest_dir)) {
-            $this->log(sprintf('%s Failed to create directory at <strong>%s</strong> in %s environment.', $error_string, $dest_dir, $this->environment));
+            $this->log(sprintf('%s Failed to create directory at <strong>%s</strong> in %s environment.', $error_string, $dest_dir, $this->environ));
             return false;
         }
         //$origin_dir = self::trailing_slash($origin_dir) . '*';

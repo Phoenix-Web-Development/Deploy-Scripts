@@ -8,7 +8,7 @@ use phpseclib\Net\SFTP;
 
 /**
  * @property TerminalClient $client
- * @property string $environment
+ * @property string $environ
  * @property SFTP $ssh
  * @property string $root
  *
@@ -93,10 +93,10 @@ class AbstractTerminal extends BaseAbstract
      *
      * @return bool|string
      */
-    protected function environment()
+    protected function environ()
     {
-        if (!empty($this->client->environment))
-            return $this->client->environment;
+        if (!empty($this->client->environ))
+            return $this->client->environ;
         return false;
     }
 
@@ -121,7 +121,7 @@ class AbstractTerminal extends BaseAbstract
     public
     function is_readable(string $dir = ''): bool
     {
-        if ($this->environment != 'local')
+        if ($this->environ !== 'local')
             return $this->ssh->is_readable($dir);
         return is_readable($dir);
     }
@@ -133,7 +133,7 @@ class AbstractTerminal extends BaseAbstract
     public
     function is_writable(string $dir = ''): bool
     {
-        if ($this->environment != 'local') {
+        if ($this->environ !== 'local') {
             if ($this->ssh->is_writable($dir))
                 return true;
             $dummyPath = self::trailing_slash($dir) . 'dummy';
@@ -158,7 +158,7 @@ class AbstractTerminal extends BaseAbstract
             return false;
         }
         if (!$this->is_dir($dir)) {
-            $this->log(sprintf("%s Directory <strong>%s</strong> doesn't exist in %s environment. You should check if dir exists first.", $error_string, $dir, $this->environment));
+            $this->log(sprintf("%s Directory <strong>%s</strong> doesn't exist in %s environ. You should check if dir exists first.", $error_string, $dir, $this->environ));
             return null;
         }
 
@@ -176,7 +176,7 @@ class AbstractTerminal extends BaseAbstract
     public
     function file_exists(string $path = ''): bool
     {
-        if ($this->environment != 'local') {
+        if ($this->environ !== 'local') {
             return $this->ssh->file_exists($path);
         }
         if (file_exists($path))
@@ -197,7 +197,7 @@ class AbstractTerminal extends BaseAbstract
     {
         if (empty($dir))
             return false;
-        if ($this->environment != 'local') {
+        if ($this->environ !== 'local') {
             return $this->ssh->is_dir($dir);
         }
 
@@ -221,7 +221,7 @@ class AbstractTerminal extends BaseAbstract
     public
     function mkdir(string $filepath = '', int $mode = 07777, $recursive = false): bool
     {
-        if ($this->environment != 'local') {
+        if ($this->environ !== 'local') {
             return $this->ssh->mkdir($filepath, $mode, $recursive);
         }
         return mkdir($filepath, $mode, $recursive);
@@ -235,9 +235,11 @@ class AbstractTerminal extends BaseAbstract
      */
     public function chmod($filepath, $mode, $recursive = false)
     {
-        if ($this->environment != 'local') {
+        if ($this->environ !== 'local') {
             return $this->ssh->chmod($mode, $filepath, $recursive);
         }
+        //if (!is_writable($filepath))
+        //  return false;
         return chmod($filepath, $mode);
     }
 
@@ -250,7 +252,7 @@ class AbstractTerminal extends BaseAbstract
     public
     function size(string $filepath = '')
     {
-        if ($this->environment != 'local') {
+        if ($this->environ !== 'local') {
             return $this->ssh->size($filepath);
         }
         return filesize($filepath);
@@ -266,7 +268,7 @@ class AbstractTerminal extends BaseAbstract
     public
     function get(string $filepath = '', $local_file = false)
     {
-        if ($this->environment != 'local') {
+        if ($this->environ !== 'local') {
             return $this->ssh->get($filepath, $local_file);
         }
         $content = file_get_contents($filepath);
@@ -286,7 +288,7 @@ class AbstractTerminal extends BaseAbstract
     public
     function put(string $filepath = '', string $data = '', $mode = 'string')
     {
-        if ($this->environment != 'local') {
+        if ($this->environ !== 'local') {
             switch($mode) {
                 case 'file':
                     $mode = SFTP::SOURCE_LOCAL_FILE;
@@ -297,7 +299,7 @@ class AbstractTerminal extends BaseAbstract
             }
             return $this->ssh->put($filepath, $data, $mode);
         }
-        if ($mode == 'file')
+        if ($mode === 'file')
             $data = file_get_contents($data);
 
         return file_put_contents($filepath, $data);
@@ -320,7 +322,7 @@ class AbstractTerminal extends BaseAbstract
         if ($this->inSanityList($filepath))
             return $this->logError(sprintf("Won't delete <strong>%s</strong> as it's in the sanity list.", $filepath));
 
-        if ($this->environment != 'local') {
+        if ($this->environ !== 'local') {
             return $this->ssh->delete($filepath, $recursive);
         }
 
@@ -421,7 +423,7 @@ class AbstractTerminal extends BaseAbstract
         if (substr($output, -strlen($append)) !== $append)
             $output .= $append;
         $title = 'Command';
-        if ($type == 'output')
+        if ($type === 'output')
             $title = 'Terminal output';
 
         $prepend = '<pre><strong>' . $title . ':</strong> ';
@@ -451,8 +453,8 @@ class AbstractTerminal extends BaseAbstract
     {
 
         if (!$this->ssh->isAuthenticated() && !empty(debug_backtrace()[1]['function'])) {
-            $this->log(sprintf("%s environment SSH read_write() failed as you aren't authenticated. <code>readWrite()</code> called by <code>%s()</code> function.",
-                ucfirst($this->environment), debug_backtrace()[1]['function']), 'error');
+            $this->log(sprintf("%s environ SSH read_write() failed as you aren't authenticated. <code>readWrite()</code> called by <code>%s()</code> function.",
+                ucfirst($this->environ), debug_backtrace()[1]['function']), 'error');
             return false;
         }
 
@@ -486,10 +488,10 @@ class AbstractTerminal extends BaseAbstract
         $prompt = str_replace('\w', '~', $prompt);
         $prompt = trim($prompt);
         if (empty($prompt)) {
-            $this->log(sprintf("Couldn't work out the %s environment terminal prompt for <code>read()</code> commands.", $this->environment));
+            $this->log(sprintf("Couldn't work out the %s environ terminal prompt for <code>read()</code> commands.", $this->environ));
             return false;
         }
-        $this->log(sprintf("Prompt string for %s environment terminal <code>read()</code> commands set to '<strong>%s</strong>'.", $this->environment, $prompt), 'info');
+        $this->log(sprintf("Prompt string for %s environ terminal <code>read()</code> commands set to '<strong>%s</strong>'.", $this->environ, $prompt), 'info');
         return $this->_prompt = $prompt;
     }
 
@@ -522,12 +524,12 @@ class AbstractTerminal extends BaseAbstract
             $sanityListTrailingSlash = [];
             foreach ($sanityList as $sanityItem) {
                 $sanityItemTrailingSlash = self::trailing_slash($sanityItem);
-                if ($sanityItem != $sanityItemTrailingSlash)
+                if ($sanityItem !== $sanityItemTrailingSlash)
                     $sanityListTrailingSlash[] = $sanityItemTrailingSlash;
             }
             $this->sanityList = array_merge($sanityList, $sanityListTrailingSlash);
         }
-        if (in_array($filepath, $this->sanityList))
+        if (in_array($filepath, $this->sanityList, true))
             return true;
         return false;
     }

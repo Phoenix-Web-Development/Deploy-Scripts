@@ -40,7 +40,7 @@ class Htaccess extends AbstractTerminal
     RewriteRule ^(.*)$ http://%1/$1 [R=301,L]";
 
         //If file in WP Uploads dir not found look for it at the live address
-        $missingImageProxy = !empty($args['live_url']) && $this->environment != 'live' ? '
+        $missingImageProxy = !empty($args['live_url']) && $this->environ != 'live' ? '
 ## Query live server for WordPress upload if file not found
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
@@ -108,6 +108,6 @@ class Htaccess extends AbstractTerminal
             return $this->_mainStr;
         $dirStr = !empty($args['directory']) ? sprintf(' in directory <strong>%s</strong>', $args['directory']) : '';
         $wwwStr = !empty($args['www']) ? ' for www containing URL' : ' for non-www URL';
-        return $this->_mainStr = sprintf('%s environment <code>.htaccess</code> file%s%s', $this->environment, $dirStr, $wwwStr);
+        return $this->_mainStr = sprintf('%s environment <code>.htaccess</code> file%s%s', $this->environ, $dirStr, $wwwStr);
     }
 }

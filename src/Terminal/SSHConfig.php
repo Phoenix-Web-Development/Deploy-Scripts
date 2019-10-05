@@ -34,7 +34,7 @@ class SSHConfig extends AbstractTerminal
         $this->mainStr($host, $hostname, $key_name, $user, $port);
         $this->logStart();
         if (empty($this->filepath()))
-            return $this->logError(sprintf("Couldn't get %s environ home directory.", $this->environment));
+            return $this->logError(sprintf("Couldn't get %s environ home directory.", $this->environ));
         if ($this->file_exists($this->filepath()))
             $config_before = $this->get($this->filepath());
         else {
@@ -66,7 +66,7 @@ class SSHConfig extends AbstractTerminal
         $this->mainStr($host);
         $this->logStart();
         if (empty($this->filepath()))
-            return $this->logError(sprintf("Couldn't get %s environ home directory.", $this->environment));
+            return $this->logError(sprintf("Couldn't get %s environ home directory.", $this->environ));
         if (!$this->file_exists($this->filepath()))
             return $this->logError(sprintf("Config file doesn't exist at <strong>%s</strong>.", $this->filepath()));
         if (!$this->check($host))
@@ -120,7 +120,7 @@ class SSHConfig extends AbstractTerminal
         $user = !empty($user) ? sprintf(' and user <strong>%s</strong>', $user) : '';
         $port = !empty($port) ? sprintf(' and port <strong>%s</strong>', $port) : '';
         $dirStr = !empty($this->filepath) ? sprintf(' in config file at <strong>%s</strong>', $this->filepath) : '';
-        return $this->_mainStr = sprintf('%s environment SSH config%s%s%s%s%s%s', $this->environment, $host, $hostname, $key_name, $user, $port, $dirStr);
+        return $this->_mainStr = sprintf('%s environment SSH config%s%s%s%s%s%s', $this->environ, $host, $hostname, $key_name, $user, $port, $dirStr);
     }
 
     /**

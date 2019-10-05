@@ -204,7 +204,7 @@ class WP extends AbstractTerminal
             return false;
         $args['directory'] = self::trailing_slash($args['directory']);
 
-        $permissions = self::WP_PERMISSIONS[$this->environment];
+        $permissions = self::WP_PERMISSIONS[$this->environ];
         $commands = '
                 find ' . $args['directory'] . ' -type d -exec chmod ' . base_convert($permissions['directories'], 10, 8) . ' {} \;
                 echo status is $?;
@@ -215,14 +215,24 @@ class WP extends AbstractTerminal
         $output = $this->exec($commands, $args['directory']);
         if (stripos($output, 'status is 0') !== false && stripos($output, 'status is 1') === false)
             $success['findCommands'] = true;
-        if (!empty($findCommands)) {
+
+        if ($success['findCommands']) {
             $configFilePath = $args['directory'] . '../wp-config.php';
-            if ($this->file_exists($configFilePath))
+            if ($this->file_exists($configFilePath)) {
                 $success['wpConfig'] = $this->chmod($configFilePath, $permissions['config']);
+                if (!$success['wpConfig']) {
+                    $output .= 'Couldn\'t change ' . $configFilePath . 'permissions.';
+                }
+            }
             $htaccessFilePath = $args['directory'] . '.htaccess';
-            if ($this->file_exists($htaccessFilePath))
+            if ($this->file_exists($htaccessFilePath)) {
                 $success['htaccess'] = $this->chmod($htaccessFilePath, $permissions['htaccess']);
+                if (!$success['htaccess']) {
+                    $output .= 'Couldn\'t change ' . $htaccessFilePath . 'permissions.';
+                }
+            }
         }
+
         $success = !in_array(false, $success, true) ? true : false;
         return $this->logFinish($success, $output, $commands);
     }
@@ -386,7 +396,7 @@ class WP extends AbstractTerminal
         if (!$this->validate($args))
             return false;
         $version = trim($this->exec('wp core version;', $args['directory']));
-        $updateToVersion = ($version != '5.0' && $version != '5.0.1') ? ' --version=4.9.9' : '';
+        $updateToVersion = ($version !== '5.0' && $version !== '5.0.1') ? ' --version=4.9.9' : '';
         $output = $this->exec('                     
             wp core update --locale="en_AU" ' . $updateToVersion . ';
             wp core update-db;
@@ -419,13 +429,14 @@ class WP extends AbstractTerminal
         if ($this->inSanityList($args['directory']))
             return $this->logError(sprintf("Shouldn't be %s WordPress in root directory <strong>%s</strong>.",
                 $this->actions[$caller]['present'], $args['directory']));
-        if ($caller != 'uninstall' && !$this->is_dir($args['directory'])) {
+
+        if ($caller !== 'uninstall' && $this->is_dir($args['directory']) === false) {
             return $this->logError(sprintf("Directory <strong>%s</strong> doesn't exist.", $args['directory']));
         }
         if (!$this->client->WPCLI()->check())
             return $this->logError('WP CLI missing.');
 
-        if ($caller == 'install') {
+        if ($caller === 'install') {
             if (!isset($args['db']['name'], $args['db']['username'], $args['db']['password']))
                 return $this->logError('DB name, username and/or password are missing from config.');
             if (!isset($args['username'], $args['password'], $args['email'], $args['url'], $args['title'], $args['prefix']))
@@ -433,7 +444,7 @@ class WP extends AbstractTerminal
             if (!$this->is_writable($args['directory']))
                 return $this->logError('Nominated WordPress directory is not writable.');
         }
-        if ($caller != 'install' && $caller != 'uninstall' && !$this->check($args))
+        if ($caller !== 'install' && $caller !== 'uninstall' && !$this->check($args))
             return $this->logError(sprintf('WordPress not installed at <strong>%s</strong>.', $args['directory']));
         return true;
     }
@@ -566,7 +577,7 @@ class WP extends AbstractTerminal
             'twentyseventeen'
         ];
         foreach ($searchForThemes as $searchForTheme) {
-            if (in_array($searchForTheme, $dotOrgThemes)) {
+            if (in_array($searchForTheme, $dotOrgThemes, true)) {
                 $themeToInstall = $searchForTheme;
                 break;
             }
@@ -576,12 +587,12 @@ class WP extends AbstractTerminal
 
         $checkThemeCommand = 'wp theme is-active ' . $themeToInstall . '; echo $?';
 
-        if ($this->exec($checkThemeCommand, $args['directory']) == '0')
+        if ($this->exec($checkThemeCommand, $args['directory']) === '0')
             return $this->logFinish(true, 'Theme <strong>' . $themeToInstall . '</strong> already installed and activated.', $checkThemeCommand);
         $command = 'wp theme install ' . $themeToInstall . ' --activate';
         $output = $this->exec($command, $args['directory']);
         $success = $this->exec($checkThemeCommand, $args['directory']);
-        $success = $success == '0' ? true : false;
+        $success = $success === '0';
 
         return $this->logFinish($success, $output, $command);
     }
@@ -601,6 +612,6 @@ class WP extends AbstractTerminal
             sprintf(' with option "<strong>%s</strong>" and value "<strong>%s</strong>"',
                 $args['option']['name'], $args['option']['value']) : '';
 
-        return $this->_mainStr = sprintf('%s environment WordPress%s%s', $this->environment, $dirStr, $optionStr);
+        return $this->_mainStr = sprintf('%s environment WordPress%s%s', $this->environ, $dirStr, $optionStr);
     }
 }

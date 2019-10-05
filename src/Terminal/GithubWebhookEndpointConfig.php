@@ -85,6 +85,6 @@ class GithubWebhookEndpointConfig extends AbstractTerminal
             return $this->_mainStr;
         $filepath = !empty($filepath) ? sprintf(' at <strong>%s</strong>', $filepath) : '';
         $worktree_dir = !empty($worktree_dir) ? sprintf(' for Git worktree <strong>%s</strong>', $worktree_dir) : '';
-        return $this->_mainStr = ' ' . $this->environment . 'environment Github webhook endpoint config file' . $worktree_dir . $filepath;
+        return $this->_mainStr = ' ' . $this->environ . 'environment Github webhook endpoint config file' . $worktree_dir . $filepath;
     }
 }

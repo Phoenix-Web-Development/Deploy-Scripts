@@ -95,6 +95,6 @@ class User extends AbstractDBComponents
             return $this->_mainStr[$action];
         $dbUser = !empty($args['username']) ? ' <strong>' . $args['username'] . '</strong>' : '';
 
-        return $this->_mainStr[$action] = sprintf('%s database user%s', $this->environment, $dbUser);
+        return $this->_mainStr[$action] = sprintf('%s database user%s', $this->environ, $dbUser);
     }
 }

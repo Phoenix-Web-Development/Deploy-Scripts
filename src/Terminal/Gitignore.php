@@ -66,6 +66,6 @@ class Gitignore extends AbstractTerminal
         if (!empty($this->_mainStr) && func_num_args() === 0)
             return $this->_mainStr;
         $worktree = !empty($worktree) ? sprintf(' in directory <strong>%s</strong>', $worktree) : '';
-        return $this->_mainStr = sprintf('%s environment gitignore file%s', $this->environment, $worktree);
+        return $this->_mainStr = sprintf('%s environment gitignore file%s', $this->environ, $worktree);
     }
 }
