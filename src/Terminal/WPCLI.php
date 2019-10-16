@@ -113,7 +113,7 @@ class WPCLI extends AbstractTerminal
             return $this->logFinish(true, $output);
 
         $output = $this->exec('wp cli update --stable --yes', $this->dirpath());
-        $success = strpos($output, 'Updated WP-CLI to the latest stable release') !== false ? true : false;
+        $success = strpos($output, 'Updated WP-CLI to the latest stable release') !== false;
 
         return $this->logFinish($success, $output);
     }

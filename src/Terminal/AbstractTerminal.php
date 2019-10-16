@@ -534,4 +534,23 @@ class AbstractTerminal extends BaseAbstract
         return false;
     }
 
+    /**
+     * Check WPCLI output with words taken from wp-cli-master/php/WP_CLI/Loggers/Regular.php
+     *
+     * @param string $output
+     * @param bool $checkSuccess
+     * @return bool
+     */
+    protected function checkWPCLI(string $output = '', bool $checkSuccess = false): bool
+    {
+        //"Failed" doesn't seem to be relevant to WPCLI but eh
+        $errors = array('Error', 'Warning', 'Failed');
+        foreach ($errors as $error) {
+            if (stripos($output, $error . ':') !== false)
+                return false;
+        }
+        if ($checkSuccess && stripos($output, 'Success:') === false)
+            return false;
+        return true;
+    }
 }

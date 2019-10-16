@@ -9,6 +9,10 @@ namespace Phoenix;
  */
 class TransferWPDB extends AbstractDeployer
 {
+    /**
+     * @var
+     */
+    private $config;
 
     /**
      * @var string
@@ -38,13 +42,15 @@ class TransferWPDB extends AbstractDeployer
     /**
      * TransferWPDB constructor.
      *
-     * @param cPanelAccount|cPanelSubdomain|Environ $fromEnviron
+     * @param $fromEnviron
      * @param TerminalClient $fromTerminal
-     * @param cPanelAccount|cPanelSubdomain|Environ $destEnviron
+     * @param null $destEnviron
      * @param TerminalClient|null $destTerminal
+     * @param $config
      */
-    public function __construct($fromEnviron, TerminalClient $fromTerminal, $destEnviron = null, TerminalClient $destTerminal = null)
+    public function __construct($config, $fromEnviron, TerminalClient $fromTerminal, $destEnviron = null, TerminalClient $destTerminal = null)
     {
+        $this->config = $config;
         $this->fromEnviron = $fromEnviron;
         $this->fromTerminal = $fromTerminal;
         $this->destEnviron = $destEnviron;
@@ -68,6 +74,24 @@ class TransferWPDB extends AbstractDeployer
 
         if (!$this->fromTerminal->wp_db()->export($args['from']['dir'], $fromFilepath))
             return $this->logError('Export failed.');
+        $args['directory'] = $args['dest']['dir'];
+        if (!empty($args['options'])) {
+            $argOptions = $args['options'];
+            foreach ($argOptions as $optionName => $option) {
+                if ($option['value'] === '%existing_value%') {
+                    $existingOption = $this->destTerminal->wp()->getOption(
+                        array_merge($args,
+                            array('option' => array(
+                                'name' => $optionName,
+                                'key_path' => $option['key_path'])
+                            )
+                        )
+                    );
+                    d($existingOption);
+                    $args['options'][$optionName]['value'] = $existingOption['value'];
+                }
+            }
+        }
 
         $success['backup'] = $this->backup();
         if (!$success['backup'])
@@ -78,24 +102,10 @@ class TransferWPDB extends AbstractDeployer
             return $this->logError('Import failed.');
 
         $success['replaceURLs'] = $this->destTerminal->wp_db()->replaceURLs($args['dest']['dir'], $args['from']['url'], $args['dest']['url']);
-
-
-        $wpOptions = array(
-            'option' => array(
-                'name' => 'blog_public',
-                'value' => $this->destEnviron->name === 'live' ? 1 : 0
-            )
-        );
-        $wpOption = array(
-            'directory' => $args['dest']['dir'],
-            'option' => array(
-                'name' => 'blog_public',
-                'value' => $this->destEnviron->name === 'live' ? 1 : 0
-            )
-        );
-        $success['search_visibility_option'] = $this->destTerminal->wp()->setOption($wpOption);
-
-        //$this->destTerminal->wp()->setOptions($args);
+        d($args);
+        if (!empty($args['options'])) {
+            $success['setOptions'] = $this->destTerminal->wp()->setOptions($args);
+        }
 
         $success = !in_array(false, $success, true) ? true : false;
         return $this->logFinish($success);
@@ -114,7 +124,6 @@ class TransferWPDB extends AbstractDeployer
 
         $success = $this->fromTerminal->wp_db()->export($args['from']['dir'], self::getFilePath($this->fromEnviron->name, $args['from']['db_name']));
         return $this->logFinish($success);
-
     }
 
     /**
@@ -158,16 +167,16 @@ class TransferWPDB extends AbstractDeployer
     protected
     function getArgs()
     {
-
         $args['from']['dir'] = $this->fromEnviron->getEnvironDir('web');
         $fromEnviron = $this->fromEnviron->name;
-        $args['from']['db_name'] = ph_d()->config->environ->$fromEnviron->db->name ?? '';
+        $args['from']['db_name'] = $this->config->environ->$fromEnviron->db->name ?? '';
 
         if ($this->getCaller() === 'transfer') {
             $args['from']['url'] = $this->fromEnviron->getEnvironURL(true, true);
             $args['dest']['dir'] = $this->destEnviron->getEnvironDir('web');
             $args['dest']['url'] = $this->destEnviron->getEnvironURL(true, true);
         }
+        $args['options'] = $this->destEnviron->getWPOptions('transfer');
         return $args;
     }
 

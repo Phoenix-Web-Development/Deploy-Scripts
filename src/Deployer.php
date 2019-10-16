@@ -146,9 +146,7 @@ final class Deployer extends Base
     public function run(): bool
     {
         $this->template->get('header');
-
         $action = '';
-
         if ($this->actionRequests->canDo('update'))
             $action = 'update';
         elseif ($this->actionRequests->canDo('create'))
@@ -158,6 +156,7 @@ final class Deployer extends Base
         elseif ($this->actionRequests->canDo('delete'))
             $action = 'delete';
         if (!empty($action)) {
+            $environments = array('live', 'staging', 'local');
             switch($action) {
                 case 'delete':
                     if ($this->actionRequests->canDo('delete_version_control'))
@@ -180,29 +179,26 @@ final class Deployer extends Base
                         $this->doLocalStuff('create');
                     break;
                 case 'update':
-                    if ($this->actionRequests->canDo('update_live_stuff'))
-                        $this->updateWP('live');
-                    if ($this->actionRequests->canDo('update_staging_stuff'))
-                        $this->updateWP('staging');
-                    if ($this->actionRequests->canDo('update_local_stuff'))
-                        $this->updateWP('local');
+                    foreach ($environments as $environment) {
+                        if ($this->actionRequests->canDo('update_' . $environment . '_stuff'))
+                            $this->updateWP($environment);
+                    }
                     break;
                 case 'transfer':
-
-                    $wpdb = new TransferWPDB();
-                    //transfer_wp_db_live_to_local
-                    if ($this->actionRequests->canDo('transfer_wp_db_live_to_staging'))
-                        $wpdb->transfer('live', 'staging', $this->terminal('live'), $this->terminal('staging'));
-                    if ($this->actionRequests->canDo('transfer_wp_db_live_to_local'))
-                        $wpdb->transfer('live', 'local', $this->terminal('live'), $this->terminal('local'));
-                    if ($this->actionRequests->canDo('transfer_wp_db_staging_to_live'))
-                        $wpdb->transfer('staging', 'live', $this->terminal('staging'), $this->terminal('live'));
-                    if ($this->actionRequests->canDo('transfer_wp_db_staging_to_local'))
-                        $wpdb->transfer('staging', 'local', $this->terminal('staging'), $this->terminal('local'));
-                    if ($this->actionRequests->canDo('transfer_wp_db_local_to_live'))
-                        $wpdb->transfer('local', 'live', $this->terminal('local'), $this->terminal('live'));
-                    if ($this->actionRequests->canDo('transfer_wp_db_local_to_staging'))
-                        $wpdb->transfer('local', 'staging', $this->terminal('local'), $this->terminal('staging'));
+                    foreach ($environments as $fromEnvironment) {
+                        foreach ($environments as $destEnvironment) {
+                            if ($fromEnvironment !== $destEnvironment && $this->actionRequests->canDo('transfer_wp_db_' . $fromEnvironment . '_to_' . $destEnvironment)) {
+                                $wpdb = new TransferWPDB(
+                                    $this->config,
+                                    $this->environ($fromEnvironment),
+                                    $this->terminal($fromEnvironment),
+                                    $this->environ($destEnvironment),
+                                    $this->terminal($destEnvironment)
+                                );
+                                $wpdb->transfer();
+                            }
+                        }
+                    }
                     break;
             }
             $this->log(sprintf('<h2>Finished %s</h2>', ucfirst($this->actions[$action]['present'])), 'info');
@@ -230,7 +226,6 @@ final class Deployer extends Base
         }
         $this->log('<h3>Input Config Array</h3>' . build_recursive_list((array)ph_d()->config), 'light');
 
-
         $this->template->get('footer');
 
         //exit();
@@ -242,9 +237,7 @@ final class Deployer extends Base
 
         */
 
-
         //$this->terminal( 'live' )->git( 'blegh' );
-
 
         //$this->whm->import_key( $privatekey, 'jackthekey', '', 'imogen' );
         //$this->whm->import_key( $publickey, 'jackthekey', '', 'imogen' );
@@ -377,23 +370,33 @@ final class Deployer extends Base
      */
     private function get_phpseclib($protocol = 'ssh', string $environ = 'live')
     {
-        $message = sprintf('%s environment %s connection.', $environ, $protocol);
-        //if ($environ !== 'local') {
-
-        //$sshArgs = $this->getEnvironSSHArgs($environ);
+        $message = sprintf('%s environ %s connection.', $environ, $protocol);
         $sshArgs = $this->environ($environ)->getSSHArgs();
-        if (!empty($sshArgs)) {
-            switch($protocol) {
-                case 'ssh':
-                    $ssh = new SSH2($sshArgs->hostname, $sshArgs->port);
-                    break;
-                case 'sftp':
-                    $ssh = new SFTP($sshArgs->hostname, $sshArgs->port);
-                    break;
-            }
+        if (empty($sshArgs)) {
+            $this->log('Can\'t connect via SSH. SSH args missing.');
+            return false;
+        }
+        if (empty(gethostbyname($sshArgs->hostname))) {
+            $this->log('Can\'t connect via SSH to <strong>' . $sshArgs->hostname . '</strong>. Couldn\'t obtain IP.');
+            return false;
+        }
+        switch($protocol) {
+            case 'ssh':
+                $ssh = new SSH2($sshArgs->hostname, $sshArgs->port);
+                break;
+            case 'sftp':
+                $ssh = new SFTP($sshArgs->hostname, $sshArgs->port);
+                break;
+            default:
+                return false;
+                break;
         }
         //$passphrase = $this->config->environ->local->ssh_keys->live->passphrase ?? '';
         //$key_name = $this->config->environ->local->ssh_keys->live->key_name ?? '';
+        if ($ssh === null) {
+            return false;
+        }
+
         if (!empty($passphrase) && !empty($key_name)) {
             $private_key_location = $this->config->environ->local->directory . $key_name;
 
@@ -410,14 +413,35 @@ final class Deployer extends Base
                 $key->loadKey(file_get_contents($private_key_location));
             }
         }
-        if (!empty($ssh) && $ssh->login($sshArgs->username, $sshArgs->password)) {
+        set_error_handler(array($this, 'phpseclibErrorHandler'), E_USER_NOTICE);
+        if ($ssh->login($sshArgs->username, $sshArgs->password))
             $this->log('Successfully authenticated ' . $message, 'success');
-            return $ssh;
+        else {
+            $lastError = error_get_last();
+            if (strpos($lastError['file'], '/vendor/phpseclib/phpseclib/phpseclib/') !== false) {
+                $message .= '<strong>phpseclib Error:</strong><code>' . $lastError['message'] . '<br>Error on line <strong>' . $lastError['line'] . '</strong> in file <strong>' . $lastError['file'] . '</strong></code>';
+            }
+            $this->log("Couldn't authenticate " . $message);
         }
-        //}
-        $this->log("Couldn't authenticate " . $message);
+        restore_error_handler();
+        return $ssh;
+    }
+
+    /**
+     * @param $number
+     * @param $string
+     * @param $file
+     * @param $line
+     * @return bool
+     */
+    public function phpseclibErrorHandler($number, $string, $file, $line): bool
+    {
+        if (strpos($file, '/vendor/phpseclib/phpseclib/phpseclib/') !== false) {
+            return true;
+        }
         return false;
     }
+
 
     /**
      * @return array|bool|stdClass

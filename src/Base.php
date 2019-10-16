@@ -88,6 +88,16 @@ class Base
             'past' => 'got',
             'action' => 'get'
         ),
+        'getOption' => array(
+            'present' => 'getting option for',
+            'past' => 'get option for',
+            'action' => 'get option for'
+        ),
+        'getOptions' => array(
+            'present' => 'getting options for',
+            'past' => 'get options for',
+            'action' => 'get options for'
+        ),
         'getSubdomains' => array(
             'present' => 'getting',
             'past' => 'got',

@@ -48,9 +48,8 @@ class LocalVirtualHost extends AbstractTerminal
         ]);
 
         $output = $this->exec($command);
-        $success = strpos($output, 'Successfully created virtual host for ' . $args['domain']) !== false
-        || strpos($output, 'This domain already exists.') !== false
-            ? true : false;
+        $success = (strpos($output, 'Successfully created virtual host for ' . $args['domain']) !== false
+            || strpos($output, 'This domain already exists.') !== false);
         //sudo: no tty present and no askpass program specified
         return $this->logFinish($success, $output, '');
     }
@@ -86,9 +85,8 @@ class LocalVirtualHost extends AbstractTerminal
         $output = $this->exec($command);
 
 
-        $success = strpos($output, 'Successfully removed Virtual Host for ' . $args['domain']) !== false ||
-        strpos($output, 'No need to delete virtualhost. Domain <strong>' . $args['domain'] . '</strong> does not exist.') !== false
-            ? true : false;
+        $success = (strpos($output, 'Successfully removed Virtual Host for ' . $args['domain']) !== false ||
+            strpos($output, 'No need to delete virtualhost. Domain <strong>' . $args['domain'] . '</strong> does not exist.') !== false);
         //sudo: no tty present and no askpass program specified
         return $this->logFinish($success, $output);
     }

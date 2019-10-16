@@ -113,9 +113,12 @@ class WordPress extends AbstractDeployer
                 }
                 $success['setRewriteRules'] = $wp->setRewriteRules($args);
                 $success['installedLatestTheme'] = $wp->installLatestDefaultTheme($args);
-                $success['permissions'] = $wp->setPermissions($args);
                 $success['updated'] = $wp->update($args);
             }
+        }
+
+        if ($this->actionRequests->canDo('create_' . $this->environ->name . '_wp_set_permissions')) {
+            $success['permissions'] = $wp->setPermissions($args);
         }
 
         if ($this->actionRequests->canDo('create_' . $this->environ->name . '_wp_htaccess')) {
@@ -194,9 +197,8 @@ class WordPress extends AbstractDeployer
             $args['db']['username'] = $this->whm->db_prefix_check($args['db']['username'], $cpanel['user']);
         }
         $args['live_url'] = $this->liveURL;
-        $allOptions = !empty($args['options']->fresh_install->all) ? (array)$args['options']->fresh_install->all : [];
-        $environOptions = !empty($args['options']->fresh_install->$environName) ? (array)$args['options']->fresh_install->$environName : [];
-        $args['options'] = array_merge($allOptions, $environOptions);
+
+        $args['options'] = $this->environ->getWPOptions();
 
         //wp_config.php constants
         $wpConfig = (array)$args['config'];

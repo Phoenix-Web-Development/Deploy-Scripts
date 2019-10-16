@@ -37,6 +37,8 @@ class ActionRequests
             'condition' => array('create', 'create_live_stuff', 'create_live_wp')),
         'create_live_wp_htaccess' => array('label' => 'Add custom WP .htaccess rules',
             'condition' => array('create', 'create_live_stuff', 'create_live_wp')),
+        'create_live_wp_set_permissions' => array('label' => 'Set WP file permissions',
+            'condition' => array('create', 'create_live_stuff', 'create_live_wp')),
 
 
         'create_live_initial_git_commit' => array('label' => 'Initial Git commit',
@@ -61,7 +63,8 @@ class ActionRequests
             'condition' => array('create', 'create_staging_stuff', 'create_staging_wp')),
         'create_staging_wp_htaccess' => array('label' => 'Add custom WP .htaccess rules',
             'condition' => array('create', 'create_staging_stuff', 'create_staging_wp')),
-
+        'create_staging_wp_set_permissions' => array('label' => 'Set WP file permissions',
+            'condition' => array('create', 'create_staging_stuff', 'create_staging_wp')),
 
         'create_staging_initial_git_commit' => array('label' => 'Initial Git commit',
             'condition' => array('create', 'create_staging_stuff')),
@@ -82,6 +85,8 @@ class ActionRequests
         'create_local_wp_install' => array('label' => 'Install WordPress',
             'condition' => array('create', 'create_local_stuff', 'create_local_wp')),
         'create_local_wp_htaccess' => array('label' => 'Add custom WP .htaccess rules',
+            'condition' => array('create', 'create_local_stuff', 'create_local_wp')),
+        'create_local_wp_set_permissions' => array('label' => 'Set WP file permissions',
             'condition' => array('create', 'create_local_stuff', 'create_local_wp')),
 
         'create_local_initial_git_commit' => array('label' => 'Initial Git commit',

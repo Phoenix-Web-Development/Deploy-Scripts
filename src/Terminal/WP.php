@@ -134,12 +134,8 @@ class WP extends AbstractTerminal
             $command .= ' --locale=' . $args['language'];
 
         $output = $this->exec($command, $args['directory']);
-        if (stripos($output, 'success') !== false) {
-            $success = true;
-        } else {
-            $success = strpos($output, 'WordPress files seem to already be present here') === false;
-        }
 
+        $success = $this->checkWPCLI($output, true) || strpos($output, 'WordPress files seem to already be present here') === false;
         return $this->logFinish($success, $output, $command);
     }
 
@@ -189,7 +185,9 @@ class WP extends AbstractTerminal
         foreach ($filesToDelete as $fileToDelete) {
             $this->deleteFile(self::trailing_slash($args['directory']) . $fileToDelete, false);
         }
-        return $this->logFinish($this->check($args), $output, $commands);
+
+        $success = $this->checkWPCLI($output, true) && $this->check($args);
+        return $this->logFinish($success, $output, $commands);
     }
 
     /**
@@ -213,28 +211,67 @@ class WP extends AbstractTerminal
         ';
         $success = [];
         $output = $this->exec($commands, $args['directory']);
-        if (stripos($output, 'status is 0') !== false && stripos($output, 'status is 1') === false)
+        if (stripos($output, 'status is 0') !== false && stripos($output, 'status is 1') === false) {
             $success['findCommands'] = true;
-
-        if ($success['findCommands']) {
             $configFilePath = $args['directory'] . '../wp-config.php';
             if ($this->file_exists($configFilePath)) {
                 $success['wpConfig'] = $this->chmod($configFilePath, $permissions['config']);
-                if (!$success['wpConfig']) {
-                    $output .= 'Couldn\'t change ' . $configFilePath . 'permissions.';
-                }
+                $output .= $success['wpConfig'] ? 'Successfully changed ' . $configFilePath . 'permissions.' : 'Couldn\'t change ' . $configFilePath . 'permissions.';
             }
             $htaccessFilePath = $args['directory'] . '.htaccess';
             if ($this->file_exists($htaccessFilePath)) {
                 $success['htaccess'] = $this->chmod($htaccessFilePath, $permissions['htaccess']);
-                if (!$success['htaccess']) {
-                    $output .= 'Couldn\'t change ' . $htaccessFilePath . 'permissions.';
-                }
+                $output .= $success['htaccess'] ? 'Successfully changed ' . $htaccessFilePath . 'permissions.' : 'Couldn\'t change ' . $htaccessFilePath . 'permissions.';
             }
         }
 
         $success = !in_array(false, $success, true) ? true : false;
         return $this->logFinish($success, $output, $commands);
+    }
+
+    /**
+     * @param array $args
+     * @return array|bool
+     */
+    public function getOptions(array $args = []): ?bool
+    {
+        $this->mainStr($args);
+        if (!$this->validate($args))
+            return false;
+        $optionValues = [];
+        foreach ($args['options'] as $optionName => $option) {
+            $args['option'] = $option;
+            $args['option']['name'] = $optionName ?? '';
+            $optionValues[] = $this->getOption($args);
+        }
+        if (in_array(false, $optionValues, true))
+            return $this->logFinish();
+        return $optionValues;
+    }
+
+    /**
+     * @param array $args
+     * @return array|bool
+     */
+    public function getOption(array $args = [])
+    {
+        $this->mainStr($args);
+        if (!$this->validate($args))
+            return false;
+        if (empty($args['option']['name']))
+            return $this->logError('Option name missing');
+
+        if (!empty($args['option']['key_path']))
+            $command = 'wp option pluck ' . $args['option']['name'] . ' ' . $args['option']['key_path'];
+        else
+            $command = 'wp option get ' . $args['option']['name'];
+
+        $output = $this->exec($command, $args['directory']);
+        if ($this->checkWPCLI($output)) {
+            $args['option']['value'] = $output;
+            return $args['option'];
+        }
+        return $this->logFinish(false, $output, $command);
     }
 
     /**
@@ -249,13 +286,12 @@ class WP extends AbstractTerminal
             return false;
         $success = [];
         foreach ($args['options'] as $optionName => $option) {
-            $args['option']['name'] = $optionName ?? '';
-            $args['option']['value'] = $option['value'] ?? '';
-            $args['option']['key_path'] = $option['key_path'] ?? '';
+            $args['option'] = $option;
+            if (empty($args['option']['name']))
+                $args['option']['name'] = $optionName ?? '';
             $success[$optionName] = $this->setOption($args);
         }
-        if (!in_array(false, $success, true))
-            $success = true;
+        $success = !in_array(false, $success, true) ? true : false;
         return $this->logFinish($success);
     }
 
@@ -266,21 +302,23 @@ class WP extends AbstractTerminal
     public function setOption(array $args = []): ?bool
     {
         $this->mainStr($args);
-        $this->logStart();
+        //$this->logStart();
         if (!$this->validate($args))
             return false;
         if (empty($args['option']['name']))
-            return $this->logError('Option name not passed to setOption method');
+            return $this->logError('Option name missing');
         if (!isset($args['option']['value']) || $args['option']['value'] === '')
-            return $this->logError('Option value not passed to setOption method');
+            return $this->logError('Option value missing');
+
+        if (!is_numeric($args['option']['value']))
+            $args['option']['value'] = '"' . $args['option']['value'] . '"';
 
         if (!empty($args['option']['key_path']))
-            $command = 'wp option patch update ' . $args['option']['name'] . ' ' . $args['option']['key_path'] . ' "' . $args['option']['value'] . '"';
+            $command = 'wp option patch update ' . $args['option']['name'] . ' ' . $args['option']['key_path'] . ' ' . $args['option']['value'];
         else
-            $command = 'wp option update ' . $args['option']['name'] . ' "' . $args['option']['value'] . '"';
+            $command = 'wp option update ' . $args['option']['name'] . ' ' . $args['option']['value'];
         $output = $this->exec($command, $args['directory']);
-        $success = stripos($output, 'Success:') !== false;
-        return $this->logFinish($success, $output, $command);
+        return $this->logFinish($this->checkWPCLI($output, true), $output, $command);
     }
 
     /**
@@ -316,10 +354,8 @@ class WP extends AbstractTerminal
 
         if ($this->exec('wp config path', $args['directory']) === self::trailing_slash($args['directory']) . 'wp-config.php')
             $command .= 'mv wp-config.php ../';
-
         $output = $this->exec($command, $args['directory']);
-        $success = (stripos($output, 'Success:') !== false) && (stripos($output, 'Error:') === false) ? true : false;
-        return $this->logFinish($success, $output, $command);
+        return $this->logFinish($this->checkWPCLI($output, true), $output, $command);
     }
 
     /**
@@ -344,46 +380,44 @@ class WP extends AbstractTerminal
         if (!$this->validate($args))
             return false;
         if (!$this->is_dir($args['directory']))
-            return $this->logFinish(true, sprintf("No need to delete as WordPress directory <strong>%s</strong> doesn't exist.", $args['directory']));
+            return $this->logFinish(true, 'No need to delete as WordPress directory <strong>' . $args['directory'] . '</strong> doesn\'t exist.');
         $output = '';
+        $success = [];
         if ($this->check($args)) {
             $output = $this->exec('wp db clean --yes;', $args['directory']);
-            $cleanedDB = (stripos($output, 'Success') !== false && stripos($output, 'Tables dropped') !== false) ? true : false;
-            if ($cleanedDB)
-                $output .= ' Successfully cleaned DB of all WordPress tables. ';
-            else
-                $output .= 'Failed to clean DB of WordPress tables. ';
+            //$success['cleanedDB'] = (stripos($output, 'Success') !== false && stripos($output, 'Tables dropped') !== false);
+            $success['cleanedDB'] = $this->checkWPCLI($output, true);
+            $output .= $success['cleanedDB'] ? ' Successfully cleaned DB of all WordPress tables. ' : ' Failed to clean DB of WordPress tables. ';
         } else {
             $noNeedCleanDB = true;
-            $output .= "Skipped dropping DB tables as apparently WordPress isn't installed. ";
+            $output .= 'Skipped dropping DB tables as apparently WordPress isn\'t installed. ';
         }
 
         $wp_files = self::WP_FILES;
         foreach ($wp_files as $wp_file) {
-            $wp_file_path = self::trailing_slash($args['directory']) . $wp_file;
-            if ($this->file_exists($wp_file_path))
-                $wp_file_paths[] = $wp_file_path;
+            $wpFilePath = self::trailing_slash($args['directory']) . $wp_file;
+            if ($this->file_exists($wpFilePath))
+                $wpFilePaths[] = $wpFilePath;
         }
-        $succeededDeleting = true;
-        if (!empty($wp_file_paths)) {
-            foreach ($wp_file_paths as $wp_file_path) {
-                if ($this->deleteFile($wp_file_path)) {
-                    $output .= '<br>Deleted <strong>' . $wp_file_path . '</strong>';
+
+        if (!empty($wpFilePaths)) {
+            foreach ($wpFilePaths as $wpFilePath) {
+                if ($this->deleteFile($wpFilePath)) {
+                    $output .= '<br>Deleted <strong>' . $wpFilePath . '</strong>';
+                    $success['deletingFiles'] = true;
                 } else {
-                    $succeededDeleting = false;
                     $output .= 'Failed to delete one or more WordPress files. ';
+                    $success['deletingFiles'] = false;
                     break;
                 }
             }
-            if ($succeededDeleting)
+            if ($success['deletingFiles'])
                 $output .= '<br>Deleted WordPress files. ';
-        } else {
-            $output = 'Apparently no WordPress files were found so no need to delete them. ';
-            $noNeedDeleteFiles = true;
-        }
-        if (!empty($noNeedCleanDB) && !empty($noNeedDeleteFiles))
-            return $this->logFinish(true, 'No need to uninstall WordPress. ' . $output);
-        $success = (!$this->check($args) && (!empty($cleanedDB) || !empty($noNeedCleanDB)) && $succeededDeleting) ? true : false;
+        } elseif (!empty($noNeedCleanDB))
+            return $this->logFinish(true, 'No need to uninstall WordPress. No WordPress files were found so no need to delete them.');
+
+
+        $success = !$this->check($args) && !in_array(false, $success, true);
         return $this->logFinish($success, $output);
     }
 
@@ -397,22 +431,17 @@ class WP extends AbstractTerminal
             return false;
         $version = trim($this->exec('wp core version;', $args['directory']));
         $updateToVersion = ($version !== '5.0' && $version !== '5.0.1') ? ' --version=4.9.9' : '';
-        $output = $this->exec('                     
-            wp core update --locale="en_AU" ' . $updateToVersion . ';
+
+        $command = 'wp core update --locale="en_AU" ' . $updateToVersion . ';         
             wp core update-db;
             wp theme update --all; 
             wp plugin update --all;
             wp core language update;
             wp language plugin update --all;
             wp language theme update --all;
-            wp db optimize', $args['directory']
-        );
-        $success = null;
-        if (stripos($output, 'error') !== false)
-            $success = false;
-        elseif (stripos($output, 'success') !== false)
-            $success = true;
-        return $this->logFinish($success, $output);
+            wp db optimize';
+        $output = $this->exec($command, $args['directory']);
+        return $this->logFinish($this->checkWPCLI($output, true), $output, $command);
     }
 
     /**
@@ -470,29 +499,7 @@ class WP extends AbstractTerminal
 
         $command = 'wp rewrite structure "/%postname%/";wp rewrite flush --hard';
         $output = $this->exec($command, $args['directory']);
-
-        //check success
-        $successMessages = array(
-            'Success',
-            'Rewrite rules flushed.',
-            'Rewrite structure set.',
-            'Rewrite rules flushed.'
-        );
-        $success = true;
-        foreach ($successMessages as $successMessage) {
-            if (strpos($output, $successMessage) === false) {
-                $success = false;
-                break;
-            }
-        }
-        $failMessages = array('Regenerating a .htaccess file requires special configuration. See usage docs.');
-        foreach ($failMessages as $failMessage) {
-            if (strpos($output, $failMessage) !== false) {
-                $success = false;
-                break;
-            }
-        }
-        return $this->logFinish($success, $output);
+        return $this->logFinish($this->checkWPCLI($output, true), $output);
     }
 
     /**
@@ -528,7 +535,7 @@ class WP extends AbstractTerminal
 
         $uselessWidgets = array('meta', 'recent-comments');
         $maxIterators = 3;
-
+        $widgetsToDelete = [];
         foreach ($widgetLists as $widgetList) {
             foreach ($uselessWidgets as $uselessWidget) {
 
@@ -608,10 +615,17 @@ class WP extends AbstractTerminal
             return $this->_mainStr;
 
         $dirStr = !empty($args['directory']) ? sprintf(' in directory <strong>%s</strong>', $args['directory']) : '';
-        $optionStr = !empty($args['option']['name']) && !empty($args['option']['value']) ?
-            sprintf(' with option "<strong>%s</strong>" and value "<strong>%s</strong>"',
-                $args['option']['name'], $args['option']['value']) : '';
+        $action = $this->getCaller();
 
+        $optionStr = '';
+        if (stripos($action, 'option') !== false) {
+            if (!empty($args['option']['name']))
+                $optionStr = ' named "<strong>' . $args['option']['name'] . '</strong>"';
+            if (!empty($args['option']['value'])) {
+                //$optionStr .= !empty($args['option']['name']) ? ' with' : ' and';
+                $optionStr .= ' with value "<strong>' . $args['option']['value'] . '</strong>"';
+            }
+        }
         return $this->_mainStr = sprintf('%s environment WordPress%s%s', $this->environ, $dirStr, $optionStr);
     }
 }

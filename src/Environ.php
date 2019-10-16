@@ -53,7 +53,7 @@ class Environ extends AbstractDeployer
     }
 
     /**
-     * @return array|bool
+     * @return object|bool
      */
     public function getSSHArgs()
     {
@@ -239,6 +239,29 @@ class Environ extends AbstractDeployer
                 $url = $protocol . $url;
         }
         return $url;
+    }
+
+    /**
+     * Get custom WordPress DB options to set when installing or transferring WordPress
+     *
+     * @param string $type
+     * @return array|bool
+     */
+    public function getWPOptions($type = 'fresh_install')
+    {
+        if (empty($type))
+            return false;
+        if (empty($this->config->wordpress->options->$type))
+            return false;
+        $anyEnvironOptions = (array)($this->config->wordpress->options->$type->any ?? []);
+        $environName = $this->name;
+        $specificEnvironOptions = (array)($this->config->wordpress->options->$type->$environName ?? []);
+        //convert object to array
+        $options = [];
+        foreach (array_merge($anyEnvironOptions, $specificEnvironOptions) as $key => $option) {
+            $options[$key] = (array)$option;
+        }
+        return $options;
     }
 
     /**

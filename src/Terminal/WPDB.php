@@ -6,6 +6,7 @@ use phpseclib\Net\SFTP;
 
 /**
  * Class WPDB
+ *
  * @package Phoenix\Terminal
  */
 class WPDB extends AbstractTerminal
@@ -40,21 +41,19 @@ class WPDB extends AbstractTerminal
 
         if ($this->file_exists($dest_paths['path']['uncompressed']) || $this->file_exists($dest_paths['path']['compressed']))
             return $this->logError('Backup file already exists in WordPress directory.');
-        $exec_commands = 'wp db export --add-drop-table ' . $dest_paths['name']['uncompressed'] . ' --exclude_tables=bbi_parts,suzuki_parts;
+        $commands = 'wp db export --add-drop-table ' . $dest_paths['name']['uncompressed'] . ' --exclude_tables=bbi_parts,suzuki_parts;
         tar -vczf ' . $dest_paths['name']['compressed'] . ' ' . $dest_paths['name']['uncompressed'] . ';';
-        $output = $this->exec($exec_commands, $wp_dir);
+        $output = $this->exec($commands, $wp_dir);
 
 
-        $success = false;
-        if (stripos($output, 'success') === false || stripos($output, 'error') !== false)
-            return $this->logFinish($success, $output);
-        if (
-            $this->get($dest_paths['path']['compressed'], self::trailing_char($args['local_dir'], self::EXT))
-            && $this->deleteFile($dest_paths['path']['compressed'], false)
-            && $this->deleteFile($dest_paths['path']['uncompressed'], false)
-        )
-            $success = true;
-        return $this->logFinish($success, $output);
+        $success['commands'] = $this->checkWPCLI($output, true);
+        if ($success['commands']) {
+            $success['get'] = $this->get($dest_paths['path']['compressed'], self::trailing_char($args['local_dir'], self::EXT));
+            $success['deleteCompressedFile'] = $this->deleteFile($dest_paths['path']['compressed'], false);
+            $success['deleteUncompressedFile'] = $this->deleteFile($dest_paths['path']['uncompressed'], false);
+        }
+        $success = !in_array(false, $success, true);
+        return $this->logFinish($success, $output, $commands);
     }
 
     /**
@@ -84,18 +83,18 @@ class WPDB extends AbstractTerminal
             $uncompressed_upload = true;
         }
 
-        $exec_commands = '';
+        $commands = '';
         if (empty($uncompressed_upload))
-            $exec_commands .= 'tar -zxvf ' . $dest_paths['name']['compressed'] . ' ' . $dest_paths['name']['uncompressed'] . ';';
-        $exec_commands .= 'wp db import ' . $dest_paths['name']['uncompressed'] . ';';
-        $output = $this->exec($exec_commands, $args['wp_dir']);
+            $commands .= 'tar -zxvf ' . $dest_paths['name']['compressed'] . ' ' . $dest_paths['name']['uncompressed'] . ';';
+        $commands .= 'wp db import ' . $dest_paths['name']['uncompressed'] . ';';
+        $output = $this->exec($commands, $args['wp_dir']);
 
-        $success = (stripos($output, 'success') !== false && stripos($output, 'error') === false) ? true : false;
-        if ($success)
-            if (!$this->deleteFile($dest_paths['path']['compressed'], false)
-                || !$this->deleteFile($dest_paths['path']['uncompressed'], false)) {
-                $success = false;
-            }
+        $success['commands'] = $this->checkWPCLI($output, true);
+        if ($success['commands']) {
+            $success['deleteCompressedFile'] = $this->deleteFile($dest_paths['path']['compressed'], false);
+            $success['deleteUncompressedFile'] = $this->deleteFile($dest_paths['path']['uncompressed'], false);
+        }
+        $success = !in_array(false, $success, true);
         return $this->logFinish($success, $output);
     }
 
@@ -130,29 +129,29 @@ class WPDB extends AbstractTerminal
                 return $this->logError('Origin' . $url_error);
         }
 
-        $exec_commands = $this->getSearchReplaceURLCommands($args['old_url'], $args['new_url']);
+        $commands = $this->getSearchReplaceURLCommands($args['old_url'], $args['new_url']);
 
-        $output = $this->exec($exec_commands, $args['wp_dir']);
+        $output = $this->exec($commands, $args['wp_dir']);
         $success = strpos($output, 'Success') !== false && strpos($output, 'Fail') === false ? true : false;
-        return $this->logFinish($success, $output, $exec_commands);
+        return $this->logFinish($success, $output, $commands);
     }
 
 
     /**
-     * @param string $filepath
-     * @return bool
+     * @param string $filePath
+     * @return array|bool
      */
     private
-    function generateDBFilePaths(string $filepath = ''): bool
+    function generateDBFilePaths(string $filePath = '')
     {
-        if (empty($filepath))
+        if (empty($filePath))
             return false;
-        $filename = basename($filepath);
-        $filepaths['name']['uncompressed'] = rtrim($filename, self::EXT);
-        $filepaths['path']['uncompressed'] = rtrim($filepath, self::EXT);
-        $filepaths['name']['compressed'] = $filepaths['name']['uncompressed'] . self::EXT;
-        $filepaths['path']['compressed'] = $filepaths['path']['uncompressed'] . self::EXT;
-        return $filepaths;
+        $filename = basename($filePath);
+        $filePaths['name']['uncompressed'] = rtrim($filename, self::EXT);
+        $filePaths['path']['uncompressed'] = rtrim($filePath, self::EXT);
+        $filePaths['name']['compressed'] = $filePaths['name']['uncompressed'] . self::EXT;
+        $filePaths['path']['compressed'] = $filePaths['path']['uncompressed'] . self::EXT;
+        return $filePaths;
     }
 
     /**
@@ -166,7 +165,7 @@ class WPDB extends AbstractTerminal
         //--skip-tables=<tables>
         if (empty($old_url) || empty($new_url))
             return false;
-        $exec_commands = '';
+        $commands = '';
 
         $search_replace_urls[$old_url] = $new_url;
         $old_url = rtrim($old_url, '/');
@@ -183,12 +182,13 @@ class WPDB extends AbstractTerminal
 
 
         foreach ($search_replace_urls as $old => $dest) {
-            $exec_commands .= 'wp search-replace "' . $old . '" "' . $dest . '" --all-tables-with-prefix --skip-tables="*_wfNotifications,*_wfHits,*_wfStatus";
+            $commands .= 'wp search-replace "' . $old . '" "' . $dest . '" --all-tables-with-prefix --skip-tables="*_wfNotifications,*_wfHits,*_wfStatus";
                 ';
         }
         //return false;
-        return $exec_commands;
+        return $commands;
     }
+
     /**
      * @param $args
      * @return bool
@@ -225,13 +225,13 @@ class WPDB extends AbstractTerminal
             return $this->_mainStr[$action];
         $string = sprintf('%s environment WordPress database', $this->environ);
         //$wp_dir = !empty($args['wp_dir']) ? ' in directory <strong>' . $args['wp_dir'] . '</strong>' : '';
-        $filepath = !empty($args['local_dir']) ? ' local destination <strong>' . $args['local_dir'] . '</strong>' : ' a local destination';
+        $filePath = !empty($args['local_dir']) ? ' local destination <strong>' . $args['local_dir'] . '</strong>' : ' a local destination';
         switch($action) {
             case 'import':
-                $string = 'to ' . $string . ' from' . $filepath;
+                $string = 'to ' . $string . ' from' . $filePath;
                 break;
             case 'export':
-                $string = 'from ' . $string . ' to' . $filepath;
+                $string = 'from ' . $string . ' to' . $filePath;
                 break;
             case 'replaceURLs':
                 $string = 'in ' . $string . ' from <strong>' . $args['old_url'] . '</strong> to <strong>' . $args['new_url'] . '</strong>';
