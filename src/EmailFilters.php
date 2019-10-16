@@ -136,59 +136,6 @@ class EmailFilters extends AbstractDeployer
     }
 
     /**
-     * @param $filters
-     * @return bool|string
-     */
-
-    /*
-    private function substitutePlaceholders($filters)
-    {
-
-
-        $placeholders['root_email_folder'] = ph_d()->config->project->root_email_folder ?? '';
-        $placeholders['project_name'] = ucwords(ph_d()->config->project->name) ?? '';
-        $placeholders['staging_domain'] = ph_d()->getEnvironURL('staging') ?? '';
-        $placeholders['live_domain'] = ph_d()->getEnvironURL('live') ?? '';
-        $placeholders['live_cpanel_username'] = ph_d()->config->environ->live->cpanel->account->username ?? '';
-
-        foreach ($placeholders as $placeholder => $actualValue) {
-            $find = '%' . $placeholder . '%';
-
-            foreach ($filters as $filterName => $filter) {
-                if (strpos($filterName, $find) !== false) {
-                    //d($placeholder . ' ' .$actualValue);
-                    if (empty($actualValue))
-                        return $this->logError(sprintf("Couldn't obtain value for <strong>%s</strong> placeholder.", $placeholder));
-
-                    $newFilterName = str_replace($find, $actualValue, $filterName);
-                    $filters->$newFilterName = $filter;
-                    unset($filters->$filterName);
-                }
-            }
-            if ($this->getCaller() != 'delete') {
-                foreach ($filters as $filterName => $filter) {
-                    foreach ($filter->args as $args) {
-                        foreach ($args as &$arg) {
-                            if (strpos($arg, $find) !== false) {
-                                if (empty($actualValue))
-                                    return $this->logError(sprintf("Couldn't obtain value for <strong>%s</strong> placeholder.", $placeholder));
-                                $arg = str_replace($find, $actualValue, $arg);
-                            }
-                        }
-                        /*
-                        $arg_values = (array) $email_filter->args->val;
-                        ksort($arg_values);
-                        $email_filter->args->val = array_to_object($arg_values);
-                        */
-    /*
-                    }
-                }
-            }
-        }
-        return $filters;
-    }
-*/
-    /**
      * @param int $problems
      * @param int $number_of_filters
      * @return string

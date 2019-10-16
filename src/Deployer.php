@@ -126,12 +126,16 @@ final class Deployer extends Base
             'root_email_folder' => $this->config->project->root_email_folder ?? '',
             'live_domain' => $this->environ('live')->getEnvironURL() ?? '',
             'staging_domain' => $this->environ('staging')->getEnvironURL() ?? '',
-            'live_cpanel_username' => $this->config->environ->live->cpanel->account->username ?? ''
+            'live_cpanel_username' => $this->config->environ->live->cpanel->account->username ?? '',
+
+            'live_admin_email' => $this->config->environ->live->admin_email ?? '',
+            'staging_admin_email' => $this->config->environ->staging->admin_email ?? '',
+            'local_admin_email' => $this->config->environ->local->admin_email ?? ''
         );
         $return = [];
         foreach ($placeholders as $placeholderName => $placeholder) {
             if (empty($placeholder)) {
-                $this->log(sprintf("Couldn't obtain value for <strong>%s</strong> config placeholder.", $placeholderName));
+                $this->log('Couldn\'t obtain value for <strong>' . $placeholderName . '</strong> config placeholder.');
                 return [];
             }
             $return['%' . $placeholderName . '%'] = $placeholder;

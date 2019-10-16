@@ -45,7 +45,6 @@ class ConfigControl extends Base
      */
     public function getConfigFileList()
     {
-
         if (!empty($this->configFileList))
             return $this->configFileList;
         $glob = glob(CONFIG_DIR . 'sites/*.php');
@@ -83,7 +82,7 @@ class ConfigControl extends Base
             return false;
         $fileList = $this->getConfigFileList();
         foreach ($fileList as $file) {
-            if ($configSelected == $file['name'])
+            if ($configSelected === $file['name'])
                 return $this->configSelected = $file;
         }
         return false;
@@ -126,7 +125,6 @@ class ConfigControl extends Base
         return $this->setConfig();
         //$this->_config ?? new \stdClass;
     }
-
 
     /**
      * Recursive function to substitute placeholder strings in config with actual value

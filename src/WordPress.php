@@ -183,7 +183,7 @@ class WordPress extends AbstractDeployer
         $args = (array)$this->config->wordpress;
         $args['www'] = $this->config->environ->$environName->www ?? false;
         $args['directory'] = $this->environ->getEnvironDir('web');
-
+        $args['email'] = $this->config->environ->$environName->admin_email;
         $args['title'] = $this->config->project->title ?? 'Insert Site Title Here';
         $args['url'] = $this->environ->getEnvironURL(true, true);
         $args['db'] = !empty($this->config->environ->$environName->db) ? (array)$this->config->environ->$environName->db : [];
@@ -202,7 +202,7 @@ class WordPress extends AbstractDeployer
 
         //wp_config.php constants
         $wpConfig = (array)$args['config'];
-        $wpConfigConstants = (array)$wpConfig['all'] ?? [];
+        $wpConfigConstants = (array)($wpConfig['all'] ?? []);
         if (!empty($wpConfig[$environName]))
             $args['config'] = array_replace_recursive($wpConfigConstants, (array)$wpConfig[$environName]);
 

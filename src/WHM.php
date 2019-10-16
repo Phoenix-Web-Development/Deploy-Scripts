@@ -1570,7 +1570,7 @@ class WHM extends Base
 
         $result = $this->curl->api_call($query, $args, 'get');
 
-        if ($result['http_status'] != 200) {
+        if ($result['http_status'] !== 200) {
             $debug_backtrace = '';
             if (!empty(debug_backtrace()[1]['function']))
                 $debug_backtrace = ' Api call by <code>' . debug_backtrace()[1]['function'] . '()</code> function.';
@@ -1578,12 +1578,11 @@ class WHM extends Base
         }
 
         $api = $this->get_api_version($result['result'], $query);
-        $return = array(
+        return array(
             'result' => $result['result'],
             'message' => $this->get_api_message($result['result'], $api),
             'success' => $this->get_api_success($result['result'], $api)
         );
-        return $return;
     }
 
     /**
@@ -1591,7 +1590,7 @@ class WHM extends Base
      * @param string $api
      * @return bool|null
      */
-    private function get_api_success(array $curl_result = array(), string $api = ''): ?bool
+    private function get_api_success($curl_result = array(), string $api = ''): ?bool
     {
         if (empty($api))
             $api = $this->get_api_version($curl_result);
@@ -1617,8 +1616,8 @@ class WHM extends Base
                 break;
         }
         if (isset($flag))
-            return $flag == 1 ? true : false;
-        $this->log(sprintf("Can't determine whether %s call succeeded or not. cURL result:%s", $api, build_recursive_list($curl_result), 'error'));
+            return $flag === 1;
+        $this->log(sprintf("Can't determine whether %s call succeeded or not. cURL result:%s", $api, build_recursive_list($curl_result)), 'error');
         return null;
     }
 
@@ -1627,7 +1626,7 @@ class WHM extends Base
      * @param string $function
      * @return bool|string
      */
-    private function get_api_version(array $curl_result = array(), string $function = '')
+    private function get_api_version($curl_result = array(), string $function = '')
     {
         if (empty($curl_result) && empty($function))
             return false;
@@ -1659,7 +1658,7 @@ class WHM extends Base
      * @return string
      */
     private
-    function get_api_message(array $curl_result = array(), string $api = ''): string
+    function get_api_message($curl_result = array(), string $api = ''): string
     {
         if (empty($api))
             $api = $this->get_api_version($curl_result);
@@ -1685,7 +1684,7 @@ class WHM extends Base
                 }
                 if (!empty($curl_result['type']) && $curl_result['type'] == 'text' && !empty($curl_result['error']))
                     $message .= $curl_result['error'];
-                if (empty($message) && $this->get_api_success($curl_result, $api) == 1)
+                if (empty($message) && $this->get_api_success($curl_result, $api) === 1)
                     return '';
                 break;
             case 'WHM':

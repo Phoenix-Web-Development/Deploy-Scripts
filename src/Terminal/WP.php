@@ -307,7 +307,7 @@ class WP extends AbstractTerminal
             return false;
         if (empty($args['option']['name']))
             return $this->logError('Option name missing');
-        if (!isset($args['option']['value']) || $args['option']['value'] === '')
+        if (!isset($args['option']['value']))
             return $this->logError('Option value missing');
 
         if (!is_numeric($args['option']['value']))
