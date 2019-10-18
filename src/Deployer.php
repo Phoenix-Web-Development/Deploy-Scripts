@@ -127,10 +127,9 @@ final class Deployer extends Base
             'live_domain' => $this->environ('live')->getEnvironURL() ?? '',
             'staging_domain' => $this->environ('staging')->getEnvironURL() ?? '',
             'live_cpanel_username' => $this->config->environ->live->cpanel->account->username ?? '',
-
-            'live_admin_email' => $this->config->environ->live->admin_email ?? '',
-            'staging_admin_email' => $this->config->environ->staging->admin_email ?? '',
-            'local_admin_email' => $this->config->environ->local->admin_email ?? ''
+            //'live_admin_email' => $this->environ('live')->getAdminEmail() ?? '',
+            //'staging_admin_email' => $this->environ('staging')->getAdminEmail() ?? '',
+            //'local_admin_email' => $this->environ('local')->getAdminEmail() ?? '',
         );
         $return = [];
         foreach ($placeholders as $placeholderName => $placeholder) {
@@ -191,14 +190,13 @@ final class Deployer extends Base
                 case 'transfer':
                     foreach ($environments as $fromEnvironment) {
                         foreach ($environments as $destEnvironment) {
-                            if ($fromEnvironment !== $destEnvironment && $this->actionRequests->canDo('transfer_wp_db_' . $fromEnvironment . '_to_' . $destEnvironment)) {
-                                $wpdb = new TransferWPDB(
-                                    $this->config,
+                            if ($fromEnvironment !== $destEnvironment && $this->actionRequests->canDo('transfer_wpdb_' . $fromEnvironment . '_to_' . $destEnvironment)) {
+                                $wpdb = new TransferWPDB($this->config,
                                     $this->environ($fromEnvironment),
                                     $this->terminal($fromEnvironment),
                                     $this->environ($destEnvironment),
-                                    $this->terminal($destEnvironment)
-                                );
+                                    $this->terminal($destEnvironment),
+                                    $this->actionRequests);
                                 $wpdb->transfer();
                             }
                         }

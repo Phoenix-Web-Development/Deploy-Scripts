@@ -109,7 +109,7 @@ class WordPress extends AbstractDeployer
 
             if ($success['install']) {
                 if (!empty($args['options'])) {
-                    $success['setOptions'] = $wp->setOptions($args);
+                    $success['setOptions'] = $this->terminal->wp_options()->setOptions($args);
                 }
                 $success['setRewriteRules'] = $wp->setRewriteRules($args);
                 $success['installedLatestTheme'] = $wp->installLatestDefaultTheme($args);

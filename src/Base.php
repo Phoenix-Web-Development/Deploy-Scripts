@@ -89,14 +89,14 @@ class Base
             'action' => 'get'
         ),
         'getOption' => array(
-            'present' => 'getting option for',
-            'past' => 'get option for',
-            'action' => 'get option for'
+            'present' => 'getting option',
+            'past' => 'got option',
+            'action' => 'get option'
         ),
         'getOptions' => array(
-            'present' => 'getting options for',
-            'past' => 'get options for',
-            'action' => 'get options for'
+            'present' => 'getting options',
+            'past' => 'got options',
+            'action' => 'get options'
         ),
         'getSubdomains' => array(
             'present' => 'getting',
@@ -179,14 +179,14 @@ class Base
             'action' => 'set user config for'
         ),
         'setOption' => array(
-            'present' => 'setting option for',
-            'past' => 'set option for',
-            'action' => 'set option for'
+            'present' => 'setting option',
+            'past' => 'set option',
+            'action' => 'set option'
         ),
         'setOptions' => array(
-            'present' => 'setting options for',
-            'past' => 'set options for',
-            'action' => 'set options for'
+            'present' => 'setting options',
+            'past' => 'set options',
+            'action' => 'set options'
         ),
         'setPermissions' => array(
             'present' => 'setting permissions for',

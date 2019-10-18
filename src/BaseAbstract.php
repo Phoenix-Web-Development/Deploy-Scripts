@@ -101,7 +101,7 @@ class BaseAbstract extends Base
      */
     protected function logFinish(bool $success = false, string $message = ''): bool
     {
-        $string = $this->getFinishStr($success);
+        $string = $this->elementWrap($this->getFinishStr($success));
         $string .= !empty($message) ? '<p>' . $message . '</p>' : '';
         $messageType = $success ? 'success' : 'error';
         $this->log($string, $messageType);
@@ -124,7 +124,6 @@ class BaseAbstract extends Base
         }
         $action = $this->getCaller();
         $action = $this->actions[$action][$tense] ?? $action ?? '<strong>Unknown Action</strong>';
-        return $this->elementWrap($string . ' ' . $action . ' ' . $this->mainStr());
+        return $string . ' ' . $action . ' ' . $this->mainStr();
     }
-
 }

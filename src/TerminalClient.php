@@ -39,6 +39,10 @@ use phpseclib\Net\SSH2;
  * @method Terminal\WPDB wpdb()
  * @method Terminal\WPDB wordpress_db()
  * @method Terminal\WPDB wordpressdb()
+ * @method Terminal\WPOptions wpoptions()
+ * @method Terminal\WPOptions wp_options()
+ * @method Terminal\WPOptions wordpressoptions()
+ * @method Terminal\WPOptions wordpress_options()
  *
  * @property SFTP $ssh
  * @property string $root
@@ -48,6 +52,7 @@ use phpseclib\Net\SSH2;
  */
 class TerminalClient extends BaseClient
 {
+
     /**
      * @var string
      */
@@ -154,6 +159,12 @@ class TerminalClient extends BaseClient
             case 'wordpress_db':
             case 'wordpressdb':
                 $api = new Terminal\WPDB($this);
+                break;
+            case 'wpoptions':
+            case 'wp_options':
+            case 'wordpressoptions':
+            case 'wordpress_options':
+                $api = new Terminal\WPOptions($this);
                 break;
             case '':
             default:

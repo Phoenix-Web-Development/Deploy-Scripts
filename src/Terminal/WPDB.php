@@ -45,8 +45,8 @@ class WPDB extends AbstractTerminal
         tar -vczf ' . $dest_paths['name']['compressed'] . ' ' . $dest_paths['name']['uncompressed'] . ';';
         $output = $this->exec($commands, $wp_dir);
 
-
         $success['commands'] = $this->checkWPCLI($output, true);
+
         if ($success['commands']) {
             $success['get'] = $this->get($dest_paths['path']['compressed'], self::trailing_char($args['local_dir'], self::EXT));
             $success['deleteCompressedFile'] = $this->deleteFile($dest_paths['path']['compressed'], false);
@@ -132,7 +132,7 @@ class WPDB extends AbstractTerminal
         $commands = $this->getSearchReplaceURLCommands($args['old_url'], $args['new_url']);
 
         $output = $this->exec($commands, $args['wp_dir']);
-        $success = strpos($output, 'Success') !== false && strpos($output, 'Fail') === false ? true : false;
+        $success = (strpos($output, 'Success') !== false && strpos($output, 'Fail') === false);
         return $this->logFinish($success, $output, $commands);
     }
 
@@ -171,22 +171,36 @@ class WPDB extends AbstractTerminal
         $old_url = rtrim($old_url, '/');
         $new_url = rtrim($new_url, '/');
         $search_replace_urls[$old_url] = $new_url;
-
-        $old_url = ltrim(ltrim($old_url, 'https://'), 'http://');
-        $new_url = ltrim(ltrim($new_url, 'https://'), 'http://');
+        $old_url = $this->removePrefix($old_url, array('http://', 'https://'));
+        $new_url = $this->removePrefix($new_url, array('http://', 'https://'));
         $search_replace_urls[$old_url] = $new_url;
+        $old_url = $this->removePrefix($old_url, 'www.');
+        $new_url = $this->removePrefix($new_url, 'www.');
 
-        $old_url = ltrim($old_url, 'www.');
-        $new_url = ltrim($new_url, 'www.');
         $search_replace_urls[$old_url] = $new_url;
-
 
         foreach ($search_replace_urls as $old => $dest) {
             $commands .= 'wp search-replace "' . $old . '" "' . $dest . '" --all-tables-with-prefix --skip-tables="*_wfNotifications,*_wfHits,*_wfStatus";
                 ';
         }
-        //return false;
         return $commands;
+    }
+
+    /**
+     * @param $string
+     * @param $prefixes
+     * @return false|string
+     */
+    public function removePrefix($string, $prefixes)
+    {
+        if (is_string($prefixes))
+            $prefixes = array($prefixes);
+
+        foreach ($prefixes as $prefix) {
+            if (strpos($string, $prefix) === 0)
+                $string = substr($string, strlen($prefix));
+        }
+        return $string;
     }
 
     /**

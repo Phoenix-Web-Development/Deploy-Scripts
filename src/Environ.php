@@ -242,7 +242,7 @@ class Environ extends AbstractDeployer
     }
 
     /**
-     * Get custom WordPress DB options to set when installing or transferring WordPress
+     * Get custom WordPress DB options from config to set when installing or transferring WordPress
      *
      * @param string $type
      * @return array|bool
@@ -258,10 +258,22 @@ class Environ extends AbstractDeployer
         $specificEnvironOptions = (array)($this->config->wordpress->options->$type->$environName ?? []);
         //convert object to array
         $options = [];
-        foreach (array_merge($anyEnvironOptions, $specificEnvironOptions) as $key => $option) {
-            $options[$key] = (array)$option;
+        foreach (array_merge($anyEnvironOptions, $specificEnvironOptions) as $optionName => $option) {
+            if (!isset($option->value))
+                return $this->logError('Value missing from <strong>' . $optionName . '</strong> option');
+            $options[$optionName] = (array)$option;
+            $options[$optionName]['name'] = $optionName;
         }
         return $options;
+    }
+
+    /**
+     * @return string
+     */
+    public function getAdminEmail()
+    {
+        $environ = $this->name;
+        return $this->config->environ->$environ->admin_email ?? '';
     }
 
     /**

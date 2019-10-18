@@ -86,7 +86,7 @@ class WP extends AbstractTerminal
      * @param array $args
      * @return bool
      */
-    protected function check(array $args = []): bool
+    public function check(array $args = []): bool
     {
         $output = $this->exec('wp core is-installed; echo $?', $args['directory']);
         $potential_errors = array(
@@ -227,98 +227,6 @@ class WP extends AbstractTerminal
 
         $success = !in_array(false, $success, true) ? true : false;
         return $this->logFinish($success, $output, $commands);
-    }
-
-    /**
-     * @param array $args
-     * @return array|bool
-     */
-    public function getOptions(array $args = []): ?bool
-    {
-        $this->mainStr($args);
-        if (!$this->validate($args))
-            return false;
-        $optionValues = [];
-        foreach ($args['options'] as $optionName => $option) {
-            $args['option'] = $option;
-            $args['option']['name'] = $optionName ?? '';
-            $optionValues[] = $this->getOption($args);
-        }
-        if (in_array(false, $optionValues, true))
-            return $this->logFinish();
-        return $optionValues;
-    }
-
-    /**
-     * @param array $args
-     * @return array|bool
-     */
-    public function getOption(array $args = [])
-    {
-        $this->mainStr($args);
-        if (!$this->validate($args))
-            return false;
-        if (empty($args['option']['name']))
-            return $this->logError('Option name missing');
-
-        if (!empty($args['option']['key_path']))
-            $command = 'wp option pluck ' . $args['option']['name'] . ' ' . $args['option']['key_path'];
-        else
-            $command = 'wp option get ' . $args['option']['name'];
-
-        $output = $this->exec($command, $args['directory']);
-        if ($this->checkWPCLI($output)) {
-            $args['option']['value'] = $output;
-            return $args['option'];
-        }
-        return $this->logFinish(false, $output, $command);
-    }
-
-    /**
-     * @param array $args
-     * @return bool|null
-     */
-    public function setOptions(array $args = []): ?bool
-    {
-        $this->mainStr($args);
-        $this->logStart();
-        if (!$this->validate($args))
-            return false;
-        $success = [];
-        foreach ($args['options'] as $optionName => $option) {
-            $args['option'] = $option;
-            if (empty($args['option']['name']))
-                $args['option']['name'] = $optionName ?? '';
-            $success[$optionName] = $this->setOption($args);
-        }
-        $success = !in_array(false, $success, true) ? true : false;
-        return $this->logFinish($success);
-    }
-
-    /**
-     * @param array $args
-     * @return bool|null
-     */
-    public function setOption(array $args = []): ?bool
-    {
-        $this->mainStr($args);
-        //$this->logStart();
-        if (!$this->validate($args))
-            return false;
-        if (empty($args['option']['name']))
-            return $this->logError('Option name missing');
-        if (!isset($args['option']['value']))
-            return $this->logError('Option value missing');
-
-        if (!is_numeric($args['option']['value']))
-            $args['option']['value'] = '"' . $args['option']['value'] . '"';
-
-        if (!empty($args['option']['key_path']))
-            $command = 'wp option patch update ' . $args['option']['name'] . ' ' . $args['option']['key_path'] . ' ' . $args['option']['value'];
-        else
-            $command = 'wp option update ' . $args['option']['name'] . ' ' . $args['option']['value'];
-        $output = $this->exec($command, $args['directory']);
-        return $this->logFinish($this->checkWPCLI($output, true), $output, $command);
     }
 
     /**
@@ -606,26 +514,19 @@ class WP extends AbstractTerminal
 
     /**
      * @param array $args
+     * @param string $action
      * @return string
      */
     protected
-    function mainStr(array $args = []): string
+    function mainStr(array $args = [], string $action = ''): string
     {
         if (!empty($this->_mainStr) && func_num_args() === 0)
             return $this->_mainStr;
 
         $dirStr = !empty($args['directory']) ? sprintf(' in directory <strong>%s</strong>', $args['directory']) : '';
-        $action = $this->getCaller();
+        if (empty($action))
+            $action = $this->getCaller();
 
-        $optionStr = '';
-        if (stripos($action, 'option') !== false) {
-            if (!empty($args['option']['name']))
-                $optionStr = ' named "<strong>' . $args['option']['name'] . '</strong>"';
-            if (!empty($args['option']['value'])) {
-                //$optionStr .= !empty($args['option']['name']) ? ' with' : ' and';
-                $optionStr .= ' with value "<strong>' . $args['option']['value'] . '</strong>"';
-            }
-        }
-        return $this->_mainStr = sprintf('%s environment WordPress%s%s', $this->environ, $dirStr, $optionStr);
+        return $this->_mainStr = sprintf('%s environment WordPress%s', $this->environ, $dirStr);
     }
 }

@@ -40,21 +40,28 @@ class TransferWPDB extends AbstractDeployer
     private $destTerminal;
 
     /**
+     * @var ActionRequests|null
+     */
+    private $actionRequests;
+
+    /**
      * TransferWPDB constructor.
      *
+     * @param $config
      * @param $fromEnviron
      * @param TerminalClient $fromTerminal
      * @param null $destEnviron
      * @param TerminalClient|null $destTerminal
-     * @param $config
+     * @param ActionRequests|null $actionRequests
      */
-    public function __construct($config, $fromEnviron, TerminalClient $fromTerminal, $destEnviron = null, TerminalClient $destTerminal = null)
+    public function __construct($config, $fromEnviron, TerminalClient $fromTerminal, $destEnviron = null, TerminalClient $destTerminal = null, ActionRequests $actionRequests = null)
     {
         $this->config = $config;
         $this->fromEnviron = $fromEnviron;
         $this->fromTerminal = $fromTerminal;
         $this->destEnviron = $destEnviron;
         $this->destTerminal = $destTerminal;
+        $this->actionRequests = $actionRequests;
         parent::__construct();
     }
 
@@ -72,40 +79,49 @@ class TransferWPDB extends AbstractDeployer
         $success = [];
         $fromFilepath = self::getFilePath($this->fromEnviron->name, $args['from']['db_name']);
 
-        if (!$this->fromTerminal->wp_db()->export($args['from']['dir'], $fromFilepath))
-            return $this->logError('Export failed.');
-        $args['directory'] = $args['dest']['dir'];
-        if (!empty($args['options'])) {
-            $argOptions = $args['options'];
-            foreach ($argOptions as $optionName => $option) {
-                if ($option['value'] === '%existing_value%') {
-                    $existingOption = $this->destTerminal->wp()->getOption(
-                        array_merge($args,
-                            array('option' => array(
-                                'name' => $optionName,
-                                'key_path' => $option['key_path'])
-                            )
-                        )
-                    );
-                    d($existingOption);
-                    $args['options'][$optionName]['value'] = $existingOption['value'];
+        $setCustomDBOptions = $this->actionRequests->canDo('transfer_wpdb_' . $this->fromEnviron->name . '_to_' . $this->destEnviron->name . '_options');
+
+        if ($setCustomDBOptions) {
+            $args['directory'] = $args['dest']['dir'];
+
+            foreach ($args['options'] as $optionName => $option) {
+                if ($option['value'] === '%existing_value%')
+                    $existingOptions[$optionName] = $option;
+            }
+            if (!empty($existingOptions)) {
+                $argsExistingOptions = $args;
+                $argsExistingOptions['options'] = $existingOptions;
+                d($argsExistingOptions);
+                $existingOptions = $this->destTerminal->wp_options()->getOptions($argsExistingOptions);
+                d($existingOptions);
+                if (!empty($existingOptions)) {
+                    foreach ($existingOptions as $existingOptionName => $existingOption) {
+                        if (empty($existingOption) || $existingOption['value'] === '%existing_value%')
+                            unset($args['options'][$existingOptionName]);
+                        else
+                            $args['options'][$existingOptionName]['value'] = $existingOption['value'];
+                    }
                 }
+                d($args);
             }
         }
+        if ($this->actionRequests->canDo('transfer_wpdb_' . $this->fromEnviron->name . '_to_' . $this->destEnviron->name . '_db')) {
+            if (!$this->fromTerminal->wp_db()->export($args['from']['dir'], $fromFilepath))
+                return $this->logError('Export failed.');
 
-        $success['backup'] = $this->backup();
-        if (!$success['backup'])
-            return $this->logError('Backup failed.');
+            $success['backup'] = $this->backup();
+            if (!$success['backup'])
+                return $this->logError('Backup failed.');
 
-        $success['import'] = $this->destTerminal->wp_db()->import($args['dest']['dir'], $fromFilepath . '.gz');
-        if (!$success['import'])
-            return $this->logError('Import failed.');
-
-        $success['replaceURLs'] = $this->destTerminal->wp_db()->replaceURLs($args['dest']['dir'], $args['from']['url'], $args['dest']['url']);
-        d($args);
-        if (!empty($args['options'])) {
-            $success['setOptions'] = $this->destTerminal->wp()->setOptions($args);
+            $success['import'] = $this->destTerminal->wp_db()->import($args['dest']['dir'], $fromFilepath . '.gz');
+            if (!$success['import'])
+                return $this->logError('Import failed.');
         }
+        if ($this->actionRequests->canDo('transfer_wpdb_' . $this->fromEnviron->name . '_to_' . $this->destEnviron->name . '_replace_urls'))
+            $success['replaceURLs'] = $this->destTerminal->wp_db()->replaceURLs($args['dest']['dir'], $args['from']['url'], $args['dest']['url']);
+
+        if ($setCustomDBOptions && !empty($args['options']))
+            $success['setOptions'] = $this->destTerminal->wp_options()->setOptions($args);
 
         $success = !in_array(false, $success, true) ? true : false;
         return $this->logFinish($success);
@@ -176,11 +192,17 @@ class TransferWPDB extends AbstractDeployer
             $args['dest']['dir'] = $this->destEnviron->getEnvironDir('web');
             $args['dest']['url'] = $this->destEnviron->getEnvironURL(true, true);
         }
-        $args['options'] = $this->destEnviron->getWPOptions('transfer');
+        $args['options'] = $this->destEnviron->getWPOptions('transfer') ?? [];
         return $args;
     }
 
-
+    /**
+     * @param string $fromEnviron
+     * @param string $destEnviron
+     * @param string $fromURL
+     * @param string $destURL
+     * @return string
+     */
     protected
     function mainStr(string $fromEnviron = '', string $destEnviron = '', string $fromURL = '', string $destURL = ''): string
     {

@@ -397,7 +397,7 @@ class AbstractTerminal extends BaseAbstract
         $output = $this->formatOutput($output);
         $command = $this->formatOutput($command, 'command');
 
-        $string = $this->getFinishStr($success);
+        $string = $this->elementWrap($this->getFinishStr($success));
 
         $string .= $command . $output;
         $messageType = $success ? 'success' : 'error';
@@ -408,13 +408,13 @@ class AbstractTerminal extends BaseAbstract
     /**
      * @param string $output
      * @param string $type
-     * @return bool|string
+     * @return string
      */
     public
-    function formatOutput(string $output = '', $type = 'output')
+    function formatOutput(string $output = '', $type = 'output'): string
     {
         if (empty($output)) {
-            return false;
+            return '';
         }
         $maxStrLen = 2000;
         if (strlen($output) > $maxStrLen * 2)
@@ -427,7 +427,7 @@ class AbstractTerminal extends BaseAbstract
             $title = 'Terminal output';
 
         $prepend = '<pre><strong>' . $title . ':</strong> ';
-        if (substr($output, 0, strlen($prepend)) !== $prepend)
+        if (strpos($output, $prepend) !== 0)
             $output = $prepend . $output;
 
         return '<br>' . $output;
