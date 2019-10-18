@@ -91,9 +91,7 @@ class TransferWPDB extends AbstractDeployer
             if (!empty($existingOptions)) {
                 $argsExistingOptions = $args;
                 $argsExistingOptions['options'] = $existingOptions;
-                d($argsExistingOptions);
                 $existingOptions = $this->destTerminal->wp_options()->getOptions($argsExistingOptions);
-                d($existingOptions);
                 if (!empty($existingOptions)) {
                     foreach ($existingOptions as $existingOptionName => $existingOption) {
                         if (empty($existingOption) || $existingOption['value'] === '%existing_value%')
@@ -102,7 +100,6 @@ class TransferWPDB extends AbstractDeployer
                             $args['options'][$existingOptionName]['value'] = $existingOption['value'];
                     }
                 }
-                d($args);
             }
         }
         if ($this->actionRequests->canDo('transfer_wpdb_' . $this->fromEnviron->name . '_to_' . $this->destEnviron->name . '_db')) {

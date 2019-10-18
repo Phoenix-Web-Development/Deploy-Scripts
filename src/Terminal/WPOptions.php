@@ -39,7 +39,6 @@ class WPOptions extends AbstractTerminal
             $output .= '<br>' . $result['string'];
             $success[$optionName] = $result['success'];
         }
-
         $success = !in_array(false, $success, true) ? true : false;
         $this->logFinish($success, $output);
         return $optionValues;
@@ -67,7 +66,6 @@ class WPOptions extends AbstractTerminal
 
         $return['success'] = $this->checkWPCLI($output);
 
-        d($output);
         if (!$return['success']) {
             if (strpos($output, $doesntExistString) !== false) {
                 $return['success'] = true;
@@ -142,7 +140,6 @@ class WPOptions extends AbstractTerminal
         return $return;
     }
 
-
     /**
      * @param array $args
      * @return bool
@@ -173,7 +170,6 @@ class WPOptions extends AbstractTerminal
             return $this->logError(sprintf('WordPress not installed at <strong>%s</strong>.', $args['directory']));
         return true;
     }
-
 
     /**
      * @param array $args

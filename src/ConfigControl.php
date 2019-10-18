@@ -148,10 +148,7 @@ class ConfigControl extends Base
                 }
 
                 if (strpos($key, $placeholder) !== false) {
-                    //d($key);
-                    //d($placeholder . ' ' .$actualValue);
                     $newKey = str_replace($placeholder, $actualValue, $key);
-                    //d($newKey);
                     if (is_array($config)) {
                         $config[$newKey] = $value;
                         unset($config[$key]);
@@ -160,7 +157,6 @@ class ConfigControl extends Base
                         $config->$newKey = $value;
                         unset($config->$key);
                     }
-
                 }
             }
         }

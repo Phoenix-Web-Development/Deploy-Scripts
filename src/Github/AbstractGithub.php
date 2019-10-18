@@ -19,7 +19,13 @@ class AbstractGithub extends BaseAbstract
     protected $_client;
 
     /**
+     * @var string
+     */
+    protected $logElement = 'h4';
+
+    /**
      * AbstractGithub constructor.
+     *
      * @param GithubClient $client
      */
     public function __construct(GithubClient $client)

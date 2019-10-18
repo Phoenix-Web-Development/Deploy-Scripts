@@ -127,9 +127,9 @@ final class Deployer extends Base
             'live_domain' => $this->environ('live')->getEnvironURL() ?? '',
             'staging_domain' => $this->environ('staging')->getEnvironURL() ?? '',
             'live_cpanel_username' => $this->config->environ->live->cpanel->account->username ?? '',
-            //'live_admin_email' => $this->environ('live')->getAdminEmail() ?? '',
-            //'staging_admin_email' => $this->environ('staging')->getAdminEmail() ?? '',
-            //'local_admin_email' => $this->environ('local')->getAdminEmail() ?? '',
+            'live_admin_email' => $this->environ('live')->getAdminEmail() ?? '',
+            'staging_admin_email' => $this->environ('staging')->getAdminEmail() ?? '',
+            'local_admin_email' => $this->environ('local')->getAdminEmail() ?? '',
         );
         $return = [];
         foreach ($placeholders as $placeholderName => $placeholder) {
@@ -162,8 +162,10 @@ final class Deployer extends Base
             $environments = array('live', 'staging', 'local');
             switch($action) {
                 case 'delete':
-                    if ($this->actionRequests->canDo('delete_version_control'))
-                        $this->versionControlMainRepo('delete');
+                    if ($this->actionRequests->canDo('delete_version_control')) {
+                        $githubRepo = new GithubRepo($this->config, $this->github);
+                        $githubRepo->delete();
+                    }
                     if ($this->actionRequests->canDo('delete_live_stuff'))
                         $this->doRemoteEnvironStuff('delete', 'live');
                     if ($this->actionRequests->canDo('delete_staging_stuff'))
@@ -172,8 +174,10 @@ final class Deployer extends Base
                         $this->doLocalStuff('delete');
                     break;
                 case 'deploy':
-                    if ($this->actionRequests->canDo('create_version_control'))
-                        $this->versionControlMainRepo('create');
+                    if ($this->actionRequests->canDo('create_version_control')) {
+                        $githubRepo = new GithubRepo($this->config, $this->github);
+                        $githubRepo->create();
+                    }
                     if ($this->actionRequests->canDo('create_live_stuff'))
                         $this->doRemoteEnvironStuff('create', 'live');
                     if ($this->actionRequests->canDo('create_staging_stuff'))
@@ -630,31 +634,6 @@ final class Deployer extends Base
             $versionControl->sync();
         }
     }
-
-
-    /**
-     * @param string $action
-     * @return bool
-     */
-    public function versionControlMainRepo(string $action = 'create'): bool
-    {
-        if (!$this->validate_action($action, array('create', 'delete'), "Can't do main version control repository stuff."))
-            return false;
-        $repo_name = $this->config->version_control->repo_name ?? '';
-        if (empty($repo_name)) {
-            $this->log(sprintf("Can't %s version control main repository. Repository name missing from config.", $action));
-            return false;
-        }
-        $domain = $this->config->environ->live->domain ?? '';
-        $repository = $this->github->repo()->$action($repo_name, $domain);
-        if (!empty($repository)) {
-            $this->log(sprintf('Successfully %s version control main repository.', $this->actions[$action]['past']), 'success');
-            return true;
-        }
-        $this->log(sprintf('Something may have gone wrong while %s version control main repository.', $this->actions[$action]['present']), 'error');
-        return false;
-    }
-
 
     /**
      * @return array|bool
